@@ -2,3 +2,6 @@
 .Rhistory
 .RData
 .Ruserdata
+input_files/
+output/
+data/
