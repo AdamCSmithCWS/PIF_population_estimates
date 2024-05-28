@@ -1,5 +1,5 @@
 ---
-title: "PIF Alternate Estimates"
+title: "PIF Alternate Population Estimates"
 format: pdf
 editor: visual
 ---
@@ -22,15 +22,46 @@ The relationship between the PIF population estimates and the eBird relative abu
 
 For example, across all routes with some (\> 0) eBird relative abundance, we can compare the ratio of the mean eBird relative abundance to the mean population estimate. This ratio could be used as a simple calibration factor to scale the eBird relative abundance surface to a total population estimate (and to estimates for any other region).
 
-## Specifics
-The PIF population estimates are defined by this equation.
+## The representative sampling assumptions of the regional approach to PIF Population Estimates
+
+The PIF population estimates derive population sizes for a given region based on the correction factors for distance $C_d$, pairs $C_p$, time of day $C_t$, and the area of the region $a$. The fraction in the first term of this equation represents the mean across all $m$ routes, of the mean counts across the $n_j$ years that each route $j$ was surveyed.
 
 $$
-\frac{\sum_{j=1}^{j=m} \sum_{i=t}^{i=T} Y_{i j} / n}{m} * \frac{a}{25.1} *\left(\frac{400}{C_D}\right)^2 * C_P * C_T
+Population Size = \frac{\sum_{j=1}^{j=m} \sum_{i=1}^{i=n_j} Y_{i j} / n_j}{m} * \frac{a}{25.1} *\left(\frac{400}{C_D}\right)^2 * C_P * C_T
 $$
-With this alternative approach, they could be simplified to this.
 
+The region specific aspects of this equation require an assumption that the densities of birds detectable to BBS observers are representative of the densities of birds in the region. This assumption can be separated into two components: 1) the density of birds near roads in a given habitat/landcover type is the same as density of birds away from roads in that same landcover type; and 2) the proportion of each habitat/landcover type near the roads are representative of the proportions in the region as a whole.
+
+## Alternative that removes/reduces the influence of these assumptions
+
+By integrating the spatial information on the paths followed by each BBS route with the relative abundance surface from eBird, we can use the PIF population estimates approach in a way that should adjust the estimates for both the non representative sampling of habitats by the BBS and roadside specific variations in the abundance of each species.
+
+With this alternative approach, we would modify the PIF population estimates equation to estimate the population density (population/unit area) of birds within the area adjacent to the $M$ BBS routes used in the calculation and within the detection radius of a given species $C_d$. The $M$ routes would be BBS routes surveyed at least once during years used in the calculation (usually the most recent 10 years) and that overlap the eBird breeding season, or resident, relative abundance surface.
 
 $$
-\left(\frac{400}{C_D}\right)^2 * C_P * C_T
+PopulationDensity_{BBS Adjacent} = \frac{\sum_{j=1}^{j=M} \frac{\sum_{i=1}^{i=n_j} Y_{i j}} {n_j} * C_P * C_T}  {M*50\pi*{C_D}^2} 
 $$
+
+To complement this BBS-adjacent population density, we can estimate a relative density of the eBird abundance within a buffer surrounding the BBS route paths, as the mean of the relative abundance per unit area across the same $M$ BBS routes.
+
+$$
+RelativeDensity_{BBSAdjacent} = \sum_{j=i}^{j=M} \frac{RelativeAbundance_{i j}}{BufferArea_{i j}}
+$$
+
+The ratio of these two density measures represent a calibration of the eBird relative abundance surface to an estimate of true abundance.
+
+$$
+Calibration = \frac{PopulationDensity_{BBS Adjacent}}{RelativeDensity_{BBSAdjacent}}
+$$
+
+Then the population estimate for the species within any arbitrarily defined region can be calculated as the sum of the eBird relative abundance values within that region, scaled by the Calibration factor.
+
+$$
+PopulationEstimate = Calibration * \sum RelAbund
+$$
+
+Generating this calibration within relatively small areas surrounding the BBS routes adjusts the population estimates for the non-representative sampling of habitats by the BBS, to the extent that the species' relative abundance varies across those habitats. It does not explicitly adjust for variations in species density in a given habitat near or further from a road, however some of the variation in density in relation to roads is included in the eBird relative abundance surface modeling because road density is one of the predictors. So, this approach may also correct for variations in density between roadside and offroad habitats, to the extent that a species' density varies based on distance to roads and the eBird relative abundance surface is able to reflect that road-specific variation in density.
+
+## Uncertainty
+
+Without going into specifics, we can estimate the uncertainty of this scaling factor by assessing the variation among routes (bootstrapping), the variation in the estimated relative abundance surface, in addition to the uncertainties of the correction factors included in the original PIF approach.
