@@ -1,0 +1,36 @@
+---
+title: "PIF Alternate Estimates"
+format: pdf
+editor: visual
+---
+
+## Strata-free estimates
+
+Instead of summarising BBS observations within arbitrarily defined strata, we can summarise for only the areas surrounding each BBS route.
+
+In effect, the PIF population estimates correction factors for time of day and pairs, as well as updated estimates of detection distance, can be applied to the area immediately surrounding BBS routes. This change, means that the PIF population estimates algorithm can be applied without this critical assumption:
+
+1.  That BBS routes are a representative sample of each or any of the strata (i.e., the habitat, the land area, or the species' population)
+
+Instead the population estimates algorithm can be applied to only the area immediately surrounding BBS routes that were actually surveyed. It is relatively trivial to assume that the BBS observations are a representative sample of the birds, habitats, and land area within a short buffer (1 km) of the route paths.
+
+## eBird relative abundance
+
+The eBird breeding season relative abundances can be summed within these same route path buffers.
+
+The relationship between the PIF population estimates and the eBird relative abundances within these route path buffers provides a clear relationship between an estimated population size and the eBird relative abundance values.
+
+For example, across all routes with some (\> 0) eBird relative abundance, we can compare the ratio of the mean eBird relative abundance to the mean population estimate. This ratio could be used as a simple calibration factor to scale the eBird relative abundance surface to a total population estimate (and to estimates for any other region).
+
+## Specifics
+The PIF population estimates are defined by this equation.
+
+$$
+\frac{\sum_{j=1}^{j=m} \sum_{i=t}^{i=T} Y_{i j} / n}{m} * \frac{a}{25.1} *\left(\frac{400}{C_D}\right)^2 * C_P * C_T
+$$
+With this alternative approach, they could be simplified to this.
+
+
+$$
+\left(\frac{400}{C_D}\right)^2 * C_P * C_T
+$$
