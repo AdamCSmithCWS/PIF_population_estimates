@@ -42,11 +42,13 @@ $$
 PopulationDensity_{BBS Adjacent} = \frac{\sum_{j=1}^{j=M} \frac{\sum_{i=1}^{i=n_j} Y_{i j}} {n_j} * C_P * C_T}  {M*50\pi*{C_D}^2} 
 $$
 
-To complement this BBS-adjacent population density, we can estimate a relative density of the eBird abundance within a buffer surrounding the BBS route paths, as the mean of the relative abundance per unit area across the same $M$ BBS routes.
+To complement this BBS-adjacent population density, we can estimate a relative density of the eBird abundance within a buffer surrounding the BBS route paths, as the area-weighted mean (i.e., weighted by the area of the cell that is overlapped by the buffer) of the predicted relative abundance values of $c_j$ cells overlapped by the buffer of route $j$ of each of the $M$ BBS routes.
 
 $$
-RelativeDensity_{BBSAdjacent} = \sum_{j=i}^{j=M} \frac{RelativeAbundance_{i j}}{BufferArea_{i j}}
+RelativeDensity_{BBSAdjacent} = \frac{\sum_{j=1}^{j=M} \frac{\sum_{i=1}^{i=c_j}RelativeAbundance_{i}*a_i}{\sum_{i=1}^{i=c_j}a_{i}}}{M}
 $$
+
+The area weighted mean relative abundance cell value is largely necessary because the highest spatial resolution of the eBird relative abundance surfaces has grid cells 3 km in width. So, the resolution of the eBird predicted abundance surface is coarse relative to the width of each BBS route buffer (depending on the chosen buffer width).
 
 The ratio of these two density measures represent a calibration of the eBird relative abundance surface to an estimate of true abundance.
 
@@ -64,4 +66,4 @@ Generating this calibration within relatively small areas surrounding the BBS ro
 
 ## Uncertainty
 
-Without going into specifics, we can estimate the uncertainty of this scaling factor by assessing the variation among routes (bootstrapping), the variation in the estimated relative abundance surface, in addition to the uncertainties of the correction factors included in the original PIF approach.
+Without going into specifics, we can estimate the uncertainty of this calibration factor by assessing the variation among routes (bootstrapping), the variation in the estimated relative abundance surface, in addition to the uncertainties of the correction factors included in the original PIF approach.

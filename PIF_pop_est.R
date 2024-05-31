@@ -80,7 +80,7 @@ route_starts <- routes_run %>%
                          "latitude"),crs = st_crs(4326)) %>%
   st_transform(.,crs = st_crs(routes_can_buf))
 
-## routes_can_buf is now a 1km buffer of all route paths with data
+## routes_can_buf is now a 1km buffer of all route paths with surveys
 routes_can_buf <- routes_can_buf %>%
   filter(route_name %in% route_starts$route_name)
 
@@ -95,12 +95,14 @@ vie
 ## ebird abundance on each each route will vary just based on
 ## the length of the route path
 ## Therefore
-## cannot summarise this information at the route-level
-## only meaningfully compared across the collection of routes
+## if summarising this information at the route-level
+## it must be adjuste for the area of each buffered region
 # BBS counts --------------------------------------------------------------
 
 surveys <- routes_run %>%
   filter(route_name %in% unique(routes_can_buf$route_name))
+
+
 
 
 bird_obs <- bbsBayes2::load_bbs_data()[["birds"]]%>%
@@ -151,7 +153,7 @@ raw_counts_route <- full_bird %>%
 
 # eBird relative abundance ------------------------------------------------
 
-sp_sel <- "Wood Thrush"
+sp_sel <- "American Robin"
 
 
 species_ebird <- ebirdst::get_species(sp_sel)
@@ -173,9 +175,9 @@ abd_seasonal_abundance <- ebirdst::load_raster(species = species_ebird,
                                            resolution = "3km",
                                            period = "seasonal",
                                            product = "abundance")  #27km low resolution
+season_sel <- ifelse(any(grepl("resident",names(abd_seasonal_abundance))),"resident","breeding")
 
-
-breed_abundance <- abd_seasonal_abundance[["breeding"]]
+breed_abundance <- abd_seasonal_abundance[[season_sel]]
 
 
 # # clipping ebird data to BBS strata region --------------------------------
@@ -197,12 +199,13 @@ routes_can_buf_proj <- st_transform(routes_can_buf, st_crs(breed_abundance))
 
 abundance_in_buffers <- terra::extract(breed_abundance,
                                 routes_can_buf_proj,
-                                fun = "mean",
+                                fun = mean,
                                 na.rm = TRUE,
-                                ID = FALSE)
+                                ID = FALSE,
+                                exact = TRUE)
 
 abundance_join <- data.frame(route_name = routes_can_buf_proj$route_name,
-                             ebird_abund = abundance_in_buffers$breeding) %>%
+                             ebird_abund = abundance_in_buffers[[season_sel]]) %>%
   inner_join(.,sp_raw_counts,
             by = "route_name")
 
@@ -215,34 +218,42 @@ abund_df <- abundance_join %>%
             n_years = n())
 
 routes_w_ebird_bbs_abund <- routes_can_buf %>%
-  inner_join(abund_df,
-             by = "route_name")
-
-routes_w_ebird_abund <- routes_w_ebird_bbs_abund %>%
+  full_join(abund_df,
+             by = "route_name") %>%
+  mutate(mean_bbs_count = ifelse(is.na(mean_bbs_count),
+                                 1,
+                                 mean_bbs_count+1)) %>%
   filter(ebird_abund > 0)
-routes_w_bbs_abund <- routes_w_ebird_bbs_abund %>%
-  filter(mean_bbs_count > 0)
 
-routes_w_either_abund <- routes_w_ebird_bbs_abund %>%
-  filter(mean_bbs_count > 0 | ebird_abund > 0)
+
+comp_plot  <- ggplot(data = abund_df,
+                     aes(x = ebird_abund,
+                         y = mean_bbs_count+1))+
+  geom_point(aes(colour = n_years))+
+  geom_smooth(method = "gam")+
+  #scale_y_continuous(transform = "log10")+
+  scale_colour_viridis_c(direction = -1)
+
+
+comp_plot
 
 
 tst1 <- ggplot()+
-  geom_sf(data = routes_w_ebird_abund,
+  geom_sf(data = routes_w_ebird_bbs_abund,
           aes(fill = ebird_abund,
               colour = ebird_abund))+
   scale_colour_viridis_c(aesthetics = c("colour","fill"),
                          trans = "log10")+
-  labs(title = "log(Sum) eBird relative abund")
+  labs(title = "log(Mean) eBird relative abund")
 tst2 <- ggplot()+
-  geom_sf(data = routes_w_bbs_abund,
+  geom_sf(data = routes_w_ebird_bbs_abund,
           aes(fill = mean_bbs_count,
               colour = mean_bbs_count))+
   scale_colour_viridis_c(aesthetics = c("colour","fill"),
                          trans = "log10")+
   labs(title = "log(Mean) BBS counts")
 tst3 <- ggplot()+
-  geom_sf(data = routes_w_ebird_abund,
+  geom_sf(data = routes_w_ebird_bbs_abund,
           aes(fill = n_years,
               colour = n_years))+
   labs(title = "Number BBS surveys")
@@ -250,12 +261,107 @@ print(tst1/tst2/tst3)# + plot_layout(guides = "collect"))
 
 
 
+## reprojecting the abundance surface
+breed_sel1 <- project(breed_abundance, crs(routes_w_ebird_bbs_abund), method = "near") |>
+  # remove areas of the raster containing no data
+  trim()
+
+
+reg_sel <- bbsBayes2::load_map("prov_state") %>%
+  filter(strata_name %in% c("YT")) %>%
+  st_transform(.,crs = st_crs(routes_w_ebird_bbs_abund))
+
+rts_sel <- routes_w_ebird_bbs_abund %>%
+  st_join(.,reg_sel,
+          left = FALSE)
+
+
+#rts_sel <- st_transform(rts_sel, st_crs(breed_abundance))
+
+breed_sel <- terra::crop(breed_sel1,rts_sel)
+
+
+
+plot(breed_sel)
+plot(routes_w_ebird_bbs_abund,add = TRUE, col = grey(0.7))
+
+png("figures/AMRO_YT_example.png",
+    width = 8,
+    height = 8,
+    units = "in",
+    res = 300)
+plot(breed_sel)
+plot(routes_w_ebird_bbs_abund,add = TRUE, col = NA)
+plot(reg_sel,add = TRUE,col = NA)
+dev.off()
+
+
+
+
+
+reg_sel <- bbsBayes2::load_map("prov_state") %>%
+  filter(strata_name %in% c("NS")) %>%
+  st_transform(.,crs = st_crs(routes_w_ebird_bbs_abund))
+
+rts_sel <- routes_w_ebird_bbs_abund %>%
+  st_join(.,reg_sel,
+          left = FALSE)
+
+#rts_sel <- st_transform(rts_sel, st_crs(breed_abundance))
+
+breed_sel <- terra::crop(breed_sel1,rts_sel)
+
+
+
+plot(breed_sel)
+plot(routes_w_ebird_bbs_abund,add = TRUE, col = NA)
+
+png("figures/AMRO_NS_example.png",
+    width = 8,
+    height = 8,
+    units = "in",
+    res = 300)
+plot(breed_sel)
+plot(routes_w_ebird_bbs_abund,add = TRUE, col = NA)
+dev.off()
+
+
+
+
+reg_sel <- bbsBayes2::load_map("prov_state") %>%
+  filter(strata_name %in% c("AB")) %>%
+  st_transform(.,crs = st_crs(routes_w_ebird_bbs_abund))
+
+rts_sel <- routes_w_ebird_bbs_abund %>%
+  st_join(.,reg_sel,
+          left = FALSE)
+
+#rts_sel <- st_transform(rts_sel, st_crs(breed_abundance))
+
+breed_sel <- terra::crop(breed_sel1,rts_sel)
+
+
+
+plot(breed_sel)
+plot(routes_w_ebird_bbs_abund,add = TRUE, col = NA)
+
+png("figures/AMRO_AB_example.png",
+    width = 8,
+    height = 8,
+    units = "in",
+    res = 300)
+plot(breed_sel)
+plot(routes_w_ebird_bbs_abund,add = TRUE, col = NA)
+plot(reg_sel,add = TRUE,col = NA)
+dev.off()
+
+
 
 # Sum of eBird relative abundance -----------------------------------------
 
 length(which(is.na(abundance_in_buffers$breeding)))
 
-eBird_in_BBS_routes <- sum(abundance_join$ebird_abund)
+eBird_in_BBS_routes <- sum(abundance_join$ebird_abund,na.rm = TRUE)
 
 # Sum of population estimates
 
