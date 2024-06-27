@@ -51,7 +51,7 @@ PolyAreas <- read.csv(paste(Inputfiles.dir,'PolygonRangeAreas.csv', sep=''), str
 ##############################################################
 
 library(msm)
-#library(tidyverse)
+library(tidyverse)
 library(plyr)
 
 PrettyUp <- function(x){
@@ -83,8 +83,8 @@ region.lkup <- all_data |>
   dplyr::rename(Prov = state_num)
 
 
-tmp <- all_data |>
-  filter(is.na(ProvBCR))
+# tmp <- all_data |>
+#   filter(is.na(ProvBCR))
 
 # Spp.dat <- list.files(Spp.dir)
 Spp.dat.date <- ""#unlist(strsplit(unlist(Spp.dat.date), "[.]"))[1]
