@@ -6,7 +6,7 @@ editor: visual
 
 ## Strata-free estimates
 
-Instead of summarising BBS observations within arbitrarily defined strata, we can summarise for only the areas surrounding each BBS route.
+Instead of summarising BBS observations within broad scale geo-political strata (e.g., Bird Conservation Regions by political jurisdictions), we can summarise for only the areas surrounding each BBS route.
 
 In effect, the PIF population estimates correction factors for time of day and pairs, as well as updated estimates of detection distance, can be applied to the area immediately surrounding BBS routes. This change, means that the PIF population estimates algorithm can be applied without this critical assumption:
 
