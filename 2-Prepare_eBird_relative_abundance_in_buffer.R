@@ -12,8 +12,14 @@ routes_buf <- readRDS("data/all_routes_buffered.rds")
 
 # eBird relative abundance ------------------------------------------------
 
-sp_sel <- "Canada Warbler"
+sps_sel <- c("Tennessee Warbler","Bay-breasted Warbler",
+            "Swainson's Thrush","Wood Duck",
+            "Mallard","Blue Jay",
+            "Blue-headed Vireo","Bicknell's Thrush",
+            "Wilson's Snipe","American Kestrel",
+            "Steller's Jay")
 
+for(sp_sel in sps_sel){
 
 species_ebird <- ebirdst::get_species(sp_sel)
 
@@ -22,6 +28,10 @@ down <- try(ebirdst::ebirdst_download_status(species_ebird,
                                              download_abundance = TRUE,
                                              download_occurrence = FALSE),
             silent = TRUE)
+
+if(class(down) == "try-error"){next}
+
+
 
 
 abd_seasonal_abundance <- ebirdst::load_raster(species = species_ebird,
@@ -94,3 +104,4 @@ saveRDS(abundance_df,
         paste0("data/species_relative_abundance/",species_ebird,"_relative_abundance.rds"))
 
 
+}
