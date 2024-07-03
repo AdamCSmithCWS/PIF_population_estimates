@@ -61,7 +61,7 @@ cefs <- coef_distance(species = sp) |>
   dplyr::filter(Model %in% c(1,2)) |>
   dplyr::arrange(AIC)
 
-if(nrow(cefs) == 0){next}
+if(nrow(cefs) == 0){next} # skip if no napops output
 
 w_mod <- cefs[1,"Model"]
 
@@ -73,7 +73,7 @@ edrt <- try(edr(species = sp,
               samples = 1000),
               silent = TRUE)
 
-if(edrt$EDR_est > 500){
+if(edrt$EDR_est > 500){ # two species where the model 2 estimates of edr are silly (> 5 km!)
   edrt <- try(edr(species = sp,
                   model = 1,
                   forest = 0.5,
@@ -86,22 +86,10 @@ if(edrt$EDR_est > 500){
 
 if(class(edrt) == "try-error"){
     break(paste("edr extraction did not work for",sp))
-    edrt <- try(edr(species = sp,
-                    model = 1,
-                    forest = 0.5,
-                    road = TRUE,
-                    quantiles = c(0.1625),
-                    samples = 1000),
-                silent = TRUE)
-    if(class(edrt) == "try-error"){
-    edrt <- try(edr(species = sp,
-                    model = 1,
-                    forest = 0.5,
-                    road = TRUE)$EDR_est,
-                silent = TRUE)
+
     }
 
-  }
+
   ExpAdjs[i,"edr"] <- as.numeric(edrt$EDR_est)
 
   if("EDR_16.25" %in% names(edrt)){
@@ -559,14 +547,17 @@ pif_comp <- pif_trad |>
   dplyr::left_join(pif_new,
                    by = "cn") |>
   dplyr::left_join(edrs, by = "cn") |>
-  dplyr::mutate(dif = (rounded.USCAN.mean.PopEst - rounded.USCAN.mean.PopEst.trad)/(rounded.USCAN.mean.PopEst+rounded.USCAN.mean.PopEst.trad)/2,
+  dplyr::mutate(dif = (rounded.USCAN.mean.PopEst - rounded.USCAN.mean.PopEst.trad)/(rounded.USCAN.mean.PopEst.trad),
                 cv.trad = (0.25*(rounded.USCAN.95UCI.PopEst.trad-rounded.USCAN.95LCI.PopEst.trad))/rounded.USCAN.mean.PopEst.trad,
                 cv = (0.25*(rounded.USCAN.95UCI.PopEst-rounded.USCAN.95LCI.PopEst))/rounded.USCAN.mean.PopEst,
                 lbl = paste(Species,mmd,"vs",edr)) %>%
   dplyr::filter(use_edr)
 
-large_dif <- pif_comp |>
-  dplyr::filter(dif > 0.3 | dif < -0.3)
+larger <- pif_comp |>
+  dplyr::filter(dif > 4.5)
+
+smaller <- pif_comp |>
+  dplyr::filter(dif < 0)
 
 library(ggplot2)
 
@@ -580,19 +571,20 @@ compare_plot_large <- ggplot(data = pif_comp,
   geom_errorbarh(aes(xmin = rounded.USCAN.95LCI.PopEst.trad,
                     xmax = rounded.USCAN.95UCI.PopEst.trad),
                 alpha = 0.3)+
-  geom_point()+
   geom_abline(intercept = 0, slope = 1)+
   geom_abline(intercept = 0, slope = 3,colour = grey(0.4))+
+  geom_abline(intercept = 0, slope = 5,colour = grey(0.4))+
+  geom_point()+
   ggrepel::geom_text_repel(aes(label = lbl), size = 3)+
   #colorspace::scale_colour_continuous_diverging(palette = "Blue-Red 3")+
   scale_y_continuous(transform = "identity",
                      labels = scales::unit_format(unit = "M", scale = 1e-6))+
   scale_x_continuous(transform = "identity",
                      labels = scales::unit_format(unit = "M", scale = 1e-6))+
-  xlab("Traditional MMD-based Population Estimate")+
+  xlab("Traditional Distance Category Population Estimate")+
   ylab("EDR-based Population Estimate")+
   labs(title = "Population estimates comparison Traditional vs EDR-based",
-       subtitle = "Diagonal black line = 1:1. Diagonal grey line = 3:1")
+       subtitle = "Diagonal black line = 1:1. Diagonal grey lines = 3:1 & 5:1")
 
 
 #compare_plot_large
@@ -608,22 +600,92 @@ compare_plot <- ggplot(data = pif_comp,
   geom_errorbarh(aes(xmin = rounded.USCAN.95LCI.PopEst.trad,
                      xmax = rounded.USCAN.95UCI.PopEst.trad),
                  alpha = 0.3)+
-  geom_point()+
   geom_abline(intercept = 0, slope = 1)+
-  geom_abline(intercept = log10(3), slope = 1,colour = grey(0.4))+
-  ggrepel::geom_text_repel(aes(label = lbl), size = 3)+
+  geom_abline(intercept = log10(3), slope = 1,colour = grey(0.7))+
+  geom_abline(intercept = log10(5), slope = 1,colour = grey(0.7))+
+  geom_point()+
+  ggrepel::geom_text_repel(aes(label = lbl), size = 1.5)+
   scale_y_continuous(transform = "log10",
                      labels = scales::unit_format(unit = "M", scale = 1e-6))+
   scale_x_continuous(transform = "log10",
                      labels = scales::unit_format(unit = "M", scale = 1e-6))+
-  xlab("Traditional MMD-based Population Estimate")+
+  xlab("Traditional Distance Category Population Estimate")+
   ylab("EDR-based Population Estimate")+
   labs(title = "Population estimates comparison Traditional vs EDR-based",
-       subtitle = "Diagonal black line = 1:1. Diagonal grey line = 3:1")
+       subtitle = "Diagonal black line = 1:1. Diagonal grey lines = 3:1 & 5:1")+
   theme_bw()
 
 
-#compare_plot
+
+compare_plot2 <- ggplot(data = pif_comp,
+                       aes(x = rounded.USCAN.mean.PopEst.trad,
+                           y = rounded.USCAN.mean.PopEst))+
+  geom_errorbar(aes(ymin = rounded.USCAN.95LCI.PopEst,
+                    ymax = rounded.USCAN.95UCI.PopEst),
+                alpha = 0.05,
+                colour = "darkblue")+
+  geom_errorbarh(aes(xmin = rounded.USCAN.95LCI.PopEst.trad,
+                     xmax = rounded.USCAN.95UCI.PopEst.trad),
+                 alpha = 0.05,
+                 colour = "darkblue")+
+  geom_abline(intercept = 0, slope = 1)+
+  geom_abline(intercept = log10(3), slope = 1,colour = grey(0.7))+
+  geom_abline(intercept = log10(5), slope = 1,colour = grey(0.7))+
+  geom_point(alpha = 0.5)+
+  ggrepel::geom_text_repel(data = larger,aes(label = lbl), size = 3,
+                           nudge_y = 0.1,
+                           segment.alpha = 0.5,
+                           min.segment.length = 0)+
+  ggrepel::geom_text_repel(data = smaller,aes(label = lbl), size = 3,
+                           nudge_y = -0.1,
+                           segment.alpha = 0.5,
+                           min.segment.length = 0)+
+  scale_y_continuous(transform = "log10",
+                     labels = scales::unit_format(unit = "M", scale = 1e-6))+
+  scale_x_continuous(transform = "log10",
+                     labels = scales::unit_format(unit = "M", scale = 1e-6))+
+  xlab("Traditional Distance Category Population Estimate")+
+  ylab("EDR-based Population Estimate")+
+  labs(title = "Population estimates comparison Traditional vs EDR-based",
+       subtitle = "Diagonal black line = 1:1. Diagonal grey lines = 3:1 & 5:1")+
+  theme_bw()
+
+
+
+compare_plot3 <- ggplot(data = pif_comp,
+                        aes(x = rounded.USCAN.mean.PopEst.trad,
+                            y = rounded.USCAN.mean.PopEst))+
+  geom_errorbar(aes(ymin = rounded.USCAN.95LCI.PopEst,
+                    ymax = rounded.USCAN.95UCI.PopEst),
+                alpha = 0.15,
+                colour = "darkblue")+
+  geom_errorbarh(aes(xmin = rounded.USCAN.95LCI.PopEst.trad,
+                     xmax = rounded.USCAN.95UCI.PopEst.trad),
+                 alpha = 0.15,
+                 colour = "darkblue")+
+  geom_abline(intercept = 0, slope = 1)+
+  geom_abline(intercept = log10(3), slope = 1,colour = grey(0.7))+
+  geom_abline(intercept = log10(5), slope = 1,colour = grey(0.7))+
+  geom_point(alpha = 0.5)+
+  # ggrepel::geom_text_repel(data = larger,aes(label = lbl), size = 3,
+  #                          nudge_y = 0.1,
+  #                          segment.alpha = 0.5,
+  #                          min.segment.length = 0)+
+  # ggrepel::geom_text_repel(data = smaller,aes(label = lbl), size = 3,
+  #                          nudge_y = -0.1,
+  #                          segment.alpha = 0.5,
+  #                          min.segment.length = 0)+
+  scale_y_continuous(transform = "log10",
+                     labels = scales::unit_format(unit = "M", scale = 1e-6))+
+  scale_x_continuous(transform = "log10",
+                     labels = scales::unit_format(unit = "M", scale = 1e-6))+
+  xlab("Traditional Distance Category Population Estimate")+
+  ylab("EDR-based Population Estimate")+
+  labs(title = "Population estimates comparison Traditional vs EDR-based",
+       subtitle = "Diagonal black line = 1:1. Diagonal grey lines = 3:1 & 5:1")+
+  theme_bw()
+
+#compare_plot2
 
 
 
@@ -633,6 +695,7 @@ compare_plot_cv <- ggplot(data = pif_comp,
                              y = cv))+
   geom_point(alpha = 0.3)+
   geom_abline(intercept = 0, slope = 1)+
+  geom_smooth(alpha = 0.5)+
   ggrepel::geom_text_repel(aes(label = lbl), size = 3)+
   xlab("CV traditional (SE/mean)")+
   ylab("CV EDR (SE/mean)")+
@@ -641,30 +704,31 @@ compare_plot_cv <- ggplot(data = pif_comp,
 
 #compare_plot_cv
 
-
-compare_plot2 <- ggplot(data = large_dif,
-                        aes(x = rounded.USCAN.mean.PopEst.trad,
-                            y = rounded.USCAN.mean.PopEst,
-                            colour = EDR_model))+
-  geom_errorbar(aes(ymin = rounded.USCAN.95LCI.PopEst,
-                    ymax = rounded.USCAN.95UCI.PopEst),
-                alpha = 0.3)+
-  geom_errorbarh(aes(xmin = rounded.USCAN.95LCI.PopEst.trad,
-                     xmax = rounded.USCAN.95UCI.PopEst.trad),
-                 alpha = 0.3)+
-  geom_point()+
-  geom_abline(intercept = 0, slope = 1)+
-  geom_abline(intercept = log10(3), slope = 1,colour = grey(0.4))+
-  ggrepel::geom_text_repel(aes(label = lbl), size = 3)+
-  scale_y_continuous(transform = "log10",
-                     labels = scales::unit_format(unit = "M", scale = 1e-6))+
-  scale_x_continuous(transform = "log10",
-                     labels = scales::unit_format(unit = "M", scale = 1e-6))+
-  xlab("Traditional MMD-based Population Estimate")+
-  ylab("EDR-based Population Estimate")+
-  theme_bw()+
-  labs(title = "Population estimates comparison Traditional vs EDR-based",
-       subtitle = "Diagonal black line = 1:1. Diagonal grey line = 3:1")
+#
+# compare_plot2 <- ggplot(data = large_dif,
+#                         aes(x = rounded.USCAN.mean.PopEst.trad,
+#                             y = rounded.USCAN.mean.PopEst,
+#                             colour = EDR_model))+
+#   geom_errorbar(aes(ymin = rounded.USCAN.95LCI.PopEst,
+#                     ymax = rounded.USCAN.95UCI.PopEst),
+#                 alpha = 0.3)+
+#   geom_errorbarh(aes(xmin = rounded.USCAN.95LCI.PopEst.trad,
+#                      xmax = rounded.USCAN.95UCI.PopEst.trad),
+#                  alpha = 0.3)+
+#   geom_point()+
+#   geom_abline(intercept = 0, slope = 1)+
+#   geom_abline(intercept = log10(3), slope = 1,colour = grey(0.4))+
+#   geom_abline(intercept = log10(5), slope = 1,colour = grey(0.4))+
+#   ggrepel::geom_text_repel(aes(label = lbl), size = 3)+
+#   scale_y_continuous(transform = "log10",
+#                      labels = scales::unit_format(unit = "M", scale = 1e-6))+
+#   scale_x_continuous(transform = "log10",
+#                      labels = scales::unit_format(unit = "M", scale = 1e-6))+
+#   xlab("Traditional Distance Category Population Estimate")+
+#   ylab("EDR-based Population Estimate")+
+#   theme_bw()+
+#   labs(title = "Population estimates comparison Traditional vs EDR-based",
+#        subtitle = "Diagonal black line = 1:1. Diagonal grey lines = 3:1 & 5:1")
 
 
 #compare_plot2
@@ -676,7 +740,11 @@ pdf("comparison_EDR_2022_traditional_USA_CAN.pdf",
 print(compare_plot)
 print(compare_plot_large)
 print(compare_plot2)
+print(compare_plot3)
 print(compare_plot_cv)
 dev.off()
+
+
+
 write.csv(pif_comp,"comparison_pif_EDR_traditional.csv",row.names = FALSE)
 
