@@ -18,6 +18,16 @@ strata_names <- strata %>%
 
 
 
+
+# key detail from Golden Eagle paper --------------------------------------
+##  USE MAX WEEKLY RELATIVE ABUNDANCE DURING KEY SEASON
+# Using the 2019 relative abundance data product as a starting point, we calculated
+# the maximum eBird relative abundance value for each 3x3-km pixel over the weeks
+# of the aerial survey (August 17th–September 14th) because these units were
+# expected to best match those of the golden eagle survey.
+
+
+
 # load traditional estimates for later comparison -------------------------
 strata_join <- strata_names %>%
   select(strata_name,country_code,
@@ -106,7 +116,7 @@ pop_ests_out_trad <- bind_rows(USACAN_trad_all,
          pop_lci_95, pop_uci_95)
 
 
-# ASK Pete where the national estimates get calculated --------------------
+# Missing national estimates --------------------
 
 
 
@@ -123,7 +133,7 @@ sps_sel <- c("Tennessee Warbler","Bay-breasted Warbler",
              "Wilson's Snipe","American Kestrel",
              "Steller's Jay")
 
-for(sp_sel in sps_sel[-c(1:8)]){
+for(sp_sel in sps_sel){
 
 sp_aou <- bbsBayes2::search_species(sp_sel)$aou[1]
 
@@ -140,6 +150,7 @@ bcr_trad <- bcr_trad_all %>%
 
 
 
+# mean counts to id routes on which species has been observed -------------
 mean_counts <- readRDS("data/mean_counts_by_route.rds") %>%
   filter(english == sp_sel,
          mean_count > 0)
@@ -147,6 +158,7 @@ mean_counts <- readRDS("data/mean_counts_by_route.rds") %>%
 raw_counts <- readRDS("data/all_counts_by_route.rds") %>%
   filter(english == sp_sel)
 
+# filtering routes on which species wasn't observed.
 routes_buf <- routes_buf_all %>%
   filter(route_name %in% mean_counts$route_name)
 
@@ -183,6 +195,7 @@ adjs <- ExpAdjs %>%
   filter(cn == sp_sel)
 
 
+
 library(cmdstanr)
 
 model <- cmdstanr::cmdstan_model("models/ebird_rel_abund_calibration.stan")
@@ -204,6 +217,16 @@ stan_data <- list(n_routes = max(combined$route),
                   use_pois = 0,
                   use_t = 0
                   )
+
+
+if(nrow(adjs) == 0){
+  stan_data$c_p = mean(ExpAdjs$Pair2,na.rm = T)
+  stan_data$c_t = exp(mean(ExpAdjs$TimeAdj.meanlog,na.rm = T) + 0.5*(mean(ExpAdjs$TimeAdj.sdlog,na.rm = T)^2))
+  stan_data$sd_c_t = exp(2*mean(ExpAdjs$TimeAdj.meanlog,na.rm = T) + mean(ExpAdjs$TimeAdj.sdlog,na.rm = T)^2)*(exp(mean(ExpAdjs$TimeAdj.sdlog,na.rm = T)^2)-1)
+  stan_data$c_d_lower = mean(ExpAdjs$Dist.Lower,na.rm = T)
+  stan_data$c_d_upper = mean(ExpAdjs$Dist.Upper,na.rm = T)
+
+}
 
 fit <- model$sample(data = stan_data,
                     parallel_chains = 4,

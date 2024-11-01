@@ -9,7 +9,7 @@ library(bbsBayes2)
 # combine it with the spatial information on route-paths.
 # Two key objects are saved at the end of the file:
 # 1 - routes_buf - a polygon simple features object representing a
-#       1500 m buffer around each BBS route that has some observational
+#       400 m buffer around each BBS route that has some observational
 #       data during the ~10-year period
 # 2 - mean_counts_route - a dataframe summarizing the mean observed counts
 #       for each species on each route for the 10-year period. Also includes
@@ -38,7 +38,9 @@ routes_can <- st_read(dsn = "data/Canada/ALLROUTES_2022.shp") %>%
   st_make_valid() #%>%
 
 routes_can <- routes_can %>%
-  mutate(route_name = route_n(Province,ProvRoute))
+  mutate(route_name = route_n(Province,ProvRoute),
+         prov_state = Province) %>%
+select(route_name,prov_state,route)
 
 
 
@@ -46,7 +48,27 @@ routes_can <- routes_can %>%
 
 
 ## US routes - old unofficial shapefile created by John Sauer
-routes_us <- readRDS("data/United_States_selected_BBS_route_paths.rds")
+routes_us <- readRDS("data/United_States_selected_BBS_route_paths.rds") %>%
+  sf::st_transform(crs = sf::st_crs(routes_can)) %>%
+  distinct() %>%
+  st_make_valid()
+
+## translate route text names to state*route numerical route_names
+rts <- load_bbs_data(release = 2024)$routes %>%
+  select(state_num,route,route_name,st_abrev,year) %>%
+  group_by(state_num,route,route_name,st_abrev) %>%
+  slice_min(order_by = year, n = 1)
+
+## join with rts to add common route-names
+routes_us <- routes_us %>%
+  inner_join(rts, by = c("RTENAME" = "route_name",
+                        "prov_state" = "st_abrev",
+                        "first_year_surveyed" = "year")) %>%
+  distinct() %>%
+  mutate(route_name = paste(state_num,route,sep = "-")) %>%
+  select(route_name,state_num,route) %>%
+  rename(prov_state = state_num)
+
 
 
 
@@ -56,14 +78,19 @@ routes_us <- readRDS("data/United_States_selected_BBS_route_paths.rds")
 
 
 
-# routes_all <- routes_can %>%
-#   bind_rows(.,routes_us)
+routes_all <- routes_can %>%
+  bind_rows(.,routes_us) %>%
+  group_by(route_name,prov_state,route) %>%
+  summarise()
 
-routes_all <- routes_can
+lgth <- st_length(routes_all)
+
+routes_all$length_km <- as.numeric(lgth/1000)
+# routes_all <- routes_can
 
 vie <- ggplot()+
   geom_sf(data = routes_all,
-          aes(colour = Province))
+          aes(colour = prov_state))
 
 vie
 
@@ -74,12 +101,18 @@ vie
 routes_buf <- routes_all %>%
   group_by(route_name) %>%
   summarise(., do_union = FALSE)  %>%
-  st_buffer(., dist = 1500)
+  st_buffer(., dist = 400)
 
 buf_a <- as.numeric(st_area(routes_buf)/1e6)
 
 routes_buf$area_km <- buf_a
 
+route_dat <- routes_all %>%
+  st_drop_geometry() %>%
+  distinct()
+
+routes_buf <- routes_buf %>%
+  inner_join(route_dat,by = "route_name")
 
 vie <- ggplot()+
   geom_sf(data = routes_buf,
@@ -87,16 +120,36 @@ vie <- ggplot()+
 
 vie
 
+#### some of the route paths are far too long
+#### These must represent alternate route paths that were not
+#### corrected.
+#### These are ok: The analysis of the eBird data relies only on a
+#### mean eBird relative abundance within the route buffer. So the
+#### total length or area of the buffer is not critical information
+####
+rts_toolarge <- routes_buf %>%
+  filter(area_km > 50)
+
+rts_toolong <- routes_all %>%
+  filter(route_name %in% rts_toolarge$route_name)
+
+### Given these toolong and toolarge routes will not bias the results
+### I've done nothing to correct them
 
 # load route start locations ----------------------------------------------
 
+routes_w_data <- load_bbs_data(release = 2024)$routes %>%
+  select(-route_name) %>%
+  filter(year > 2012) %>%  # 10 years from 2013 - 2023, missing 2020.
+  mutate(route_name = paste(state_num,route,sep = "-")) %>%
+  select(state_num,route,route_name,st_abrev,year,latitude,longitude) %>%
+  group_by(state_num,route,route_name,st_abrev,latitude,longitude) %>%
+  slice_min(order_by = year, n = 1) %>%
+  ungroup()
 
-routes_run <- bbsBayes2::load_bbs_data()[["routes"]] %>%
-  filter(year > 2011) %>%
-  mutate(route_name = paste(state_num,route,sep = "-"))
 
 
-route_starts <- routes_run %>%
+route_starts <- routes_w_data %>%
   select(route_name,latitude,longitude) %>%
   distinct() %>%
   filter(route_name %in% unique(routes_buf$route_name)) %>%
@@ -104,13 +157,13 @@ route_starts <- routes_run %>%
                          "latitude"),crs = st_crs(4326)) %>%
   st_transform(.,crs = st_crs(routes_buf))
 
-## routes_buf is now a 1km buffer of all route paths with surveys
+## routes_buf is now an 800mm buffer of all route paths with surveys
 routes_buf <- routes_buf %>%
   filter(route_name %in% route_starts$route_name)
 
 vie <- ggplot()+
   geom_sf(data = routes_buf,
-          aes(colour = area_km))+
+          aes(colour = first_year))+
   geom_sf(data = route_starts)
 
 vie
@@ -123,14 +176,17 @@ vie
 ## it must be adjuste for the area of each buffered region
 # BBS counts --------------------------------------------------------------
 
-surveys <- routes_run %>%
+surveys <- load_bbs_data(release = 2024)$routes %>%
+  select(-route_name) %>%
+  filter(year > 2012) %>%  # 10 years from 2013 - 2023, missing 2020.
+  mutate(route_name = paste(state_num,route,sep = "-")) %>%
   filter(route_name %in% unique(routes_buf$route_name))
 
 
 
 
 bird_obs <- bbsBayes2::load_bbs_data()[["birds"]]%>%
-  filter(year > 2011) %>%
+  filter(year > 2012) %>%
   mutate(route_name = paste(state_num,route,sep = "-")) %>%
   filter(route_name %in% routes_buf$route_name,
          route_data_id %in% surveys$route_data_id) %>%
@@ -158,7 +214,7 @@ full_bird <- surveys_all %>%
   distinct()
 
 species_list <- bbsBayes2::load_bbs_data()[["species"]] %>%
-  filter(unid_combined == FALSE)
+  filter(unid_combined == TRUE)
 
 mean_counts_route <- full_bird %>%
   group_by(route_name,aou) %>%
