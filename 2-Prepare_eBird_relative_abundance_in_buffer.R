@@ -132,7 +132,7 @@ if(resident){
   breed_abundance <- abd_seasonal_abundance[["breeding"]]
 }
 
-
+saveRDS(breed_abundance,paste0("data/species_relative_abundance/",species_ebird,"_derived_breeding_relative_abundance.rds"))
 
 
 # # clipping ebird data to BBS strata region --------------------------------

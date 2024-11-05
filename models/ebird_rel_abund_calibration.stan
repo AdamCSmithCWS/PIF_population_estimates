@@ -14,8 +14,12 @@ data {
   real c_p; // mean of pair correction values
   real sd_c_p; // sd of pair correction values
 
-  real c_t; // mean time of day correction value
-  real sd_c_t; //sd of time of day correction value
+  real c_t; // mean time of day correction value or cue_rate correction
+  real sd_c_t; //sd of time of day correction value or sd of cue_rate correction
+  int<lower=0,upper=1> cue; // indicator for calculating distance with edr
+          // if cue == 1, then use cue_rate with 1/rnorm(c_d,sd_c_d)
+          // if cue == 0, then use cue_rate with rnorm(c_d,sd_c_d)
+
 
   real c_d; // mean distance correction value
   real sd_c_d; // sd of distance correction value
@@ -26,6 +30,7 @@ data {
           // if edr == 0, then use uniform dist between c_d_lower and c_d_upper
 
   int<lower=0,upper=1> use_pois; //indicator if count variation should be based on over-dispersed Poisson (if ==1) or Negative binomial (if == 0)
+  int<lower=0,upper=1> use_pair; //indicator if pair-correction should be used
   int<lower=0,upper=1> use_t; //indicator if route variation should be based on heavy tailed t-distribution instead of a normal
 
 }
@@ -75,13 +80,13 @@ transformed parameters{
 //
 model {
   nu ~ gamma(2,0.1); // prior on df for t-distribution of heavy tailed site-effects from https://github.com/stan-dev/stan/wiki/Prior-Choice-Recommendations#prior-for-degrees-of-freedom-in-students-t-distribution
-  BETA ~ normal(0,1);
+  BETA ~ student_t(3,0,2);
   if(use_t){
   beta_raw ~ student_t(nu,0,1);
   }else{
   beta_raw ~ normal(0,1);
   }
-  sd_beta ~ normal(0,1);
+  sd_beta ~ student_t(3,0,1);
   sdnoise ~ student_t(3,0,1); //prior on scale of extra Poisson log-normal variance or inverse sqrt(phi) for negative binomial
 
 if(use_pois){
@@ -100,6 +105,8 @@ generated quantities {
   vector[2] cp_sel;
   real cp_draw;
   real ct;
+  real<lower=0.001,upper=0.999> p_avail;
+  real<lower=0.001,upper=0.999> ctp; //ensuring that the rng_normal below doesn't generate impossible cue rate values
   real cd;
   real c_area;
   real calibration;
@@ -107,7 +114,9 @@ generated quantities {
   vector[n_routes] calibration_r;
   real adj;
 
-// ridiculous work around to allow for the limits on cp
+// ridiculous work around to allow for the limits on pair correction
+
+  if(use_pair){
   cp_draw = normal_rng(c_p,sd_c_p);
   cp_sel[1] = 1.0;
   cp_sel[2] = cp_draw;
@@ -115,8 +124,20 @@ generated quantities {
   cp_sel[1] = 2.0;
   cp_sel[2] = cp;
   cp = min(cp_sel);
+  }else{
+    cp = 1;
+  }
 
+  if(cue){
+    ctp = normal_rng(c_t,sd_c_t); // constrained between 0.001 and 0.999
+  p_avail = 1-(1-ctp)^3;// probability of at least one success
+  // with binomial probability = ctp
+  ct = 1/p_avail;
+  }else{
   ct = normal_rng(c_t,sd_c_t);
+  p_avail = 1/ct;
+  }
+
 
   if(edr){
     cd = normal_rng(c_d,sd_c_d);

@@ -32,7 +32,7 @@ By integrating the spatial information on the paths followed by each BBS route w
 With this alternative approach, we would modify the PIF population estimates equation to estimate the population density (population/unit area) of birds within the area adjacent to the $M$ BBS routes used in the calculation and within the detection radius of a given species $C_d$. The $M$ routes would be BBS routes surveyed at least once during years used in the calculation (usually the most recent 10 years) and that overlap the eBird breeding season, or resident, relative abundance surface.
 
 $$
-PopulationDensity_{BBS Adjacent} = \frac{\sum_{j=1}^{j=M} \frac{\sum_{i=1}^{i=n_j} Y_{i j}} {n_j} * C_P * C_T}  {M*50\pi*{C_D}^2} 
+PopulationDensity_{BBSAdjacent} = \frac{\sum_{j=1}^{j=M}\frac{\sum_{i=1}^{i=n_j}Y_{i j}} {n_j} * C_P * C_T}{M*50\pi*{C_D}^2} 
 $$
 
 To complement this BBS-adjacent population density, we can estimate a relative density of the eBird abundance within a buffer surrounding the BBS route paths, as the area-weighted mean (i.e., weighted by the area of the cell that is overlapped by the buffer) of the predicted relative abundance values of $c_j$ cells overlapped by the buffer of route $j$ of each of the $M$ BBS routes.

@@ -8,6 +8,181 @@ library(bbsBayes2)
 library(cmdstanr)
 library(ggrepel)
 library(tidyterra)
+library(napops)
+
+
+# Load BBS data -----------------------------------------------------------
+
+
+# mean counts to id routes on which species has been observed -------------
+mean_counts <- readRDS("data/mean_counts_by_route.rds") %>%
+  filter(english == sp_sel,
+         mean_count > 0)
+
+raw_counts <- readRDS("data/all_counts_by_route.rds") %>%
+  filter(english == sp_sel)
+
+
+surveys <- load_bbs_data(release = 2024)$routes %>%
+  filter(year > 2012)  %>%  # 10 years from 2013 - 2023, missing 2020.
+  mutate(doy = lubridate::yday(paste(year,month,day,sep = "-")),
+         start_hr = floor(start_time/100),
+         end_hr = floor(end_time/100),
+         start_min = start_hr*60 + ((start_time/100)-start_hr)*100,
+         end_min = end_hr*60 + ((end_time/100)-end_hr)*100,
+         mid_time = ((end_min - start_min)/120)-0.5) %>%
+  summarise(mean_time = mean(mid_time),
+            mean_doy = mean(doy))
+
+mid_time = round(surveys$mean_time,1)
+mid_doy = round(surveys$mean_doy)
+
+
+
+
+# Add na-pops EDRs --------------------------------------------------------
+
+
+Inputfiles.dir <- "Stanton_2019_code/input_files/" #paste(Inputfiles.dir, '/', sep="")
+napops_species <- napops::list_species() |>
+  dplyr::select(Species,Common_Name)
+
+re_napops <- FALSE # set to True to re-run the napops extraction
+
+if(re_napops){
+# Species specific adjustment factors (Time of Day, Detection Distance, Pair)
+ExpAdjs <- read.csv(paste(Inputfiles.dir, 'Species_PSEst_Adjustments.csv', sep=''), stringsAsFactors=FALSE)
+
+
+
+ExpAdjs <- ExpAdjs |>
+  dplyr::left_join(napops_species,
+                   by = c("cn" = "Common_Name"))
+
+for(i in 1:nrow(ExpAdjs)){
+  if(is.na(ExpAdjs[i,"Species"])){
+    print(paste("no napops edr for",ExpAdjs[i,"cn"]))
+          next}
+
+  sp <- ExpAdjs[i,"Species"]
+
+  # choose better supported model between models 1 (intercept) and 2 (roadside)
+  cefs <- napops::coef_distance(species = sp) |>
+    dplyr::filter(Model %in% c(1,2)) |>
+    dplyr::arrange(AIC)
+
+  if(nrow(cefs) == 0){next} # skip if no napops output
+
+  w_mod <- cefs[1,"Model"]
+
+  edrt <- try(napops::edr(species = sp,
+                  model = w_mod,
+                  forest = 0.5,
+                  road = TRUE,
+                  quantiles = c(0.1625), # 1 sd below the mean
+                  samples = 1000),
+              silent = TRUE)
+
+  if(edrt$EDR_est > 500){ # two species where the model 2 estimates of edr are silly (> 5 km!)
+    edrt <- try(napops::edr(species = sp,
+                    model = 1,
+                    forest = 0.5,
+                    road = TRUE,
+                    quantiles = c(0.1625),# 1 sd below the mean
+                    samples = 1000),
+                silent = TRUE)
+    w_mod <- 1
+  }
+
+  if(class(edrt) == "try-error"){
+    break(paste("edr extraction did not work for",sp))
+
+  }
+
+
+  ExpAdjs[i,"edr"] <- as.numeric(edrt$EDR_est)
+
+  if("EDR_16.25" %in% names(edrt)){
+    ExpAdjs[i,"edr_sd"] <- as.numeric(edrt$EDR_est)-as.numeric(edrt$EDR_16.25)
+  }
+
+  ExpAdjs[i,"EDR_model"] <- ifelse(w_mod == 1,"Intercept","Roadside")
+
+  rm(edrt, w_mod)
+}
+
+ExpAdjs <- ExpAdjs |>
+  dplyr::mutate(edr = ifelse(edr == 1,NA,edr),
+                use_edr = ifelse(is.na(edr),FALSE,TRUE))
+
+
+
+
+# Availability from napops ------------------------------------------------
+
+
+
+for(i in 1:nrow(ExpAdjs)){
+  if(is.na(ExpAdjs[i,"Species"])){
+    print(paste("no napops avail for",ExpAdjs[i,"cn"]))
+    next}
+
+  sp <- ExpAdjs[i,"Species"]
+
+  # choose better supported model between models 1 (intercept) and 2 (roadside)
+  cefs <- napops::coef_removal(species = sp) |>
+    #dplyr::filter(Model %in% c(1,2)) |>
+    dplyr::arrange(AIC)
+
+  if(nrow(cefs) == 0){next} # skip if no napops output
+
+  w_mod <- cefs[1,"Model"]
+
+  cue <- try(napops::cue_rate(species = sp,
+                          model = w_mod,
+                          od = mid_doy, # mean of the doy for all BBS surveys
+                          tssr = mid_time, #mean of time of day for all BBS surveys
+                          quantiles = c(0.1625), # 1 sd below the mean
+                          samples = 1000),
+              silent = TRUE)
+
+  # if(cue$EDR_est > 500){ # two species where the model 2 estimates of edr are silly (> 5 km!)
+  #   edrt <- try(napops::cue_rate(species = sp,
+  #                        model = 1,
+  #                        od = mid_doy, # mean of the doy for all BBS surveys
+  #                        tssr = mid_time, #mean of time of day for all BBS surveys
+  #                        quantiles = c(0.1625), # 1 sd below the mean
+  #                        samples = 1000),
+  #               silent = TRUE)
+  #   w_mod <- 1
+  # }
+
+  if(class(cue) == "try-error"){
+    break(paste("cue rate extraction did not work for",sp))
+
+  }
+
+
+  ExpAdjs[i,"cue_rate"] <- as.numeric(cue$CR_est)
+
+  if("CR_16.25" %in% names(cue)){
+    ExpAdjs[i,"cue_rate_sd"] <- as.numeric(cue$CR_est)-as.numeric(cue$CR_16.25)
+  }
+
+  ExpAdjs[i,"EDR_model"] <- w_mod
+
+  rm(cue, w_mod)
+}
+
+ExpAdjs <- ExpAdjs |>
+  dplyr::mutate(use_cue_rate = ifelse(is.na(cue_rate),FALSE,TRUE))
+
+
+write_csv(ExpAdjs,"Species_correction_factors_w_edr_cue.csv")
+# route overlap info ------------------------------------------------------
+}else{
+  ExpAdjs <- read_csv("Species_correction_factors_w_edr_cue.csv")
+}
 
 routes_buf_all <- readRDS("data/all_routes_buffered.rds")
 
@@ -19,7 +194,7 @@ strata_names <- strata %>%
 
 
 
-# key detail from Golden Eagle paper --------------------------------------
+# potentially important detail from Golden Eagle paper --------------------------------------
 ##  USE MAX WEEKLY RELATIVE ABUNDANCE DURING KEY SEASON
 # Using the 2019 relative abundance data product as a starting point, we calculated
 # the maximum eBird relative abundance value for each 3x3-km pixel over the weeks
@@ -116,7 +291,6 @@ pop_ests_out_trad <- bind_rows(USACAN_trad_all,
          pop_lci_95, pop_uci_95)
 
 
-# Missing national estimates --------------------
 
 
 
@@ -124,16 +298,20 @@ pop_ests_out_trad <- bind_rows(USACAN_trad_all,
 
 
 
-# species loop -----------------------------------------------------
 
+# Running full model using eBird relative abundance ------------------------------------------------
+
+#
+sps_list <- readRDS("data/all_bbs_data_species_list.rds") #
 
 sps_sel <- c("Tennessee Warbler","Bay-breasted Warbler",
              "Swainson's Thrush","Blue Jay",
              "Blue-headed Vireo","Bicknell's Thrush",
              "Wilson's Snipe","American Kestrel",
              "Steller's Jay")
+# species loop -----------------------------------------------------
 
-for(sp_sel in sps_sel){
+for(sp_sel in sps_sel){#list$english){
 
 sp_aou <- bbsBayes2::search_species(sp_sel)$aou[1]
 
@@ -150,13 +328,6 @@ bcr_trad <- bcr_trad_all %>%
 
 
 
-# mean counts to id routes on which species has been observed -------------
-mean_counts <- readRDS("data/mean_counts_by_route.rds") %>%
-  filter(english == sp_sel,
-         mean_count > 0)
-
-raw_counts <- readRDS("data/all_counts_by_route.rds") %>%
-  filter(english == sp_sel)
 
 # filtering routes on which species wasn't observed.
 routes_buf <- routes_buf_all %>%
@@ -186,11 +357,8 @@ mean_abund <- combined %>%
   distinct() %>%
   arrange(.,route)
 
-Inputfiles.dir <- "Stanton_2019_code/input_files/" #paste(Inputfiles.dir, '/', sep="")
 
-# Species specific adjustment factors (Time of Day, Detection Distance, Pair)
-ExpAdjs <- read.csv(paste(Inputfiles.dir, 'Species_PSEst_Adjustments.csv', sep=''), stringsAsFactors=FALSE)
-
+#adjustment scores
 adjs <- ExpAdjs %>%
   filter(cn == sp_sel)
 
@@ -200,6 +368,7 @@ library(cmdstanr)
 
 model <- cmdstanr::cmdstan_model("models/ebird_rel_abund_calibration.stan")
 
+
 stan_data <- list(n_routes = max(combined$route),
                   n_counts = nrow(combined),
                   count = combined$count,
@@ -207,24 +376,30 @@ stan_data <- list(n_routes = max(combined$route),
                   log_mean_rel_abund = mean_abund$logm,
                   c_p = adjs$Pair2,
                   sd_c_p = 0.13,
-                  c_d = 100,
-                  sd_c_d = 20,
-                  c_t = exp(adjs$TimeAdj.meanlog + 0.5*(adjs$TimeAdj.sdlog^2)),
-                  sd_c_t = exp(2*adjs$TimeAdj.meanlog + adjs$TimeAdj.sdlog^2)*(exp(adjs$TimeAdj.sdlog^2)-1),
+                  c_d = ifelse(adjs$use_edr,adjs$edr,1),
+                  sd_c_d = ifelse(adjs$use_edr,adjs$edr_sd,1),
+                  c_t = ifelse(adjs$use_cue_rate,
+                               adjs$cue_rate,
+                               exp(adjs$TimeAdj.meanlog + 0.5*(adjs$TimeAdj.sdlog^2))),
+                  sd_c_t = ifelse(adjs$use_cue_rate,
+                                  adjs$cue_rate_sd,
+                                  exp(2*adjs$TimeAdj.meanlog + adjs$TimeAdj.sdlog^2)*(exp(adjs$TimeAdj.sdlog^2)-1)),
                   c_d_lower = adjs$Dist.Lower,
                   c_d_upper = adjs$Dist.Upper,
-                  edr = 0,
+                  edr = ifelse(adjs$use_edr,1,0),
+                  cue = ifelse(adjs$use_cue_rate,1,0),
                   use_pois = 0,
+                  use_pair = 0,
                   use_t = 0
                   )
 
 
 if(nrow(adjs) == 0){
-  stan_data$c_p = mean(ExpAdjs$Pair2,na.rm = T)
-  stan_data$c_t = exp(mean(ExpAdjs$TimeAdj.meanlog,na.rm = T) + 0.5*(mean(ExpAdjs$TimeAdj.sdlog,na.rm = T)^2))
-  stan_data$sd_c_t = exp(2*mean(ExpAdjs$TimeAdj.meanlog,na.rm = T) + mean(ExpAdjs$TimeAdj.sdlog,na.rm = T)^2)*(exp(mean(ExpAdjs$TimeAdj.sdlog,na.rm = T)^2)-1)
-  stan_data$c_d_lower = mean(ExpAdjs$Dist.Lower,na.rm = T)
-  stan_data$c_d_upper = mean(ExpAdjs$Dist.Upper,na.rm = T)
+  # stan_data$c_p = mean(ExpAdjs$Pair2,na.rm = T)
+  # stan_data$c_t = exp(mean(ExpAdjs$TimeAdj.meanlog,na.rm = T) + 0.5*(mean(ExpAdjs$TimeAdj.sdlog,na.rm = T)^2))
+  # stan_data$sd_c_t = exp(2*mean(ExpAdjs$TimeAdj.meanlog,na.rm = T) + mean(ExpAdjs$TimeAdj.sdlog,na.rm = T)^2)*(exp(mean(ExpAdjs$TimeAdj.sdlog,na.rm = T)^2)-1)
+  # stan_data$c_d_lower = mean(ExpAdjs$Dist.Lower,na.rm = T)
+  # stan_data$c_d_upper = mean(ExpAdjs$Dist.Upper,na.rm = T)
 
 }
 
@@ -232,7 +407,8 @@ fit <- model$sample(data = stan_data,
                     parallel_chains = 4,
                     refresh = 500,
                     iter_warmup = 2000,
-                    iter_sampling = 2000)
+                    iter_sampling = 2000,
+                    show_exceptions = FALSE)
 
 
 
@@ -243,6 +419,61 @@ quant <- function(x,q){
 
 summ <- fit$summary()
 
+saveRDS(summ,paste0("convergence/parameter_summary_",sp_aou,"_",sp_ebird,".rds"))
+
+avail_correction_realised <- fit$summary(variable = "ct",
+                                "mean",
+                                "median",
+                                "sd",
+                                "rhat",
+                                "ess_bulk",
+                                q2_5 = ~quant(.x,q = 0.025),
+                                q10 = ~quant(.x,q = 0.10),
+                                q90 = ~quant(.x,q = 0.90),
+                                q97_5 = ~quant(.x,q = 0.975)) %>%
+  mutate(inference = "realised correction for time or availability")
+
+p_avail_realised <- fit$summary(variable = "p_avail",
+                                "mean",
+                                "median",
+                                "sd",
+                                "rhat",
+                                "ess_bulk",
+                                q2_5 = ~quant(.x,q = 0.025),
+                                q10 = ~quant(.x,q = 0.10),
+                                q90 = ~quant(.x,q = 0.90),
+                                q97_5 = ~quant(.x,q = 0.975)) %>%
+  mutate(inference = "realised p availability 3-minutes")
+
+
+
+edr_realised <- fit$summary(variable = "cd",
+                            "mean",
+                            "median",
+                            "sd",
+                            "rhat",
+                            "ess_bulk",
+                            q2_5 = ~quant(.x,q = 0.025),
+                            q10 = ~quant(.x,q = 0.10),
+                            q90 = ~quant(.x,q = 0.90),
+                            q97_5 = ~quant(.x,q = 0.975)) %>%
+  mutate(inference = "realised EDR")
+
+
+
+surveyed_area_realised <- fit$summary(variable = "c_area",
+                                      "mean",
+                                      "median",
+                                      "sd",
+                                      "rhat",
+                                      "ess_bulk",
+                                      q2_5 = ~quant(.x,q = 0.025),
+                                      q10 = ~quant(.x,q = 0.10),
+                                      q90 = ~quant(.x,q = 0.90),
+                                      q97_5 = ~quant(.x,q = 0.975)) %>%
+  mutate(inference = "realised surveyed area per BBS route")
+
+
 cali <- fit$summary(variable = "calibration",
                     "mean",
                     "median",
@@ -252,7 +483,8 @@ cali <- fit$summary(variable = "calibration",
                     q2_5 = ~quant(.x,q = 0.025),
                     q10 = ~quant(.x,q = 0.10),
                     q90 = ~quant(.x,q = 0.90),
-                    q97_5 = ~quant(.x,q = 0.975))
+                    q97_5 = ~quant(.x,q = 0.975))%>%
+  mutate(inference = "calibration assuming log normal route distribution")
 
 cali_post <- fit$draws(variables = "calibration",
                        format = "df")
@@ -267,10 +499,23 @@ cali_alt <- fit$summary(variable = "calibration_alt",
                     q2_5 = ~quant(.x,q = 0.025),
                     q10 = ~quant(.x,q = 0.10),
                     q90 = ~quant(.x,q = 0.90),
-                    q97_5 = ~quant(.x,q = 0.975))
+                    q97_5 = ~quant(.x,q = 0.975))%>%
+  mutate(inference = "calibration realised mean across groups")
 
 cali_alt_post <- fit$draws(variables = "calibration_alt",
                        format = "df")
+
+param_infer <- bind_rows(cali_alt,
+                         cali,
+                         avail_correction_realised,
+                         p_avail_realised,
+                         edr_realised,
+                         surveyed_area_realised) %>%
+  mutate(english = sp_sel,
+         sp_eBird = sp_ebird,
+         aou = sp_aou)
+
+saveRDS(param_infer,paste0("output/parameter_inference_",sp_aou,"_",sp_ebird,".rds"))
 
 # BETA_post <- fit$draws(variables = "BETA",
 #                        format = "df")
@@ -278,28 +523,15 @@ cali_alt_post <- fit$draws(variables = "calibration_alt",
 saveRDS(fit,paste0("output/calibration_fit_",sp_aou,"_",sp_ebird,".rds"))
 
 
-sp_ebird <- ebirdst::get_species(sp_sel)
+
+# loading the breeding season abundance raster generated in
+# 2_Prepare_eBird_relative_abundance_in_buffer.R
 #
-# down <- try(ebirdst::ebirdst_download_status(sp_ebird,
-#                                              download_ranges = FALSE,
-#                                              download_abundance = TRUE,
-#                                              download_occurrence = FALSE),
-#             silent = TRUE)
-#
+breed_abundance <- readRDS(paste0("data/species_relative_abundance/",
+                                  species_ebird,
+                                  "_derived_breeding_relative_abundance.rds"))
 
-abd_seasonal_abundance <- ebirdst::load_raster(species = sp_ebird,
-                                               resolution = "3km",
-                                               period = "seasonal",
-                                               product = "abundance")  #27km low resolution
-season_sel <- ifelse(any(grepl("resident",names(abd_seasonal_abundance))),"resident","breeding")
 
-# Need to explore the resident vs breeding season abundance patterns
-# At least for BCCH the resident relative abundance is not linearly related
-# to the BBS mean observations (log-linear)
-# Option: if resident, then extract the weekly abundance data for the
-# BBS survey season and generate a breeding season abundance
-
-breed_abundance <- abd_seasonal_abundance[[season_sel]]
 
 breed_abundance_full <- breed_abundance
 
@@ -358,7 +590,7 @@ post_abund <- function(x,draws = cali_post$calibration,
 
 strata_abund <- data.frame(region = strata_proj$strata_name,
                            region_type = "strata",
-                           sum_abund = 3^2 * unlist(abundance_in_strata[season_sel])) %>%
+                           sum_abund = 3^2 * unlist(abundance_in_strata[[1]])) %>%
   filter(!is.na(sum_abund)) %>%
   mutate(pop_mean = post_abund(sum_abund,
                                draws = cali_alt_post$calibration_alt,
@@ -413,6 +645,7 @@ comp_trad_new_plot <- ggplot(data = strata_compare,
                              aes(x = med.PopEst,
                                  y = pop_median))+
   geom_abline(slope = 1, intercept = 0)+
+  geom_abline(slope = 2, intercept = 0,linetype = 2)+
   geom_errorbar(aes(ymin = pop_lci_80,ymax = pop_uci_80),
                 alpha = 0.3, width = 0)+
   geom_errorbarh(aes(xmin = LCI80.PopEst,xmax = UCI80.PopEst),
@@ -425,7 +658,7 @@ comp_trad_new_plot <- ggplot(data = strata_compare,
   xlab("Traditional PIF population estimate")+
   ylab("PIF-Calibrated eBird relative abundance estimate")+
   labs(title = paste(sp_sel,"population estimates by BBS strata"),
-       subtitle = "Diagonal line = 1:1")
+       subtitle = "Diagonal lines = 1:1 and 2:1")
 
 png(filename = paste0("Figures/comp_trad_new_",sp_aou,"_",sp_ebird,".png"),
     res = 300,
@@ -458,7 +691,7 @@ abund_map <- ggplot()+
   geom_spatraster(data = breed_abundance_plot,
                   maxcell = 16000000)+
   geom_sf(data = strata, fill = NA)+
-  geom_sf(data = routes_buf,fill = "black",colour = NA)+
+  geom_sf(data = routes_buf,fill = "darkred",colour = "darkred")+
   coord_sf(xlim = c(bb[c("xmin","xmax")]),
            ylim = c(bb[c("ymin","ymax")]))+
   #scale_fill_gradientn(12,colours = terrain.colors(12),na.value = NA)+
@@ -516,7 +749,7 @@ abundance_in_countries <- terra::extract(breed_abundance,
 
 country_abund <- data.frame(region = countries_proj$country,
                             region_type = "country",
-                           sum_abund = 3^2 * unlist(abundance_in_countries[season_sel])) %>%
+                           sum_abund = 3^2 * unlist(abundance_in_countries[[1]])) %>%
   mutate(pop_mean = post_abund(sum_abund, draws = cali_alt_post$calibration_alt,
                                fun = "mean"),
          pop_median = post_abund(sum_abund, draws = cali_alt_post$calibration_alt,
@@ -562,7 +795,7 @@ abundance_in_bcr <- terra::extract(breed_abundance,
 
 bcr_abund <- data.frame(region = as.character(bcr_proj$bcr),
                             region_type = "bcr",
-                            sum_abund = 3^2 * unlist(abundance_in_bcr[season_sel])) %>%
+                            sum_abund = 3^2 * unlist(abundance_in_bcr[[1]])) %>%
   filter(!is.na(sum_abund)) %>%
   mutate(pop_mean = post_abund(sum_abund, draws = cali_alt_post$calibration_alt,
                                fun = "mean"),
@@ -611,7 +844,7 @@ abundance_in_USACAN <- terra::extract(breed_abundance,
 
 USACAN_abund <- data.frame(region = "USACAN",
                           region_type = "USACAN",
-                            sum_abund = 3^2 * unlist(abundance_in_USACAN[season_sel])) %>%
+                            sum_abund = 3^2 * unlist(abundance_in_USACAN[[1]])) %>%
   mutate(pop_mean = post_abund(sum_abund, fun = "mean"),
          pop_median = post_abund(sum_abund, draws = cali_alt_post$calibration_alt,
                                  fun = "quantile",p = 0.5),
