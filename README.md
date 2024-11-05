@@ -1,4 +1,3 @@
-
 ## Strata-free estimates
 
 Instead of summarising BBS observations within broad scale geo-political strata (e.g., Bird Conservation Regions by political jurisdictions), we can summarise for only the areas surrounding each BBS route.
@@ -76,12 +75,12 @@ C_{i,j} \sim NegativeBinomial(\lambda_{i,j},\phi)
 $$
 
 $$
-log(\lambda_{i,j}) = \alpha_{j} + log(RelativeAbundance_{i,j})
+log(\lambda_{i,j}) = \beta_{j} + log(RelativeAbundance_{i,j})
 $$
 
-In this model formulation, the intercept ($\alpha_j$) represents a scaling factor between the observed BBS counts and the eBird relative abundance for route-j. We can use a hierarchical structure to model the variation in the scaling factor among routes ($\sigma$), while accounting for the repeated observations at each route $\alpha_j\sim Normal(\mu,\sigma)$. The hyperparameter $\mu$ estimates the mean eBird-BBS scaling factor across all routes, and its posterior distribution estimates the variation in that scaling.
+In this model formulation, the intercept ($\beta_j$) represents a scaling factor between the observed BBS counts and the eBird relative abundance for route-j. We can use a hierarchical structure to model the variation in the scaling factor among routes ($\sigma$), while accounting for the repeated observations at each route $\beta_j\sim Normal(\mu,\sigma)$. The hyperparameter $\mu$ estimates the mean eBird-BBS scaling factor across all routes, and its posterior distribution estimates the variation in that scaling.
 
-We can then combine the posterior draws of the exponentiated scaling factor $\mu$, (including a retransformation factor, $0.5*\sigma^2$ to account for the asymetries of a log normal distribution) with the bootstrapping processes used in @stanton2019 to propagate the uncertainty of the scaling factor with the uncertainty of the correction factors for distance ($C_d$, a uniform distribution from 80% of the species' assigned distance category \[in km\] to 10% above the distance category), time of day ($C_t$, normal distribution with mean and standard deviation estimated in @stanton2019), and pairs ($C_p$, truncated normal distribution with a mean equal to the species' assigned pair correction value, standard deviation equal to 0.13, and truncated at 1.0 and 2.0).
+We can then combine the posterior draws of the exponentiated scaling factor $\mu$, (including a retransformation factor, $0.5*\sigma^2$ to account for the asymetries of a log normal distribution) with the bootstrapping processes used in @stanton2019 to propagate the uncertainty of the scaling factor with the uncertainty of the correction factors for distance ($C_d$, a uniform distribution from 80% of the species' assigned distance category $$in km$$ to 10% above the distance category), time of day ($C_t$, normal distribution with mean and standard deviation estimated in @stanton2019), and pairs ($C_p$, truncated normal distribution with a mean equal to the species' assigned pair correction value, standard deviation equal to 0.13, and truncated at 1.0 and 2.0).
 
 $$
 Calibration = \frac{exp(\mu + 0.5*\sigma^2)*C_t*C_p}{50*\pi*C_d}
@@ -91,19 +90,18 @@ This calibration factor mutliplied by an eBird relative abundance value in a giv
 
 For each posterior draw of the calibration factor, we can multiply the collection of eBird relative abundance cell values within any given area, account for the area of each cell (e.g., for the 3km cells in the highest resolution seasonal abundance surfaces 9 $km^2$), and generate a posterior draw of the species total population within that given area. Across all posterior draws, we can estimate the uncertainty of the population size estimate.
 
-## Example: American Robin, using Canadian BBS routes
+## Example: American Robin
 
-Using only BBS routes in Canada (i.e., the routes for which route-path spatial information is immediately available). We can demonstrate this estimation process. This species eBird breeding season relative abundance surface suggests that BBS routes sample a relatively biased component of the species' distribution, at least in Northern Canada (Figure 1).
+This species eBird breeding season relative abundance surface suggests that BBS routes sample a relatively biased component of the species' distribution, at least in Northern Canada (Figure 1).
 
-![The location of BBS routes (black squiggles representing a 1 km buffer around each BBS route with observations of American Robin) over the estimated breeding season relative abundance surface for American Robin in Yukon Territory, Canada.](figures/AMRO_YT_example.png){fig-alt="Map of the BBS route buffers over the American Robin relative abundance surface. The route buffers overlap the regions of the map with the highest predicted abundance."}
+![The location of BBS routes (black squiggles representing a 1 km buffer around each BBS route with observations of American Robin) over the estimated breeding season relative abundance surface for American Robin in Yukon Territory, Canada.](figures/AMRO_YT_example.png){fig.alt="Map of the BBS route buffers over the American Robin relative abundance surface. The route buffers overlap the regions of the map with the highest predicted abundance."}
 
 The biased sampling of American Robin abundance by BBS routes in Yukon territory (almost entirely within BCR 4) suggests that the standard PIF population estimate for American Robins in Yukon will be biased high.
 
-As expected, when we estimate PIF population sizes using the calibration model described above, the estimated number of American Robins in BCR-4 in Yukon Territory drops by approximately 35%, from 10 million birds based on the standard PIF approach to approximately 6.5 million birds based on the calibration model (Figure 2). Estimated population sizes are reduced for many of the large northern strata (US-AK-4, CA-QC-7, CA-NT-6) where sampling is likely biased in a way similar to that for Yukon Territory. In additiona, the estimates are reduced for some of the relatively large and mountainous strata (CA-BC-10 and CA-BC-5) where there are again likely similar biases in the BBS sampling (confined to valleys where there are roads and likely higher American Robin abundance than at higher elevations).
+As expected, the relative population sizes across the species' range change when we estimate PIF population sizes using the calibration model described above, and we re-scale the estimates using distance corrections based on data-informed estimates from the NA-POPS project (i.e., estimates of effective detection radii and the availability of birds during 3 minute surveys at the mean survey time for BBS, see: ([Edwards et al. 2023](https://doi.org/10.1111/ibi.13169)). For example, all estimates increase with the new methods, except for many of the large northern strata such as CA-YT-4 and other regions where sampling is likely biased in a similar to to Yukon (US-AK-4, CA-QC-7, CA-NT-6). The same is true for some of the relatively large and mountainous strata (CA-BC-10 and CA-BC-5) where there are again likely similar biases in the BBS sampling (confined to valleys where there are roads and likely higher American Robin abundance than at higher elevations).
 
 ![Comparison of strata-level population estimates for American Robin from the traditional PIF approach and the calibration model described here. Some strata are labelled where space is sufficient.](figures/comp_trad_new_7610_amerob.png)
 
-The map in Figure 3 shows the full breeding season relative abundance surface for American Robin and the location of the route paths used in the fitting of this model (i.e., the black squiggles in Canada).
+The map in Figure 3 shows the full breeding season relative abundance surface for American Robin and the location of the route paths used in the fitting of this model (i.e., the red squiggles).
 
 ![Breeding season, relative abundance surface from eBird for American Robin, with the route paths for Canadian BBS routes used in the calibration model.](figures/abund_map_7610_amerob.png)
-
