@@ -1048,6 +1048,52 @@ bcr_abund
 
 
 
+# BCR map -----------------------------------------------------------------
+
+
+bcr_sel <- bcr_abund$region
+
+bcrs_eqarea <- sf::st_transform(bcrs,
+                                st_crs(strata))
+bcrs_w_data <- bcrs_eqarea%>%
+  filter(BCR %in% bcr_sel,
+         BCR != 999,
+         BCR != 100)
+
+bb <- sf::st_bbox(bcrs_w_data)
+
+
+abund_map_bcrs <- ggplot()+
+  geom_sf(data = bcrs_eqarea, fill = NA)+
+  geom_spatraster(data = breed_abundance_plot,
+                  maxcell = 16000000)+
+  geom_sf(data = bcrs_eqarea, fill = NA)+
+  geom_sf_text(data = bcrs_eqarea,aes(label = BCR),
+               size = 2)+
+  geom_sf(data = routes_buf,fill = "darkred",colour = "darkred")+
+  coord_sf(xlim = c(bb[c("xmin","xmax")]),
+           ylim = c(bb[c("ymin","ymax")]))+
+  #scale_fill_gradientn(12,colours = terrain.colors(12),na.value = NA)+
+  scale_fill_viridis_c(direction = -1,
+                       option = "G",
+                       na.value = NA,
+                       end = 0.98)+
+  theme_bw()+
+  labs(title = paste(sp_sel,"eBird relative abundance values by BCR"))
+
+
+#
+
+png(filename = paste0("Figures/abund_map_bcrs_",sp_aou,"_",sp_ebird,".png"),
+    res = 400,
+    height = 7,
+    width = 6.5,
+    units = "in")
+print(abund_map_bcrs)
+dev.off()
+
+
+
 # USACAN estimates -----------------------------------------
 
 
@@ -1219,6 +1265,7 @@ print(vis_relationship)
 print(comp_trad_new_plot)
 print(abund_map)
 print(side_plot)
+print(abund_map_bcrs)
 print(ppc)
 dev.off()
 
