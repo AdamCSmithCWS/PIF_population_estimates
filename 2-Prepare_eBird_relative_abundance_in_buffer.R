@@ -36,12 +36,19 @@ sps_list <- readRDS("data/all_bbs_data_species_list.rds")
 
 qual_ebird <- ebirdst_runs
 
-
+re_calc <- FALSE # TRUE if want to re-calcluate the eBird-BBS overlap
+      # e.g., when new route spatial data
 
 for(i in rev(1:nrow(sps_list))){
 
   sp_sel <- unname(unlist(sps_list[i,"english"]))
 species_ebird <- ebirdst::get_species(sp_sel)
+
+if(file.exists(paste0("data/species_relative_abundance/",
+                      species_ebird,"_relative_abundance.rds")) &
+   file.exists(paste0("data/species_relative_abundance/",species_ebird,"_derived_breeding_relative_abundance.rds"))){
+  next
+}
 
 if(is.na(species_ebird)){
   sps_list[i,"available_ebird_data"] <- "Not in ebird species list"
