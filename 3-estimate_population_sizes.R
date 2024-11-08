@@ -160,7 +160,8 @@ for(i in 1:nrow(ExpAdjs)){
 
   w_mod <- cefs[1,"Model"]
 
-  cue <- try(napops::cue_rate(species = sp,
+  availability <- try(napops::avail(species = sp,
+                           time = 3,
                           model = w_mod,
                           od = mid_doy, # mean of the doy for all BBS surveys
                           tssr = mid_time, #mean of time of day for all BBS surveys
@@ -169,40 +170,40 @@ for(i in 1:nrow(ExpAdjs)){
               silent = TRUE)
 
 
-  if(class(cue) == "try-error"){
-    break(paste("cue rate extraction did not work for",sp))
+  if(class(availability) == "try-error"){
+    break(paste("availability extraction did not work for",sp))
 
   }
 
 
-  ExpAdjs[i,"cue_rate"] <- as.numeric(cue$CR_est)
+  ExpAdjs[i,"availability"] <- as.numeric(availability$p_est)
 
-  if("CR_16.25" %in% names(cue)){
-    ExpAdjs[i,"cue_rate_sd"] <- as.numeric(cue$CR_est)-as.numeric(cue$CR_16.25)
+  if("p_16.25" %in% names(availability)){
+    ExpAdjs[i,"availability_sd"] <- as.numeric(availability$p_est)-as.numeric(availability$p_16.25)
   }
 
-  ExpAdjs[i,"Cue_rate_model"] <- w_mod
+  ExpAdjs[i,"availability_model"] <- w_mod
 
-  rm(cue, w_mod)
+  rm(availability, w_mod)
 }
 
 ExpAdjs <- ExpAdjs |>
-  dplyr::mutate(use_cue_rate = ifelse(is.na(cue_rate),FALSE,TRUE))
+  dplyr::mutate(use_availability = ifelse(is.na(availability),FALSE,TRUE))
 
 
-write_csv(ExpAdjs,"Species_correction_factors_w_edr_cue.csv")
+write_csv(ExpAdjs,"Species_correction_factors_w_edr_availability.csv")
 # route overlap info ------------------------------------------------------
 }else{
-  ExpAdjs <- read_csv("Species_correction_factors_w_edr_cue.csv")
+  ExpAdjs <- read_csv("Species_correction_factors_w_edr_availability.csv")
 }
 
-# ID species missing edrs or cue-rates
+# ID species missing edrs or availability-rates
 corrections_example_sp <- ExpAdjs %>%
   filter(cn %in% sp_example)
 
-if(any(!corrections_example_sp$use_cue_rate) |
+if(any(!corrections_example_sp$use_availability) |
    any(!corrections_example_sp$use_edr)){
-  warning("edr or cue rate missing for some species")
+  warning("edr or availability missing for some species")
 }
 
 routes_buf_all <- readRDS("data/all_routes_buffered.rds")
@@ -471,16 +472,16 @@ stan_data <- list(n_routes = max(combined$route),
                   sd_c_p = 0.13,
                   c_d = ifelse(adjs$use_edr,adjs$edr,1),
                   sd_c_d = ifelse(adjs$use_edr,adjs$edr_sd,1),
-                  c_t = ifelse(adjs$use_cue_rate,
-                               adjs$cue_rate,
+                  c_t = ifelse(adjs$use_availability,
+                               adjs$availability,
                                exp(adjs$TimeAdj.meanlog + 0.5*(adjs$TimeAdj.sdlog^2))),
-                  sd_c_t = ifelse(adjs$use_cue_rate,
-                                  adjs$cue_rate_sd,
+                  sd_c_t = ifelse(adjs$use_availability,
+                                  adjs$availability_sd,
                                   exp(2*adjs$TimeAdj.meanlog + adjs$TimeAdj.sdlog^2)*(exp(adjs$TimeAdj.sdlog^2)-1)),
                   c_d_lower = adjs$Dist.Lower,
                   c_d_upper = adjs$Dist.Upper,
                   use_edr = ifelse(adjs$use_edr,1,0),
-                  use_cue = ifelse(adjs$use_cue_rate,1,0),
+                  use_availability = ifelse(adjs$use_availability,1,0),
                   use_pois = 0,
                   use_pair = 1,
                   use_t = 1
@@ -509,6 +510,7 @@ fit <- model$sample(data = stan_data,
 
 summ <- fit$summary()
 #shinystan::launch_shinystan(fit)
+fit$save_object(paste0("output/calibration_fit_",sp_aou,"_",sp_ebird,".rds"))
 
 saveRDS(summ,paste0("convergence/parameter_summary_",sp_aou,"_",sp_ebird,".rds"))
 
@@ -649,7 +651,6 @@ saveRDS(param_infer,paste0("output/parameter_inference_",sp_aou,"_",sp_ebird,".r
 # BETA_post <- fit$draws(variables = "BETA",
 #                        format = "df")
 
-fit$save_object(paste0("output/calibration_fit_",sp_aou,"_",sp_ebird,".rds"))
 
 
 

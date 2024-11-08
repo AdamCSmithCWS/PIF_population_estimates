@@ -19,11 +19,11 @@ data {
   real c_p; // mean of pair correction values
   real sd_c_p; // sd of pair correction values
 
-  real c_t; // mean time of day correction value or cue_rate correction
-  real sd_c_t; //sd of time of day correction value or sd of cue_rate correction
-  int<lower=0,upper=1> use_cue; // indicator for calculating distance with edr
-          // if use_cue == 1, then use cue_rate with 1/rnorm(c_d,sd_c_d)
-          // if use_cue == 0, then use cue_rate with rnorm(c_d,sd_c_d)
+  real c_t; // mean time of day correction value or availability correction
+  real sd_c_t; //sd of time of day correction value or sd of availability correction
+  int<lower=0,upper=1> use_availability; // indicator for calculating availability
+          // if use_availability == 1, then use availability with 1/rnorm(c_d,sd_c_d)
+          // if use_availability == 0, then use availability with rnorm(c_d,sd_c_d)
 
 
   real c_d; // mean distance correction value
@@ -136,7 +136,7 @@ generated quantities {
   real cp_draw;
   real ct;
   real<lower=0.001,upper=0.999> p_avail;
-  real<lower=0.001,upper=0.999> ctp; //ensuring that the rng_normal below doesn't generate impossible cue rate values
+  real<lower=0.001,upper=0.999> ctp; //ensuring that the rng_normal below doesn't generate impossible availability rate values
   real cd;
   real c_area;
   real calibration;
@@ -171,9 +171,9 @@ y_rep[i] = neg_binomial_2_log_rng(beta[route[i]] + gamma[year[i]] + log_mean_rel
     cp = 1;
   }
 
-  if(use_cue){
+  if(use_availability){
     ctp = normal_rng(c_t,sd_c_t); // constrained between 0.001 and 0.999
-  p_avail = 1-(1-ctp)^3;// probability of at least one success
+  p_avail = ctp;// probability of at least one success
   // with binomial probability = ctp
   ct = 1/p_avail;
   }else{
@@ -196,7 +196,7 @@ if(use_t){
   adj = 1;
 }
 
-// this calibration assumes the distribution of route-level betas is approximately normal
+// this calibration assumes the distribution of route-level betas is symetrical
   calibration = ((exp(BETA + 0.5*(sd_beta/adj)^2)) * cp * ct) / c_area;
   calibration_log = (BETA + 0.5*(sd_beta/adj)^2 + log(cp) + log(ct)) -log(c_area);
 
@@ -205,8 +205,10 @@ if(use_t){
   }
   // this calibration does not assume a normal distribution of beta[j]
   // but also assumes estimates a mean across the realised set of routes
+  // it is also highly sensitive to long tails of the distribution of route-level variation
   calibration_alt = mean(calibration_r);
   calibration_median = quantile(calibration_r,0.5);
-
+  // The difference between these two calibration metrics may be a good criterion
+  // by which to identify strange variation among routes
 
 }
