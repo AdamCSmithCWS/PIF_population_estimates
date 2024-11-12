@@ -161,12 +161,12 @@ route_starts <- routes_w_data %>%
 routes_buf <- routes_buf %>%
   filter(route_name %in% route_starts$route_name)
 
-vie <- ggplot()+
-  geom_sf(data = routes_buf,
-          aes(colour = first_year))+
-  geom_sf(data = route_starts)
-
-vie
+# vie <- ggplot()+
+#   geom_sf(data = routes_buf,
+#           aes(colour = first_year))+
+#   geom_sf(data = route_starts)
+#
+# vie
 
 ## the area of each route is different and so the summed
 ## ebird abundance on each each route will vary just based on
@@ -179,8 +179,29 @@ vie
 surveys <- load_bbs_data(release = 2024)$routes %>%
   select(-route_name) %>%
   filter(year > 2012) %>%  # 10 years from 2013 - 2023, missing 2020.
-  mutate(route_name = paste(state_num,route,sep = "-")) %>%
+  mutate(route_name = paste(state_num,route,sep = "-"),
+         doy = lubridate::yday(paste(year,month,day,sep = "-"))) %>%
   filter(route_name %in% unique(routes_buf$route_name))
+
+
+n_obs_summary <- surveys %>%
+  select(route_name,obs_n,year) %>%
+  distinct() %>%
+  group_by(route_name,obs_n) %>%
+  summarise(n_surveys = n())
+
+n_obs_route <- n_obs_summary %>%
+  group_by(route_name) %>%
+  summarise(n_obs = n(),
+            min_yrs_by_obs = min(n_surveys),
+            max_yrs_by_obs = max(n_surveys))
+
+n_routes_ob <- n_obs_summary %>%
+  group_by(obs_n) %>%
+  summarise(n_routes = n(),
+            min_yrs_by_route = min(n_surveys),
+            max_yrs_by_route = max(n_surveys))
+
 
 
 
@@ -205,13 +226,18 @@ full_bird <- surveys_all %>%
             by = c("route_data_id",
                    "aou")) %>%
   mutate(count = ifelse(is.na(species_total),0,
-                              species_total)) %>%
+                              species_total),
+         strata_name = paste(country,st_abrev,bcr,sep ="-")) %>%
   select(route_data_id,
          route_name,
          aou,
          count,
-         year) %>%
+         year,
+         obs_n,
+         doy,
+         strata_name) %>%
   distinct()
+unique(full_bird$strata_name)
 
 species_list <- bbsBayes2::load_bbs_data()[["species"]] %>%
   filter(unid_combined == TRUE)

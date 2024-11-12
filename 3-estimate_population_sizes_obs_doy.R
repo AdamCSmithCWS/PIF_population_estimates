@@ -11,7 +11,7 @@ library(tidyterra)
 library(napops)
 library(tidybayes)
 
-load("functions/GAM_basis_function_mgcv.R")
+source("functions/GAM_basis_function_mgcv.R")
 
 yr_ebird <- 2022 # prediction year for eBird relative abundance
 
@@ -472,14 +472,18 @@ inner_join(.,raw_counts,
   mutate(logm = log(ebird_abund),
          route = as.integer(factor(route_name)),
          prov_state = str_extract(pattern = ".+(?=[[:punct:]])",string = route_name),
-         yr = year-(min(year)-1))
+         yr = year-(min(year)-1),
+         observer = as.integer(factor(obs_n)),
+         strata = as.integer(factor(strata_name)),
+         doy = 1+(doy-(min(doy))),
+         route_obs = as.integer(factor(paste(route_name,obs_n,sep = "-")))) # doy centered on earliest survey day for species
 
 
 
 mean_abund <- combined %>%
-  select(route,logm) %>%
+  select(route_obs,logm) %>%
   distinct() %>%
-  arrange(.,route)
+  arrange(.,route_obs)
 
 
 #adjustment scores
@@ -489,18 +493,32 @@ if(nrow(adjs) == 0){next}
 if(!(adjs$use_edr | adjs$use_availability)){next}
 
 #library(cmdstanr)
+#
+#
 # Fit stan model ----------------------------------------------------------
 
+# setup for GAM of doy ----------------------------------------------------
 
-model <- cmdstanr::cmdstan_model("models/ebird_rel_abund_calibration_year.stan")
+
+doy_gam <- gam_basis(combined$doy, nknots = 7,
+                     predpoints = c(1:max(combined$doy)),
+                     sm_name = "doy")
+
+model <- cmdstanr::cmdstan_model("models/ebird_rel_abund_calibration_year_doy_obs.stan")
 
 
-stan_data <- list(n_routes = max(combined$route),
+stan_data <- list(n_route_obs = max(combined$route_obs),
                   n_counts = nrow(combined),
                   n_years = max(combined$yr),
+                  n_knots_doy = 7,
+                  n_doy = max(combined$doy),
+                  n_strata = max(combined$strata),
                   count = combined$count,
-                  route = combined$route,
+                  route = combined$route_obs,
                   year = combined$yr,
+                  strata = combined$strata,
+                  doy = combined$doy,
+                  doy_basis = doy_gam$doy_basispred,
                   ebird_year = yr_ebird-(min(combined$year)-1),
                   yrev = seq(from = (yr_ebird-(min(combined$year))),to = 1, by = -1),
                   log_mean_rel_abund = mean_abund$logm,
@@ -568,13 +586,23 @@ params_to_summarise <- c("nu",
                          "calibration_log",
                          "calibration_r",
                          "adj",
-                         "raw_prediction")
+                         "raw_prediction",
+                         "obs",
+                         "sd_obs",
+                         "sd_doy",
+                         "sd_DOY",
+                         "doy_raw",
+                         "DOY_raw",
+                         "DOY_b",
+                         "doy_b",
+                         "DOY_pred",
+                         "doy_pred")
 
 summ <- fit$summary(variables = params_to_summarise)
 #shinystan::launch_shinystan(fit)
-fit$save_object(paste0("output/calibration_fit_",sp_aou,"_",sp_ebird,".rds"))
+fit$save_object(paste0("output/calibration_fit_alt_",sp_aou,"_",sp_ebird,".rds"))
 
-saveRDS(summ,paste0("convergence/parameter_summary_",sp_aou,"_",sp_ebird,".rds"))
+saveRDS(summ,paste0("convergence/parameter_summary_alt_",sp_aou,"_",sp_ebird,".rds"))
 
 
 
@@ -698,7 +726,7 @@ param_infer <- bind_rows(cali_alt,
          sp_eBird = sp_ebird,
          aou = sp_aou)
 
-saveRDS(param_infer,paste0("output/parameter_inference_",sp_aou,"_",sp_ebird,".rds"))
+saveRDS(param_infer,paste0("output/parameter_inference_alt_",sp_aou,"_",sp_ebird,".rds"))
 
 adjs[1,"calibration"] <- as.numeric(cali$mean)
 adjs[1,"calibration_sd"] <- as.numeric(cali$sd)
@@ -999,7 +1027,7 @@ comp_trad_new_plot <- ggplot(data = strata_compare,
   labs(title = paste(sp_sel,"population estimates by BBS strata"),
        subtitle = "Diagonal lines = 1:1 and 2:1")
 
-png(filename = paste0("Figures/comp_trad_new_",sp_aou,"_",sp_ebird,".png"),
+png(filename = paste0("Figures/comp_trad_new_alt_",sp_aou,"_",sp_ebird,".png"),
     res = 300,
     height = 6,
     width = 6,
@@ -1057,7 +1085,7 @@ abund_map <- ggplot()+
 
 #
 
-png(filename = paste0("Figures/abund_map_",sp_aou,"_",sp_ebird,".png"),
+png(filename = paste0("Figures/abund_map_alt_",sp_aou,"_",sp_ebird,".png"),
     res = 400,
     height = 7,
     width = 6.5,
@@ -1066,8 +1094,8 @@ print(abund_map)
 dev.off()
 
 
-saveRDS(comp_trad_new_plot,paste0("figures/saved_ggplots/trad_vs_new_",sp_aou,"_",sp_ebird,".rds"))
-saveRDS(abund_map,paste0("figures/saved_ggplots/abund_map_",sp_aou,"_",sp_ebird,".rds"))
+saveRDS(comp_trad_new_plot,paste0("figures/saved_ggplots/trad_vs_new_alt_",sp_aou,"_",sp_ebird,".rds"))
+saveRDS(abund_map,paste0("figures/saved_ggplots/abund_map_alt_",sp_aou,"_",sp_ebird,".rds"))
 
 
 
@@ -1213,7 +1241,7 @@ abund_map_bcrs <- ggplot()+
 
 #
 
-png(filename = paste0("Figures/abund_map_bcrs_",sp_aou,"_",sp_ebird,".png"),
+png(filename = paste0("Figures/abund_map_bcrs_alt_",sp_aou,"_",sp_ebird,".png"),
     res = 400,
     height = 7,
     width = 6.5,
@@ -1349,7 +1377,7 @@ pop_ests_out <- bind_rows(USACAN_abund,
 # Sum of population estimates
 
 write_excel_csv(pop_ests_out,
-                paste0("estimates/pop_ests_",sp_aou,sp_ebird,".csv"))
+                paste0("estimates/pop_ests_alt_",sp_aou,sp_ebird,".csv"))
 
 
 pop_ests_out_trad_sel <- pop_ests_out_trad %>%
@@ -1365,7 +1393,7 @@ pop_compare_stack <- pop_ests_out %>%
 
 
 pop_compare_stack_sel <- pop_compare_stack %>%
-  filter(region_type %in% c("USACAN","continent","global","bcr"))
+  filter(region_type %in% c("USACAN","continent","country","global","bcr"))
 
 
 side_plot <- ggplot(data = pop_compare_stack_sel,
@@ -1384,10 +1412,10 @@ side_plot <- ggplot(data = pop_compare_stack_sel,
   theme_bw()
 
 
-saveRDS(side_plot,paste0("figures/saved_ggplots/side_plot_",sp_aou,"_",sp_ebird,".rds"))
+saveRDS(side_plot,paste0("figures/saved_ggplots/side_plot_alt_",sp_aou,"_",sp_ebird,".rds"))
 
 
-pdf(paste0("figures/estimate_plots_",sp_aou,"_",sp_ebird,".pdf"),
+pdf(paste0("figures/estimate_plots_alt_",sp_aou,"_",sp_ebird,".pdf"),
     width = 11,
     height = 8.5)
 print(vis_relationship)
