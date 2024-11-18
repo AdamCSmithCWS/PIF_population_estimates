@@ -38,7 +38,7 @@ sp_example <- c("American Robin",
                 "Barn Swallow",
                 "Verdin","Ash-throated Flycatcher","Black-throated Sparrow",
                 "Blue Jay","Varied Thrush","Veery","Wood Thrush","Chestnut-collared Longspur",
-                "Bobolink")
+                "Bobolink","Savannah Sparrow","Grasshopper Sparrow")
 
 # Load BBS data -----------------------------------------------------------
 
@@ -204,7 +204,6 @@ ExpAdjs <- ExpAdjs |>
 
 
 write_csv(ExpAdjs,"Species_correction_factors_w_edr_availability.csv")
-# route overlap info ------------------------------------------------------
 }else{
   ExpAdjs <- read_csv("Species_correction_factors_w_edr_availability.csv")
 }
@@ -410,11 +409,14 @@ today <- as_date(Sys.Date())
 if(file.exists(paste0("adjs_out",today,".csv"))){
   adjs_out <- read_csv(paste0("adjs_out",today,".csv"))
   wh_drop_already <- which(sp_example %in% adjs_out$cn)
+  wh_drop <- c(wh_drop_already,8)
+}else{
+  wh_drop <- 8
 }
 
 
-for(sp_sel in sp_example[-c(wh_drop_already,8)]){#list$english){
-
+for(sp_sel in sp_example[-wh_drop]){#list$english){
+#sp_sel = "Connecticut Warbler"
   mean_counts <- mean_counts_all %>%
     filter(english == sp_sel,
            mean_count > 0)
@@ -466,16 +468,18 @@ if(!file.exists(paste0("data/species_relative_abundance/",
 rel_abund <- readRDS(paste0("data/species_relative_abundance/",
                             sp_ebird,"_relative_abundance.rds"))
 
+
 combined <- rel_abund %>%
 inner_join(.,raw_counts,
            by = "route_name") %>%
   mutate(logm = log(ebird_abund),
+         day_of_year = doy,
          route = as.integer(factor(route_name)),
          prov_state = str_extract(pattern = ".+(?=[[:punct:]])",string = route_name),
          yr = year-(min(year)-1),
          observer = as.integer(factor(obs_n)),
          strata = as.integer(factor(strata_name)),
-         doy = 1+(doy-(min(doy))),
+         doy = 1+(day_of_year-(min(day_of_year))),
          route_obs = as.integer(factor(paste(route_name,obs_n,sep = "-")))) # doy centered on earliest survey day for species
 
 
@@ -512,6 +516,7 @@ stan_data <- list(n_route_obs = max(combined$route_obs),
                   n_years = max(combined$yr),
                   n_knots_doy = 7,
                   n_doy = max(combined$doy),
+                  mid_doy = as.integer(round(max(combined$doy)/2)),
                   n_strata = max(combined$strata),
                   count = combined$count,
                   route = combined$route_obs,
@@ -587,8 +592,6 @@ params_to_summarise <- c("nu",
                          "calibration_r",
                          "adj",
                          "raw_prediction",
-                         "obs",
-                         "sd_obs",
                          "sd_doy",
                          "sd_DOY",
                          "doy_raw",
@@ -600,6 +603,8 @@ params_to_summarise <- c("nu",
 
 summ <- fit$summary(variables = params_to_summarise)
 #shinystan::launch_shinystan(fit)
+
+
 fit$save_object(paste0("output/calibration_fit_alt_",sp_aou,"_",sp_ebird,".rds"))
 
 saveRDS(summ,paste0("convergence/parameter_summary_alt_",sp_aou,"_",sp_ebird,".rds"))
@@ -815,6 +820,44 @@ adjs$R_squared_not_route_uci <- quantile(R_squared_not_route,0.95)
 
 adjs_out <- bind_rows(adjs_out,adjs)
 
+# Seasonal corrections on counts ------------------------------------------
+strat_names <- combined %>%
+  select(strata,strata_name) %>%
+  distinct()
+
+seasonal_strat <- summ %>% filter(grepl("doy_pred[",variable,fixed = TRUE)) %>%
+  mutate(doy = rep(c(1:stan_data$n_doy),times = stan_data$n_strata) + (min(combined$day_of_year)-1),
+         strata = rep(c(1:stan_data$n_strata),each = stan_data$n_doy)) %>%
+  inner_join(strat_names,by = "strata")
+
+seasonal <- summ %>% filter(grepl("DOY_pred[",variable,fixed = TRUE)) %>%
+  mutate(doy = c(1:stan_data$n_doy)+ (min(combined$day_of_year)-1))
+
+strat_labs <- seasonal_strat %>%
+  filter(doy == max(combined$day_of_year))
+
+vis_season <- ggplot(data = seasonal_strat,
+                     aes(x = doy,y = mean,
+                         group = strata_name,
+                         colour = strata_name))+
+  geom_ribbon(data = seasonal,aes(x = doy,y = mean,
+                                  ymin = q5, ymax = q95),
+              alpha = 0.2,
+              inherit.aes = FALSE)+
+  geom_line(data = seasonal,aes(x = doy,y = mean),
+            inherit.aes = FALSE)+
+  geom_line(alpha = 0.3)+
+  coord_cartesian(xlim = c(100,240))+
+  ggrepel::geom_text_repel(data = strat_labs, aes(label = strata_name),
+                           size = 1.5,
+                           min.segment.length = 0,
+                           xlim = c(200,240),
+                           nudge_x = 20)+
+  scale_colour_viridis_d()+
+  theme(legend.position = "none")
+
+
+
 # explore relationship ----------------------------------------------------
 y_pred_bind <- data.frame(year = rep(c(1:stan_data$n_years)+2012,2),
                           ebird_abund = rep(c(min(combined$ebird_abund),max(combined$ebird_abund)),each = stan_data$n_years))
@@ -1025,7 +1068,7 @@ comp_trad_new_plot <- ggplot(data = strata_compare,
   xlab("Traditional PIF population estimate")+
   ylab("PIF-Calibrated eBird relative abundance estimate")+
   labs(title = paste(sp_sel,"population estimates by BBS strata"),
-       subtitle = "Diagonal lines = 1:1 and 2:1")
+       subtitle = "Diagonal lines = 1:1, 2:1, and 5:1")
 
 png(filename = paste0("Figures/comp_trad_new_alt_",sp_aou,"_",sp_ebird,".png"),
     res = 300,
@@ -1414,7 +1457,7 @@ side_plot <- ggplot(data = pop_compare_stack_sel,
 
 saveRDS(side_plot,paste0("figures/saved_ggplots/side_plot_alt_",sp_aou,"_",sp_ebird,".rds"))
 
-
+saveRDS(combined,paste0("data/main_data_df_alt_",sp_aou,"_",sp_ebird,".rds"))
 pdf(paste0("figures/estimate_plots_alt_",sp_aou,"_",sp_ebird,".pdf"),
     width = 11,
     height = 8.5)
@@ -1424,6 +1467,7 @@ print(abund_map)
 print(side_plot)
 print(abund_map_bcrs)
 print(ppc)
+print(vis_season)
 dev.off()
 
 write_csv(adjs_out,paste0("adjs_out",today,".csv"))

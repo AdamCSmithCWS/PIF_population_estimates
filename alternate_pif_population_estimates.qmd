@@ -67,9 +67,9 @@ Generating this calibration within relatively small areas surrounding the BBS ro
 
 The above comparison of means across all BBS routes ignores the variation in the calibration across routes and the uncertainty in the estimation of the species abundance on any given BBS routes.
 
-To account for the uncertainty of this calibration, we can fit a Bayesian hierarchical model that estimates the calibration factor while accounting for: 1) the variation in the calibration factor among repeated counts on each route, 2) the variation in the calibration factor among routes; and 3) all of the remaining uncertainty components used in PIF uncertainty estimates [@stanton2019].
+To account for the uncertainty of this calibration, we can fit a Bayesian hierarchical model that estimates the calibration factor while accounting for: 1) the variation in the calibration factor among routes, 2) the variation in the calibration factor among repeated counts on each route; 3) the estimated availability of birds for detection (and its uncertainty) during a 3-minute BBS point count conducted on that day and in that BBS survey stratum; 4) the estimated detectability distance for roadside counts and the uncertainty in its estimate; and 5) the pair correction factor used in previous PIF population estimates [@stanton2019].
 
-This proposed model would use the area weighted mean eBird relative abundance cell values in the buffer zone of route-j ($RelativeAbundance_j$, same as above) to model the observed BBS counts at that route over the 10 most recent years of BBS data.
+The model would use the area weighted mean eBird relative abundance cell values in the buffer zone of route-j ($RelativeAbundance_j$, same as above) to model the observed BBS count on route-j, by observer-i, in year-t.
 
 $$
 RelativeAbundance_{j} = \frac{\sum_{i=1}^{i=c_j}RelativeAbundance_{i}*a_i}{\sum_{i=1}^{i=c_j}a_{i}}

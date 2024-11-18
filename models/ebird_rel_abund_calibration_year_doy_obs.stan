@@ -23,6 +23,7 @@ data {
   array[ebird_year-1] int<lower=1> yrev; // reverse year vector (ebird_year-1):1
   int<lower=1> n_doy; // number of unique values of doy (max(doy))
   int<lower=1> n_strata; // number of unique values of doy (max(doy))
+  int<lower=1> mid_doy;
 
   array[n_counts] int<lower=0> count; // Raw BBS counts
   array[n_counts] int<lower=1> route; // route indicators for counts
@@ -78,7 +79,7 @@ parameters {
 
   vector[n_knots_doy] DOY_raw;         // GAM hyper coefficients for doy
   matrix[n_strata,n_knots_doy] doy_raw;         // GAM strata level parameters
-  real<lower=0> sd_doy;    // sd of doy effects among strata
+  vector<lower=0>[n_strata] sd_doy;    // sd of doy effects among strata
   real<lower=0> sd_DOY;    // sd of doy effect hyperparameter
 
 }
@@ -99,7 +100,7 @@ transformed parameters{
   DOY_pred = doy_basis*DOY_b;
 
   for(k in 1:n_strata){
-    doy_b[k,] = (sd_doy * doy_raw[k,]) + transpose(DOY_b);
+    doy_b[k,] = (sd_doy[k] * doy_raw[k,]) + transpose(DOY_b);
     doy_pred[,k] = doy_basis * transpose(doy_b[k,]);
   }
 
@@ -149,7 +150,7 @@ model {
   sd_beta ~ student_t(3,0,1);
   sdnoise ~ student_t(3,0,1); //prior on scale of extra Poisson log-normal variance or inverse sqrt(phi) for negative binomial
   sd_gamma ~ gamma(2,10); //time-series annual variance in gamma
-  sd_doy ~ normal(0,1);
+  sd_doy ~ gamma(2,10); // weak shrinkage prior with zero-avoidance
   sd_DOY ~ normal(0,1);
   DOY_raw ~ normal(0,1);         // GAM hyper coefficients for doy
   for(s in 1:n_strata){
@@ -201,8 +202,8 @@ generated quantities {
   array[n_years,2] real raw_prediction;
 
 for(y in 1:n_years){
-  raw_prediction[y,1] = exp(min(log_mean_rel_abund + BETA+gamma[y] + 0.5*sd_beta^2));
-  raw_prediction[y,2] = exp(max(log_mean_rel_abund + BETA+gamma[y] + 0.5*sd_beta^2));
+  raw_prediction[y,1] = exp(min(log_mean_rel_abund + DOY_pred[mid_doy] + BETA+gamma[y] + 0.5*sd_beta^2));
+  raw_prediction[y,2] = exp(max(log_mean_rel_abund + DOY_pred[mid_doy] + BETA+gamma[y] + 0.5*sd_beta^2));
 }
 // posterior predictive check
 for(i in 1:n_counts){
@@ -249,11 +250,11 @@ if(use_t){
 }
 
 // this calibration assumes the distribution of route-level betas is symetrical
-  calibration = ((exp(BETA + 0.5*(sd_beta/adj)^2)) * cp * ct) / c_area;
-  calibration_log = (BETA + 0.5*(sd_beta/adj)^2 + log(cp) + log(ct)) -log(c_area);
+  calibration = (exp(BETA + 0.5*(sd_beta/adj)^2 + DOY_pred[mid_doy]) * cp * ct) / c_area;
+  calibration_log = (BETA + 0.5*(sd_beta/adj)^2  + DOY_pred[mid_doy] + log(cp) + log(ct)) -log(c_area);
 
   for(j in 1:n_route_obs){
-    calibration_r[j] = (exp(beta[j]) * cp * ct) / c_area;
+    calibration_r[j] = (exp(beta[j] + DOY_pred[mid_doy]) * cp * ct) / c_area;
   }
   // this calibration does not assume a normal distribution of beta[j]
   // but also assumes estimates a mean across the realised set of routes

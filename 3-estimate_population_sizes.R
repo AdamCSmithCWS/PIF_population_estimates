@@ -997,7 +997,7 @@ comp_trad_new_plot <- ggplot(data = strata_compare,
   xlab("Traditional PIF population estimate")+
   ylab("PIF-Calibrated eBird relative abundance estimate")+
   labs(title = paste(sp_sel,"population estimates by BBS strata"),
-       subtitle = "Diagonal lines = 1:1 and 2:1")
+       subtitle = "Diagonal lines = 1:1, 2:1, and 5:1")
 
 png(filename = paste0("Figures/comp_trad_new_",sp_aou,"_",sp_ebird,".png"),
     res = 300,
