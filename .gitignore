@@ -5,3 +5,5 @@
 input_files/
 output/
 data/
+figures/
+**arch/
