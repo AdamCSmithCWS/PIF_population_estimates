@@ -30,9 +30,21 @@ data {
   array[n_counts] int<lower=1> year; // year indicators for counts
   array[n_counts] int<lower=1> doy; // doy indicators for counts
   array[n_counts] int<lower=1> strata; // strata indicators for route (to support varying doy effect)
-
-
   vector[n_route_obs] log_mean_rel_abund; // log-transformed mean relative abund within BBS route buffers
+
+
+
+// spatial varying time series components
+  array[n_years] int<lower=0> y_2020; //indicators for 2020 = 0 if 2020 and missing if fixed_year
+  // a vector of zeros to fill fixed beta values for fixed_year
+  vector[n_strata] zero_gammas;
+  //data for spatial iCAR among strata
+  int<lower=1> n_edges;
+  array [n_edges] int<lower=1, upper=n_strata> node1;  // node1[i] adjacent to node2[i]
+  array [n_edges] int<lower=1, upper=n_strata> node2;  // and node1[i] < node2[i]
+
+
+
 
 // spline components for doy
   int<lower=1> n_knots_doy;  // number of knots in the basis function for year
@@ -74,8 +86,14 @@ parameters {
 
   vector[n_counts*use_pois] noise_raw; // over-dispersion if use_pois == 1
   real<lower=0> sdnoise;    // sd of over-dispersion, if use_pois == 1
-  vector[n_years] gamma_raw;
-  real<lower=0> sd_gamma;    // sd of year effect
+
+
+  real<lower=0> sd_gamma;    // sd of annual changes among strata
+  real<lower=0> sd_GAMMA;    // sd of overall annual changes
+
+  vector[n_years] GAMMA_raw;//_hyperparameter of overall annual change values - "differences" between years
+  matrix[n_strata,n_years] gamma_raw;         // strata level parameters
+
 
   vector[n_knots_doy] DOY_raw;         // GAM hyper coefficients for doy
   matrix[n_strata,n_knots_doy] doy_raw;         // GAM strata level parameters
@@ -89,11 +107,16 @@ transformed parameters{
   vector[n_route_obs] beta; //
   vector[n_counts] E;
   real<lower=0> phi; //transformed sdnoise if use_pois == 0 (and therefore Negative Binomial)
-  vector[n_years] gamma;
   matrix[n_doy,n_strata] doy_pred;
   vector[n_doy] DOY_pred;
   vector[n_knots_doy] DOY_b;         // GAM coefficients
   matrix[n_strata,n_knots_doy] doy_b;         // GAM strata level parameters
+  vector[n_years] GAMMA;
+  matrix[n_strata,n_years] gamma;         // strata-level mean differences (0-centered deviation from continental mean BETA)
+  matrix[n_strata,n_years] yeareffect;  // matrix of estimated annual values of trajectory
+  vector[n_years] YearEffect;
+
+
 
   // doy effects
   DOY_b = sd_DOY*DOY_raw;
@@ -104,22 +127,47 @@ transformed parameters{
     doy_pred[,k] = doy_basis * transpose(doy_b[k,]);
   }
 
+// overdispersion
    if(use_pois){
     phi = 1;
   }else{
     phi = 1/sqrt(sdnoise); //as recommended to avoid prior that places most prior mass at very high overdispersion by https://github.com/stan-dev/stan/wiki/Prior-Choice-Recommendations
   }
 
+// route level intercepts
   beta = sd_beta*beta_raw + BETA;//
 
-// replacing the missing fixed-year in gamma_raw
-  for(y in 1:(ebird_year-1)){
-    gamma[y] = gamma_raw[y];
+
+// Time series
+ GAMMA = sd_GAMMA * GAMMA_raw;
+
+  gamma[,ebird_year] = zero_gammas; //fixed at zero
+  yeareffect[,ebird_year] = zero_gammas; //fixed at zero
+  YearEffect[ebird_year] = 0; //fixed at zero
+
+// first half of time-series - runs backwards from fixed_year
+  for(t in yrev){
+  if(y_2020[t]){ // all years not equal to 2020
+    gamma[,t] = (sd_gamma * gamma_raw[,t]) + GAMMA[t];
+  }else{
+    gamma[,t] = (0 * gamma_raw[,t]) + GAMMA[t]; // in 2020 strata-parameters forced to 0
   }
-  gamma[ebird_year] = 0; // centers the year-effects on the year of the eBird abundance surface
-  for(y in (ebird_year+1):n_years){
-    gamma[y] = gamma_raw[y];
+    yeareffect[,t] = yeareffect[,t+1] - gamma[,t];
+    YearEffect[t] = YearEffect[t+1] - GAMMA[t]; // hyperparameter trajectory interesting to monitor but no direct inference
   }
+// second half of time-series - runs forwards from fixed_year
+for(t in (ebird_year+1):n_years){
+  if(y_2020[t]){ // all years not equal to 2020
+    gamma[,t] = (sd_gamma * gamma_raw[,t]) + GAMMA[t-1];//t-1 indicators to match dimensionality
+      }else{
+    gamma[,t] = (0 * gamma_raw[,t]) + GAMMA[t]; // in 2020 strata-parameters forced to 0
+  }
+    yeareffect[,t] = yeareffect[,t-1] + gamma[,t];
+    YearEffect[t] = YearEffect[t-1] + GAMMA[t];
+  }
+
+// replacing the strata level difference values
+
 
     for(i in 1:n_counts){
        real noise;
@@ -131,7 +179,7 @@ transformed parameters{
       }
 
 
-    E[i] = beta[route[i]] + doy_pred[doy[i],strata[i]] + gamma[year[i]] + log_mean_rel_abund[route[i]] + noise;
+    E[i] = beta[route[i]] + doy_pred[doy[i],strata[i]] + yeareffect[strata[i],year[i]] + log_mean_rel_abund[route[i]] + noise;
   }
 
 
@@ -149,7 +197,7 @@ model {
 
   sd_beta ~ student_t(3,0,1);
   sdnoise ~ student_t(3,0,1); //prior on scale of extra Poisson log-normal variance or inverse sqrt(phi) for negative binomial
-  sd_gamma ~ gamma(2,10); //time-series annual variance in gamma
+ // sd_gamma ~ gamma(2,10); //time-series annual variance in gamma
   sd_doy ~ gamma(2,10); // weak shrinkage prior with zero-avoidance
   sd_DOY ~ normal(0,1);
   DOY_raw ~ normal(0,1);         // GAM hyper coefficients for doy
@@ -162,14 +210,29 @@ model {
 //  doy_raw[k,] ~ icar_normal(nstrata, node1, node2);         // GAM strata level parameters
 // }
 
+  sd_gamma ~ student_t(3,0,0.2); // prior on sd of differences among strata
+  sd_GAMMA ~ student_t(3,0,0.1); // prior on sd of mean hyperparameter differences
+  GAMMA_raw ~ std_normal();
 
-for(y in yrev){
-  gamma_raw[y] ~ normal(gamma_raw[y+1],sd_gamma);
+for(t in 1:n_years){
+
+  if(y_2020[t]){ // y_2020 == 1 for all years not equal to 2020
+     if(ebird_year-t){ // zero/false for the ebird year
+   gamma_raw[,t] ~ icar_normal(n_strata, node1, node2);
+
+    }else{
+     gamma_raw[,t] ~ normal(0,0.001); // arbitrarily small because this is the ebird eyar
+
+     }
+  }else{ //if year is 2020 - no spatial variance
+
+    gamma_raw[,t] ~ std_normal(); //non-spatial substitute for year with no data
+    sum(gamma_raw[,t]) ~ normal(0,0.001*n_strata);
+
+  }
 }
-gamma_raw[ebird_year] ~ normal(0,0.001); // strong prior forcing this to 0, but it is exluded from likelihood
-for(y in (ebird_year+1):n_years){
-  gamma_raw[y] ~ normal(gamma_raw[y-1],sd_gamma);
-}
+
+
 
 
 if(use_pois){
@@ -202,12 +265,12 @@ generated quantities {
   array[n_years,2] real raw_prediction;
 
 for(y in 1:n_years){
-  raw_prediction[y,1] = exp(min(log_mean_rel_abund + DOY_pred[mid_doy] + BETA + gamma[y] + 0.5*sd_beta^2));
-  raw_prediction[y,2] = exp(max(log_mean_rel_abund + DOY_pred[mid_doy] + BETA + gamma[y] + 0.5*sd_beta^2));
+  raw_prediction[y,1] = exp(min(log_mean_rel_abund + DOY_pred[mid_doy] + BETA + YearEffect[y] + 0.5*sd_beta^2));
+  raw_prediction[y,2] = exp(max(log_mean_rel_abund + DOY_pred[mid_doy] + BETA + YearEffect[y] + 0.5*sd_beta^2));
 }
 // posterior predictive check
 for(i in 1:n_counts){
-y_rep[i] = neg_binomial_2_log_rng(beta[route[i]] + doy_pred[doy[i],strata[i]] + gamma[year[i]] + log_mean_rel_abund[route[i]],phi);
+y_rep[i] = neg_binomial_2_log_rng(beta[route[i]] + doy_pred[doy[i],strata[i]] + yeareffect[strata[i],year[i]] + log_mean_rel_abund[route[i]],phi);
 }
 
 // ridiculous work around to allow for the limits on pair correction
@@ -232,6 +295,7 @@ y_rep[i] = neg_binomial_2_log_rng(beta[route[i]] + doy_pred[doy[i],strata[i]] + 
   }else{
   ct = normal_rng(c_t,sd_c_t);
   p_avail = 1/ct;
+  ctp = p_avail;
   }
 
 
@@ -250,11 +314,11 @@ if(use_t){
 }
 
 // this calibration assumes the distribution of route-level betas is symetrical
-  calibration = (exp(BETA + 0.5*(sd_beta/adj)^2 + DOY_pred[mid_doy]) * cp * ct) / c_area;
-  calibration_log = (BETA + 0.5*(sd_beta/adj)^2  + DOY_pred[mid_doy] + log(cp) + log(ct)) -log(c_area);
+  calibration = (exp(BETA + 0.5*(sd_beta/adj)^2) * cp * ct) / c_area;
+  calibration_log = (BETA + 0.5*(sd_beta/adj)^2 + log(cp) + log(ct)) -log(c_area);
 
   for(j in 1:n_route_obs){
-    calibration_r[j] = (exp(beta[j] + DOY_pred[mid_doy]) * cp * ct) / c_area;
+    calibration_r[j] = (exp(beta[j]) * cp * ct) / c_area;
   }
   // this calibration does not assume a normal distribution of beta[j]
   // but also assumes estimates a mean across the realised set of routes

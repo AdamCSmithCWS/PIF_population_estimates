@@ -3,7 +3,7 @@
 library(bbsBayes2) # devtools::install_github("bbsBayes/bbsBayes2")
 
 library(tidyverse)
-# Download NA BBS data up to 2022 using
+# Download NA BBS data up to 2023 using
 # bbsBayes2 package; this only needs to be done once as the data will be stored
 # and used for any future calls from bbsBayes functions
 if(!bbsBayes2::have_bbs_data(quiet = TRUE)){
@@ -17,7 +17,7 @@ counts <- all_dat$birds %>%  # positive counts of each species during every BBS 
   select(route_data_id,aou,species_total) #dropping all but the critical columns
 
 sampling_events <- all_dat$routes %>%  # date, time, starting location, for every BBS survey since 1966
-  filter(year > 2010) %>% #selecting data from last 10 years only
+  filter(year > 2011) %>% #selecting data from last 10 years only
   select(country,state,st_abrev,route_name,bcr,
          country_num,state_num,route,
          latitude,longitude,

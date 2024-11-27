@@ -12,7 +12,7 @@ library(napops)
 library(tidybayes)
 
 source("functions/GAM_basis_function_mgcv.R")
-
+source("functions/neighbours_define.R")
 yr_ebird <- 2022 # prediction year for eBird relative abundance
 
 
@@ -39,7 +39,8 @@ sp_example <- c("American Robin",
                 "Verdin","Ash-throated Flycatcher","Black-throated Sparrow",
                 "Blue Jay","Varied Thrush","Veery","Wood Thrush","Chestnut-collared Longspur",
                 "Bobolink","Savannah Sparrow","Grasshopper Sparrow",
-                "Horned Lark")
+                "Horned Lark",
+                "Eastern Whip-poor-will", "Common Nighthawk")
 
 # Load BBS data -----------------------------------------------------------
 
@@ -405,6 +406,11 @@ bcrs <- read_sf("data/BCR_terrestrial/BCR_Terrestrial_master_International.shp")
 
 adjs_out <- NULL
 today <- as_date(Sys.Date())
+
+
+
+
+
 # species loop -----------------------------------------------------
 
 if(file.exists(paste0("adjs_out",today,".csv"))){
@@ -415,9 +421,28 @@ if(file.exists(paste0("adjs_out",today,".csv"))){
   wh_drop <- 8
 }
 
+use_traditional <- TRUE
+if(use_traditional){
+  vers <- "trad_"
+}else{
+  vers <- ""
+}
+
+re_fit <- FALSE # set to true to fit model and re-run plotting and summaries
+
+
 
 for(sp_sel in sp_example[-wh_drop]){#list$english){
 #sp_sel = "Connecticut Warbler"
+ sp_aou <- bbsBayes2::search_species(sp_sel)$aou[1]
+  sp_ebird <- ebirdst::get_species(sp_sel)
+
+
+  if(file.exists(paste0("output/calibration_fit_alt_",
+                        vers,sp_aou,"_",sp_ebird,".rds")) &
+     !re_fit){next}
+
+
   mean_counts <- mean_counts_all %>%
     filter(english == sp_sel,
            mean_count > 0)
@@ -434,8 +459,6 @@ for(sp_sel in sp_example[-wh_drop]){#list$english){
     warning(paste(sp_sel,"has no name matches"))
     next
   }
-  sp_aou <- bbsBayes2::search_species(sp_sel)$aou[1]
-
 
 strata_trad <- strata_trad_all %>%
   filter(cn == sp_sel)
@@ -461,13 +484,14 @@ routes_buf <- routes_buf %>%
   left_join(mn_c_join, by = "route_name")
 
 
-sp_ebird <- ebirdst::get_species(sp_sel)
 
 if(!file.exists(paste0("data/species_relative_abundance/",
                        sp_ebird,"_relative_abundance.rds"))){next}
 
 rel_abund <- readRDS(paste0("data/species_relative_abundance/",
                             sp_ebird,"_relative_abundance.rds"))
+
+
 
 
 combined <- rel_abund %>%
@@ -484,6 +508,31 @@ inner_join(.,raw_counts,
          route_obs = as.integer(factor(paste(route_name,obs_n,sep = "-")))) # doy centered on earliest survey day for species
 
 
+# spatial setup -----------------------------------------------------------
+
+strata_incl <- combined %>%
+  select(strata_name,strata) %>%
+  distinct()
+
+strata_map <- bbsBayes2::load_map("bbs_usgs") %>%
+  inner_join(strata_incl) %>%
+  arrange(strata)
+
+neighbours <- neighbours_define(strata_map,
+                                strat_indicator = "strata",
+                                save_plot_data = FALSE)
+
+
+all_years <- data.frame(year = c(min(combined$year):max(combined$year)))
+
+y_2020 <- combined %>%
+  select(year,yr) %>%
+  distinct() %>%
+  full_join(all_years, by = "year") %>%
+  arrange(year) %>%
+  mutate(y_2020 = ifelse(is.na(yr),0,1))
+
+
 
 mean_abund <- combined %>%
   select(route_obs,logm) %>%
@@ -495,7 +544,7 @@ mean_abund <- combined %>%
 adjs <- ExpAdjs %>%
   filter(cn == sp_sel)
 if(nrow(adjs) == 0){next}
-if(!(adjs$use_edr | adjs$use_availability)){next}
+if(!use_traditional & !(adjs$use_edr | adjs$use_availability)){next}
 
 #library(cmdstanr)
 #
@@ -509,7 +558,7 @@ doy_gam <- gam_basis(combined$doy, nknots = 7,
                      predpoints = c(1:max(combined$doy)),
                      sm_name = "doy")
 
-model <- cmdstanr::cmdstan_model("models/ebird_rel_abund_calibration_year_doy_obs.stan")
+model <- cmdstanr::cmdstan_model("models/ebird_rel_abund_calibration_spatial_year_doy_obs.stan")
 
 
 stan_data <- list(n_route_obs = max(combined$route_obs),
@@ -519,6 +568,7 @@ stan_data <- list(n_route_obs = max(combined$route_obs),
                   n_doy = max(combined$doy),
                   mid_doy = as.integer(round(max(combined$doy)/2)),
                   n_strata = max(combined$strata),
+
                   count = combined$count,
                   route = combined$route_obs,
                   year = combined$yr,
@@ -528,20 +578,27 @@ stan_data <- list(n_route_obs = max(combined$route_obs),
                   ebird_year = yr_ebird-(min(combined$year)-1),
                   yrev = seq(from = (yr_ebird-(min(combined$year))),to = 1, by = -1),
                   log_mean_rel_abund = mean_abund$logm,
+                  y_2020 = as.integer(unname(unlist(y_2020$y_2020))),
+                  zero_gammas = rep(0,max(combined$strata)),
+                  n_edges = neighbours$N_edges,
+                  node1 = neighbours$node1,
+                  node2 = neighbours$node2,
+
+
                   c_p = adjs$Pair2,
                   sd_c_p = 0.13,
-                  c_d = ifelse(adjs$use_edr,adjs$edr,1),
-                  sd_c_d = ifelse(adjs$use_edr,adjs$edr_sd,1),
-                  c_t = ifelse(adjs$use_availability,
+                  c_d = ifelse(!use_traditional & adjs$use_edr,adjs$edr,adjs$Dist2),
+                  sd_c_d = ifelse(!use_traditional & adjs$use_edr,adjs$edr_sd,1),
+                  c_t = ifelse(!use_traditional & adjs$use_availability,
                                adjs$availability,
                                exp(adjs$TimeAdj.meanlog + 0.5*(adjs$TimeAdj.sdlog^2))),
-                  sd_c_t = ifelse(adjs$use_availability,
+                  sd_c_t = ifelse(!use_traditional & adjs$use_availability,
                                   adjs$availability_sd,
                                   exp(2*adjs$TimeAdj.meanlog + adjs$TimeAdj.sdlog^2)*(exp(adjs$TimeAdj.sdlog^2)-1)),
                   c_d_lower = adjs$Dist.Lower,
                   c_d_upper = adjs$Dist.Upper,
-                  use_edr = ifelse(adjs$use_edr,1,0),
-                  use_availability = ifelse(adjs$use_availability,1,0),
+                  use_edr = ifelse(!use_traditional & adjs$use_edr,1,0),
+                  use_availability = ifelse(!use_traditional & adjs$use_availability,1,0),
                   use_pois = 0,
                   use_pair = 1,
                   use_t = 1
@@ -564,7 +621,8 @@ fit <- model$sample(data = stan_data,
                     refresh = 500,
                     iter_warmup = 2000,
                     iter_sampling = 2000,
-                    adapt_delta = 0.95,
+                    adapt_delta = 0.8,
+                    max_treedepth = 11,
                     show_exceptions = FALSE)
 
 
@@ -576,8 +634,11 @@ params_to_summarise <- c("nu",
                          "sd_beta",
                          "sdnoise",
                          "sd_gamma",
-                         "gamma_raw",
+                         "GAMMA",
+                         "sd_GAMMA",
                          "gamma",
+                         "yeareffect",
+                         "YearEffect",
                          "phi",
                          "cp",
                          "cp_sel",
@@ -606,9 +667,9 @@ summ <- fit$summary(variables = params_to_summarise)
 #shinystan::launch_shinystan(fit)
 
 
-fit$save_object(paste0("output/calibration_fit_alt_",sp_aou,"_",sp_ebird,".rds"))
+fit$save_object(paste0("output/calibration_fit_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
 
-saveRDS(summ,paste0("convergence/parameter_summary_alt_",sp_aou,"_",sp_ebird,".rds"))
+saveRDS(summ,paste0("convergence/parameter_summary_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
 
 
 
@@ -732,7 +793,7 @@ param_infer <- bind_rows(cali_alt,
          sp_eBird = sp_ebird,
          aou = sp_aou)
 
-saveRDS(param_infer,paste0("output/parameter_inference_alt_",sp_aou,"_",sp_ebird,".rds"))
+saveRDS(param_infer,paste0("output/parameter_inference_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
 
 adjs[1,"calibration"] <- as.numeric(cali$mean)
 adjs[1,"calibration_sd"] <- as.numeric(cali$sd)
@@ -1089,7 +1150,7 @@ comp_trad_new_plot <- ggplot(data = strata_compare,
   labs(title = paste(sp_sel,"population estimates by BBS strata"),
        subtitle = "Diagonal lines = 1:1, 2:1, and 5:1")
 
-png(filename = paste0("Figures/comp_trad_new_alt_",sp_aou,"_",sp_ebird,".png"),
+png(filename = paste0("Figures/comp_trad_new_alt_",vers,sp_aou,"_",sp_ebird,".png"),
     res = 300,
     height = 6,
     width = 6,
@@ -1147,7 +1208,7 @@ abund_map <- ggplot()+
 
 #
 
-png(filename = paste0("Figures/abund_map_alt_",sp_aou,"_",sp_ebird,".png"),
+png(filename = paste0("Figures/abund_map_alt_",vers,sp_aou,"_",sp_ebird,".png"),
     res = 400,
     height = 7,
     width = 6.5,
@@ -1156,8 +1217,8 @@ print(abund_map)
 dev.off()
 
 
-saveRDS(comp_trad_new_plot,paste0("figures/saved_ggplots/trad_vs_new_alt_",sp_aou,"_",sp_ebird,".rds"))
-saveRDS(abund_map,paste0("figures/saved_ggplots/abund_map_alt_",sp_aou,"_",sp_ebird,".rds"))
+saveRDS(comp_trad_new_plot,paste0("figures/saved_ggplots/trad_vs_new_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
+saveRDS(abund_map,paste0("figures/saved_ggplots/abund_map_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
 
 
 
@@ -1303,7 +1364,7 @@ abund_map_bcrs <- ggplot()+
 
 #
 
-png(filename = paste0("Figures/abund_map_bcrs_alt_",sp_aou,"_",sp_ebird,".png"),
+png(filename = paste0("Figures/abund_map_bcrs_alt_",vers,sp_aou,"_",sp_ebird,".png"),
     res = 400,
     height = 7,
     width = 6.5,
@@ -1439,7 +1500,7 @@ pop_ests_out <- bind_rows(USACAN_abund,
 # Sum of population estimates
 
 write_excel_csv(pop_ests_out,
-                paste0("estimates/pop_ests_alt_",sp_aou,sp_ebird,".csv"))
+                paste0("estimates/pop_ests_alt_",vers,sp_aou,sp_ebird,".csv"))
 
 
 pop_ests_out_trad_sel <- pop_ests_out_trad %>%
@@ -1474,10 +1535,10 @@ side_plot <- ggplot(data = pop_compare_stack_sel,
   theme_bw()
 
 
-saveRDS(side_plot,paste0("figures/saved_ggplots/side_plot_alt_",sp_aou,"_",sp_ebird,".rds"))
+saveRDS(side_plot,paste0("figures/saved_ggplots/side_plot_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
 
-saveRDS(combined,paste0("data/main_data_df_alt_",sp_aou,"_",sp_ebird,".rds"))
-pdf(paste0("figures/estimate_plots_alt_",sp_aou,"_",sp_ebird,".pdf"),
+saveRDS(combined,paste0("data/main_data_df_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
+pdf(paste0("figures/estimate_plots_alt_",vers,sp_aou,"_",sp_ebird,".pdf"),
     width = 11,
     height = 8.5)
 print(vis_relationship)
@@ -1497,7 +1558,4 @@ write_csv(adjs_out,paste0("adjs_out",today,".csv"))
 #
 
 
-
-cali_rt <- summ %>% filter(grepl("calibration_r",variable))
-hist(log(cali_rt$mean))
 

@@ -447,7 +447,7 @@ pif_new <- Spp.by.WH.GL |>
   dplyr::select(cn,rounded.USCAN.mean.PopEst,
                 rounded.USCAN.95LCI.PopEst,
                 rounded.USCAN.95UCI.PopEst)|>
-  dplyr::mutate(source = "PIF_2022")
+  dplyr::mutate(source = "PIF_2023")
 
 
 pif_comp <- pif_19 |>
@@ -506,7 +506,7 @@ compare_plot_cv <- ggplot(data = pif_comp,
   geom_point(alpha = 0.3)+
   geom_abline(intercept = 0, slope = 1)+
   xlab("CV 2019 (SE/mean)")+
-  ylab("CV 2022 (SE/mean)")
+  ylab("CV 2023 (SE/mean)")
 
 
 compare_plot_cv
@@ -534,11 +534,11 @@ compare_plot2
 
 
 library(patchwork)
-pdf("comparison_2022_2019_USA_CAN.pdf",
+pdf("comparison_2023_2019_USA_CAN.pdf",
     width = 11, height = 8.5)
 print(compare_plot_e)
 print(compare_plot2)
 print(compare_plot_cv)
 dev.off()
-write.csv(pif_comp,"comparison_pif2022_2019.csv",row.names = FALSE)
+write.csv(pif_comp,"comparison_pif2023_2019.csv",row.names = FALSE)
 
