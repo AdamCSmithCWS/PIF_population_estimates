@@ -44,9 +44,15 @@ for(i in rev(1:nrow(sps_list))){
   sp_sel <- unname(unlist(sps_list[i,"english"]))
 species_ebird <- ebirdst::get_species(sp_sel)
 
+# paste0("data/species_relative_abundance/",
+#        sp_ebird,
+#        "_derived_breeding_relative_abundance.rds")
+
+
 if(file.exists(paste0("data/species_relative_abundance/",
                       species_ebird,"_relative_abundance.rds")) &
-   file.exists(paste0("data/species_relative_abundance/",species_ebird,"_derived_breeding_relative_abundance.rds"))){
+   file.exists(paste0("data/species_relative_abundance/",
+                      species_ebird,"_derived_breeding_relative_abundance.rds"))){
   next
 }
 

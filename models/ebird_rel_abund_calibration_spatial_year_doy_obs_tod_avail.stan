@@ -57,9 +57,16 @@ data {
 
   real c_t; // mean time of day correction value or availability correction
   real sd_c_t; //sd of time of day correction value or sd of availability correction
+  int<lower=0,upper=1> use_tod; // indicator for calculating time of day correction (tod)
+          // if use_tod == 1, then use availability with rlnorm(c_t,sd_c_t)
+          // if use_tod == 0, then no used
+
+  real c_av; // mean time of day correction value or availability correction
+  real sd_c_av; //sd of time of day correction value or sd of availability correction
   int<lower=0,upper=1> use_availability; // indicator for calculating availability
-          // if use_availability == 1, then use availability with 1/rnorm(c_d,sd_c_d)
-          // if use_availability == 0, then use availability with rnorm(c_d,sd_c_d)
+          // if use_availability == 1, then use availability with 1/rnorm(c_av,sd_c_av)
+          // if use_availability == 0, then use availability with rnorm(c_av,sd_c_av)
+
 
 
   real c_d; // mean distance correction value
@@ -247,13 +254,14 @@ if(use_pois){
 }
 
 generated quantities {
+  // This is where all of the PIF correction factors are applied
   real cp;
   vector[2] cp_sel;
   real cp_draw;
-  real ct;
-  real p_avail;
-  vector[2] p_avail_max;
-  vector[2] p_avail_min;
+  real<lower=1.0> cav;
+  real<lower=1.0> ct;
+  real<lower=0.0001,upper=1.0> p_avail;
+  real<lower=0.0001,upper=1.0> p_tod;
   real cd;
   real c_area;
   real calibration;
@@ -288,25 +296,21 @@ y_rep[i] = neg_binomial_2_log_rng(beta[route[i]] + doy_pred[doy[i],strata[i]] + 
     cp = 1;
   }
 
+// Availability
   if(use_availability){
-    p_avail = normal_rng(c_t,sd_c_t); // constrained between 0.001 and 0.999
-  p_avail_min[2] = 1.0;
-  p_avail_max[2] = 0.0001;
-  p_avail_min[1] = p_avail;
-  p_avail_max[1] = p_avail;
-  p_avail = min(p_avail_min);
-  p_avail = max(p_avail_max);
-
-  ct = 1/p_avail;
+    p_avail = normal_rng(c_av,sd_c_av); // constrained between 0.001 and 0.999
+  // with binomial probability = p_avail
+  cav = 1/p_avail;
   }else{
+    cav = 1;
+    p_avail = 1/cav;
+  }
+  if(use_tod){
   ct = lognormal_rng(c_t,sd_c_t);
-  p_avail = 1/ct;
-  p_avail_min[2] = 1.0;
-  p_avail_max[2] = 0.0001;
-  p_avail_min[1] = p_avail;
-  p_avail_max[1] = p_avail;
-  p_avail = min(p_avail_min);
-  p_avail = max(p_avail_max);
+  p_tod = 1/ct;
+  }else{
+    ct = 1;
+    p_tod = 1/ct;
   }
 
 
@@ -325,11 +329,11 @@ if(use_t){
 }
 
 // this calibration assumes the distribution of route-level betas is symetrical
-  calibration = (exp(BETA + 0.5*(sd_beta/adj)^2) * cp * ct) / c_area;
-  calibration_log = (BETA + 0.5*(sd_beta/adj)^2 + log(cp) + log(ct)) -log(c_area);
+  calibration = (exp(BETA + 0.5*(sd_beta/adj)^2) * cp * ct * cav) / c_area;
+  calibration_log = (BETA + 0.5*(sd_beta/adj)^2 + log(cp) + log(ct) + log(cav)) -log(c_area);
 
   for(j in 1:n_route_obs){
-    calibration_r[j] = (exp(beta[j]) * cp * ct) / c_area;
+    calibration_r[j] = (exp(beta[j]) * cp * ct * cav) / c_area;
   }
   // this calibration does not assume a normal distribution of beta[j]
   // but also assumes estimates a mean across the realised set of routes

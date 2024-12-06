@@ -209,13 +209,14 @@ pop_ests_out_trad <- readRDS("all_traditional_pop_estimates.rds")
 
 pop_compare_stack_sel <-NULL
 
-for(sp_sel in sp_example[-8]){
+for(sp_sel in sps_list$english){
 
 
     sp_aou <- bbsBayes2::search_species(sp_sel)$aou[1]
     sp_ebird <- ebirdst::get_species(sp_sel)
 
-if(!file.exists(paste0("estimates/pop_ests_alt_",sp_aou,sp_ebird,".csv"))){next}
+if(!file.exists(paste0("estimates/pop_ests_alt_",sp_aou,sp_ebird,".csv")) |
+   !file.exists(paste0("estimates/pop_ests_alt_trad_",sp_aou,sp_ebird,".csv"))){next}
 
 
 pop_ests_out <- read_csv(paste0("estimates/pop_ests_alt_",
@@ -244,13 +245,66 @@ pop_compare_stack <- pop_ests_out %>%
 pop_compare_stack_sel <- bind_rows(pop_compare_stack_sel,pop_compare_stack)
 } # end species loop
 
+sp_names_e <- pop_compare_stack_sel %>%
+  select(species,species_ebird) %>%
+  distinct() %>%
+  filter(!is.na(species_ebird))
+
+sp_names_a <- pop_compare_stack_sel %>%
+  select(species,aou) %>%
+  distinct() %>%
+  filter(!is.na(aou))
+
+
+pop_compare_stack_sel <- pop_compare_stack_sel %>%
+  select(-c(aou,species_ebird)) %>%
+  inner_join(sp_names_e,by = "species") %>%
+  inner_join(sp_names_a,by = "species")
+
 saveRDS(pop_compare_stack_sel,
         "estimates/comparison_estimates_method.rds")
+
+
+
+# Compare correction factors ----------------------------------------------
+
+Cor_factors <- ExpAdjs %>%
+  select(cn, Dist2,Pair2, TimeAdj.meanlog,
+         edr, availability, Aou) %>%
+  mutate(Cd_trad = 1/(pi*(Dist2^2)),
+         Cd_edr = 1/(pi*(edr^2)),
+         Ct_trad = exp(TimeAdj.meanlog),
+         Ct_avail = 1/availability,
+         Cd_diff = Cd_edr/Cd_trad,
+         Ct_diff = Ct_avail/Ct_trad)
+
+
+
+pop_compare_stack_sel <- readRDS("estimates/comparison_estimates_method.rds")
+pop_compare_wide <- pop_compare_stack_sel %>%
+  filter(!is.na(region)) %>%
+  pivot_wider(names_from = version,
+              names_sep = "_",
+              values_from = c(pop_median,pop_lci_80,pop_lci_95,
+                              pop_uci_80,pop_uci_95)) %>%
+  mutate(dif_mag_new_trad = pop_median_PIF_eBird_with_EDR_Avail/pop_median_PIF_traditional,
+         dif_mag_eBird_trad = pop_median_PIF_eBird_without_EDR_Avail/pop_median_PIF_traditional,
+         dif_mag_napops_eBird = pop_median_PIF_eBird_with_EDR_Avail/pop_median_PIF_eBird_without_EDR_Avail)
+
+pop_compare_wide_usacan <- pop_compare_wide %>%
+  filter(region %in% c("USACAN")) %>%
+  left_join(Cor_factors,
+            by = c("species" = "cn",
+                   "aou" = "Aou")) %>%
+  mutate(species_factor = fct_reorder(species,dif_mag_new_trad))
+
+
 pop_compare_stack <- pop_compare_stack_sel %>%
-  filter(region %in% c("USACAN"))
+  filter(region %in% c("USACAN")) %>%
+  mutate(species_factor = factor(species,levels = levels(pop_compare_wide_usacan$species_factor)))
 
 side_plot1 <- ggplot(data = pop_compare_stack,
-                    aes(y = species,
+                    aes(y = species_factor,
                         x = pop_median,
                         colour = version))+
   geom_point(position = position_dodge(width = 0.5))+
@@ -266,6 +320,34 @@ side_plot1 <- ggplot(data = pop_compare_stack,
   theme_bw()
 
 side_plot1
+
+
+
+
+bi_plot1 <- ggplot(data = pop_compare_wide_usacan,
+                     aes(y = pop_median_PIF_eBird_with_EDR_Avail,
+                         x = pop_median_PIF_traditional,
+                         colour = Cd_diff))+
+  geom_abline(slope = 1, intercept = 0)+
+  geom_point()+
+  geom_errorbarh(aes(xmin = pop_lci_95_PIF_traditional,
+                     xmax = pop_uci_95_PIF_traditional),
+                 height = 0, alpha = 0.3)+
+  geom_errorbar(aes(ymin = pop_lci_95_PIF_eBird_with_EDR_Avail,
+                     ymax = pop_uci_95_PIF_eBird_with_EDR_Avail),
+                 width = 0, alpha = 0.3)+
+  geom_text_repel(aes(label = species_ebird),
+                  size = 2,min.segment.length = 0)+
+  scale_colour_viridis_c(end = 0.95, name = "Area")+
+  ylab("Updated Population estimate")+
+  xlab("Traditional Population estimate with 95% CI (Millions)")+
+  scale_x_continuous(labels = scales::unit_format(unit = "M", scale = 1e-6),
+                     transform = "log10")+
+  scale_y_continuous(labels = scales::unit_format(unit = "M", scale = 1e-6),
+                     transform = "log10")+
+  theme_bw()
+
+bi_plot1
 
 
 pop_compare_stack <- pop_compare_stack_sel %>%

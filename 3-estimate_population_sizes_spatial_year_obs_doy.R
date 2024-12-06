@@ -39,7 +39,7 @@ sp_example <- c("American Robin",
                 "Verdin","Ash-throated Flycatcher","Black-throated Sparrow",
                 "Blue Jay","Varied Thrush","Veery","Wood Thrush","Chestnut-collared Longspur",
                 "Bobolink","Savannah Sparrow","Grasshopper Sparrow",
-                "Horned Lark",
+                "Horned Lark","Baird's Sparrow",
                 "Eastern Whip-poor-will", "Common Nighthawk")
 
 # Load BBS data -----------------------------------------------------------
@@ -72,7 +72,7 @@ survey_dates <- load_bbs_data(release = 2024)$routes %>%
          mid_time = ((end_min - start_min)/120)-0.5)
 
 mid_time = round(surveys$mean_time,1)
-mid_doy = round(surveys$mean_doy)
+mean_doy = round(surveys$mean_doy)
 
 
 
@@ -177,7 +177,7 @@ for(i in 1:nrow(ExpAdjs)){
   availability <- try(napops::avail(species = sp,
                            time = 3,
                           model = w_mod,
-                          od = mid_doy, # mean of the doy for all BBS surveys
+                          od = mean_doy, # mean of the doy for all BBS surveys
                           tssr = mid_time, #mean of time of day for all BBS surveys
                           quantiles = c(0.1625), # 1 sd below the mean
                           samples = 1000),
@@ -412,33 +412,33 @@ today <- as_date(Sys.Date())
 
 
 # species loop -----------------------------------------------------
-
-if(file.exists(paste0("adjs_out",today,".csv"))){
-  adjs_out <- read_csv(paste0("adjs_out",today,".csv"))
-  wh_drop_already <- which(sp_example %in% adjs_out$cn)
-  wh_drop <- c(wh_drop_already,8)
-}else{
-  wh_drop <- 8
-}
-
-use_traditional <- TRUE
+use_traditional <- FALSE
 if(use_traditional){
   vers <- "trad_"
 }else{
   vers <- ""
 }
 
-re_fit <- FALSE # set to true to fit model and re-run plotting and summaries
+if(file.exists(paste0("adjs_out",vers,today,".csv"))){
+  adjs_out <- read_csv(paste0("adjs_out",vers,today,".csv"))
+  wh_drop_already <- which(sp_example %in% adjs_out$cn)
+  wh_drop <- c(wh_drop_already,8)
+}else{
+  wh_drop <- 8
+}
 
 
+re_fit <- TRUE # set to true to fit model and re-run plotting and summaries
 
-for(sp_sel in sp_example[-wh_drop]){#list$english){
+output_dir <- "D:/PIF_pop_estimates/output"
+
+for(sp_sel in rev(sps_list$english[1:348])){#sp_example[-wh_drop]){#list$english){
 #sp_sel = "Connecticut Warbler"
  sp_aou <- bbsBayes2::search_species(sp_sel)$aou[1]
   sp_ebird <- ebirdst::get_species(sp_sel)
 
 
-  if(file.exists(paste0("output/calibration_fit_alt_",
+  if(file.exists(paste0(output_dir,"/calibration_fit_alt_",
                         vers,sp_aou,"_",sp_ebird,".rds")) &
      !re_fit){next}
 
@@ -566,7 +566,7 @@ stan_data <- list(n_route_obs = max(combined$route_obs),
                   n_years = max(combined$yr),
                   n_knots_doy = 7,
                   n_doy = max(combined$doy),
-                  mid_doy = as.integer(round(max(combined$doy)/2)),
+                  mean_doy = as.integer(round(mean(combined$doy))),
                   n_strata = max(combined$strata),
 
                   count = combined$count,
@@ -584,19 +584,21 @@ stan_data <- list(n_route_obs = max(combined$route_obs),
                   node1 = neighbours$node1,
                   node2 = neighbours$node2,
 
-
+                  # PIF adjustments
                   c_p = adjs$Pair2,
                   sd_c_p = 0.13,
                   c_d = ifelse(!use_traditional & adjs$use_edr,adjs$edr,adjs$Dist2),
                   sd_c_d = ifelse(!use_traditional & adjs$use_edr,adjs$edr_sd,1),
                   c_t = ifelse(!use_traditional & adjs$use_availability,
                                adjs$availability,
-                               exp(adjs$TimeAdj.meanlog + 0.5*(adjs$TimeAdj.sdlog^2))),
+                               adjs$TimeAdj.meanlog),
                   sd_c_t = ifelse(!use_traditional & adjs$use_availability,
                                   adjs$availability_sd,
-                                  exp(2*adjs$TimeAdj.meanlog + adjs$TimeAdj.sdlog^2)*(exp(adjs$TimeAdj.sdlog^2)-1)),
+                                  adjs$TimeAdj.sdlog),
                   c_d_lower = adjs$Dist.Lower,
                   c_d_upper = adjs$Dist.Upper,
+
+                  # Conditional statments
                   use_edr = ifelse(!use_traditional & adjs$use_edr,1,0),
                   use_availability = ifelse(!use_traditional & adjs$use_availability,1,0),
                   use_pois = 0,
@@ -645,7 +647,6 @@ params_to_summarise <- c("nu",
                          "ct",
                          "cd",
                          "p_avail",
-                         "ctp",
                          "c_area",
                          "calibration",
                          "calibration_alt",
@@ -667,7 +668,7 @@ summ <- fit$summary(variables = params_to_summarise)
 #shinystan::launch_shinystan(fit)
 
 
-fit$save_object(paste0("output/calibration_fit_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
+fit$save_object(paste0(output_dir,"/calibration_fit_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
 
 saveRDS(summ,paste0("convergence/parameter_summary_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
 
@@ -793,7 +794,7 @@ param_infer <- bind_rows(cali_alt,
          sp_eBird = sp_ebird,
          aou = sp_aou)
 
-saveRDS(param_infer,paste0("output/parameter_inference_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
+saveRDS(param_infer,paste0(output_dir,"/parameter_inference_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
 
 adjs[1,"calibration"] <- as.numeric(cali$mean)
 adjs[1,"calibration_sd"] <- as.numeric(cali$sd)
@@ -1551,7 +1552,7 @@ print(ppc)
 print(vis_season)
 dev.off()
 
-write_csv(adjs_out,paste0("adjs_out",today,".csv"))
+write_csv(adjs_out,paste0("adjs_out",vers,today,".csv"))
 
 
  } #end of species loop
