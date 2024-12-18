@@ -88,7 +88,16 @@ re_napops <- FALSE # set to True to re-run the napops extraction
 
 if(re_napops){
 # Species specific adjustment factors (Time of Day, Detection Distance, Pair)
-ExpAdjs <- read.csv(paste(Inputfiles.dir, 'Species_PSEst_Adjustments.csv', sep=''), stringsAsFactors=FALSE)
+ExpAdjs <- read.csv(paste(Inputfiles.dir, 'Species_PSEst_Adjustments.csv', sep=''), stringsAsFactors=FALSE) %>%
+  mutate(cn = ifelse(cn == "McCown's Longspur",
+                     "Thick-billed Longspur",
+                     cn),
+         cn = ifelse(cn == "Gray Jay",
+                     "Canada Jay",
+                     cn),
+         cn = ifelse(grepl("Le Conte's",cn),
+                     gsub("Le Conte's","LeConte's",cn),
+                     cn))
 
 
 

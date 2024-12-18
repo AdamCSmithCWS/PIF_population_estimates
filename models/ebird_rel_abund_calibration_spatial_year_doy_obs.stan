@@ -265,9 +265,16 @@ generated quantities {
   array[n_counts] int<lower=0> y_rep;
   array[n_years,2] real raw_prediction;
 
+
+if(use_t){
+  adj = (1.422*(nu^0.906))/(1+(1.422*(nu^0.906)));
+}else{
+  adj = 1;
+}
+
 for(y in 1:n_years){
-  raw_prediction[y,1] = exp(min(log_mean_rel_abund + DOY_pred[mean_doy] + BETA + YearEffect[y] + 0.5*sd_beta^2));
-  raw_prediction[y,2] = exp(max(log_mean_rel_abund + DOY_pred[mean_doy] + BETA + YearEffect[y] + 0.5*sd_beta^2));
+  raw_prediction[y,1] = exp(min(log_mean_rel_abund + DOY_pred[mean_doy] + BETA + YearEffect[y] + 0.5*(sd_beta/adj)^2));
+  raw_prediction[y,2] = exp(max(log_mean_rel_abund + DOY_pred[mean_doy] + BETA + YearEffect[y] + 0.5*(sd_beta/adj)^2));
 }
 // posterior predictive check
 for(i in 1:n_counts){
@@ -318,11 +325,6 @@ y_rep[i] = neg_binomial_2_log_rng(beta[route[i]] + doy_pred[doy[i],strata[i]] + 
 
   c_area = (50*3.14159*(cd^2))/1000000; // area in square km
 
-if(use_t){
-  adj = (1.422*(nu^0.906))/(1+(1.422*(nu^0.906)));
-}else{
-  adj = 1;
-}
 
 // this calibration assumes the distribution of route-level betas is symetrical
   calibration = (exp(BETA + 0.5*(sd_beta/adj)^2) * cp * ct) / c_area;
@@ -337,6 +339,6 @@ if(use_t){
   calibration_alt = mean(calibration_r);
   calibration_median = quantile(calibration_r,0.5);
   // The difference between these two calibration metrics may be a good criterion
-  // by which to identify strange variation among routes
+  // by which to identify non-log-normal variation among routes
 
 }

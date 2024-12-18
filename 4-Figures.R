@@ -206,7 +206,8 @@ sp_example <- c("American Robin",
 ExpAdjs <- read_csv("Species_correction_factors_w_edr_availability.csv")
 pop_ests_out_trad <- readRDS("all_traditional_pop_estimates.rds")
 
-
+re_summarise <- FALSE # set to true to re-run this summary loop
+if(re_summarise){
 pop_compare_stack_sel <-NULL
 
 for(sp_sel in sps_list$english){
@@ -263,8 +264,21 @@ pop_compare_stack_sel <- pop_compare_stack_sel %>%
 
 saveRDS(pop_compare_stack_sel,
         "estimates/comparison_estimates_method.rds")
+}else{
+  pop_compare_stack_sel <- readRDS("estimates/comparison_estimates_method.rds")
 
+}
 
+# join with habitat categories
+#
+
+acad <- readRDS("data/cleaned_acad_global_2024_05_23.rds") # this file created in
+# https://github.com/AdamCSmithCWS/ACAD_summary/blob/25c1693530bc5243e5e615572ee7f67faae5d4be/plotting.R#L5C1-L84C1
+#
+
+breed_habitats <- acad %>%
+  select(primary_breeding_habitat_major,primary_breeding_habitat_sub, common_name, canada, usa, mexico, c_america) %>%
+  distinct()
 
 # Compare correction factors ----------------------------------------------
 
@@ -276,11 +290,14 @@ Cor_factors <- ExpAdjs %>%
          Ct_trad = exp(TimeAdj.meanlog),
          Ct_avail = 1/availability,
          Cd_diff = Cd_edr/Cd_trad,
-         Ct_diff = Ct_avail/Ct_trad)
+         Ct_diff = Ct_avail/Ct_trad) %>%
+  left_join(breed_habitats,
+            by = c("cn" = "common_name"))
 
 
 
-pop_compare_stack_sel <- readRDS("estimates/comparison_estimates_method.rds")
+
+
 pop_compare_wide <- pop_compare_stack_sel %>%
   filter(!is.na(region)) %>%
   pivot_wider(names_from = version,
@@ -301,6 +318,9 @@ pop_compare_wide_usacan <- pop_compare_wide %>%
 
 pop_compare_stack <- pop_compare_stack_sel %>%
   filter(region %in% c("USACAN")) %>%
+  left_join(Cor_factors,
+            by = c("species" = "cn",
+                   "aou" = "Aou")) %>%
   mutate(species_factor = factor(species,levels = levels(pop_compare_wide_usacan$species_factor)))
 
 side_plot1 <- ggplot(data = pop_compare_stack,
@@ -322,24 +342,49 @@ side_plot1 <- ggplot(data = pop_compare_stack,
 side_plot1
 
 
+pop_compare_stack_for <- pop_compare_stack %>%
+  filter(primary_breeding_habitat_major == "Forests") %>%
+  arrange(primary_breeding_habitat_sub)
+
+
+side_plot_forest <- ggplot(data = pop_compare_stack_for,
+                     aes(y = species_factor,
+                         x = pop_median,
+                         colour = version))+
+  geom_point(position = position_dodge(width = 0.5))+
+  geom_errorbarh(aes(xmin = pop_lci_80,
+                     xmax = pop_uci_80),
+                 height = 0,
+                 position = position_dodge(width = 0.5))+
+  scale_colour_viridis_d(end = 0.8)+
+  ylab("Continental estimates")+
+  xlab("Population estimate with 80% CI (Millions)")+
+  scale_x_continuous(labels = scales::unit_format(unit = "M", scale = 1e-6),
+                     transform = "log10")+
+  theme_bw()
+
+side_plot_forest
+
 
 
 bi_plot1 <- ggplot(data = pop_compare_wide_usacan,
-                     aes(y = pop_median_PIF_eBird_with_EDR_Avail,
+                     aes(y = pop_median_PIF_eBird_without_EDR_Avail,
                          x = pop_median_PIF_traditional,
-                         colour = Cd_diff))+
+                         colour = primary_breeding_habitat_major))+
   geom_abline(slope = 1, intercept = 0)+
   geom_point()+
   geom_errorbarh(aes(xmin = pop_lci_95_PIF_traditional,
                      xmax = pop_uci_95_PIF_traditional),
                  height = 0, alpha = 0.3)+
-  geom_errorbar(aes(ymin = pop_lci_95_PIF_eBird_with_EDR_Avail,
-                     ymax = pop_uci_95_PIF_eBird_with_EDR_Avail),
+  geom_errorbar(aes(ymin = pop_lci_95_PIF_eBird_without_EDR_Avail,
+                     ymax = pop_uci_95_PIF_eBird_without_EDR_Avail),
                  width = 0, alpha = 0.3)+
   geom_text_repel(aes(label = species_ebird),
                   size = 2,min.segment.length = 0)+
-  scale_colour_viridis_c(end = 0.95, name = "Area")+
-  ylab("Updated Population estimate")+
+  scale_colour_viridis_d(end = 1, name = "Forest type",
+                         option = "H")+
+  #scale_colour_viridis_c(end = 0.95, name = "Area")+
+  ylab("Population estimate with eBird map correction")+
   xlab("Traditional Population estimate with 95% CI (Millions)")+
   scale_x_continuous(labels = scales::unit_format(unit = "M", scale = 1e-6),
                      transform = "log10")+
@@ -348,6 +393,110 @@ bi_plot1 <- ggplot(data = pop_compare_wide_usacan,
   theme_bw()
 
 bi_plot1
+
+pop_compare_wide_usacan_forest <- pop_compare_wide_usacan %>%
+  filter(primary_breeding_habitat_major == "Forests")
+
+
+bi_plot_forest <- ggplot(data = pop_compare_wide_usacan_forest,
+                   aes(y = pop_median_PIF_eBird_without_EDR_Avail,
+                       x = pop_median_PIF_traditional,
+                       colour = primary_breeding_habitat_sub))+
+  geom_abline(slope = 1, intercept = 0)+
+  geom_point()+
+  geom_errorbarh(aes(xmin = pop_lci_95_PIF_traditional,
+                     xmax = pop_uci_95_PIF_traditional),
+                 height = 0, alpha = 0.3)+
+  geom_errorbar(aes(ymin = pop_lci_95_PIF_eBird_without_EDR_Avail,
+                    ymax = pop_uci_95_PIF_eBird_without_EDR_Avail),
+                width = 0, alpha = 0.3)+
+  geom_text_repel(aes(label = species_ebird),
+                  size = 2,min.segment.length = 0)+
+  scale_colour_viridis_d(end = 1, name = "Forest type",
+                         option = "H")+
+  #scale_colour_viridis_c(end = 0.95, name = "Area")+
+  ylab("Population estimate with eBird map correction")+
+  xlab("Traditional Population estimate with 95% CI (Millions)")+
+  scale_x_continuous(labels = scales::unit_format(unit = "M", scale = 1e-6),
+                     transform = "log10")+
+  scale_y_continuous(labels = scales::unit_format(unit = "M", scale = 1e-6),
+                     transform = "log10")+
+  theme_bw()
+
+bi_plot_forest
+
+
+
+pop_compare_wide_ab6 <- pop_compare_wide %>%
+  filter(region %in% c("CA-AB-6"),
+         !is.na(dif_mag_eBird_trad)) %>%
+  left_join(Cor_factors,
+            by = c("species" = "cn",
+                   "aou" = "Aou")) %>%
+  mutate(species_factor = fct_reorder(species,dif_mag_eBird_trad))
+
+
+bi_plot_ab6 <- ggplot(data = pop_compare_wide_ab6,
+                         aes(y = pop_median_PIF_eBird_without_EDR_Avail,
+                             x = pop_median_PIF_traditional,
+                             colour = primary_breeding_habitat_major))+
+  geom_abline(slope = 1, intercept = 0)+
+  geom_point()+
+  geom_errorbarh(aes(xmin = pop_lci_95_PIF_traditional,
+                     xmax = pop_uci_95_PIF_traditional),
+                 height = 0, alpha = 0.3)+
+  geom_errorbar(aes(ymin = pop_lci_95_PIF_eBird_without_EDR_Avail,
+                    ymax = pop_uci_95_PIF_eBird_without_EDR_Avail),
+                width = 0, alpha = 0.3)+
+  geom_text_repel(aes(label = species_ebird),
+                  size = 2,min.segment.length = 0)+
+  scale_colour_viridis_d(end = 1, name = "Forest type",
+                         option = "H")+
+  #scale_colour_viridis_c(end = 0.95, name = "Area")+
+  ylab("Population estimate with eBird map correction")+
+  xlab("Traditional Population estimate with 95% CI (Millions)")+
+  scale_x_continuous(labels = scales::unit_format(unit = "M", scale = 1e-6),
+                     transform = "log10")+
+  scale_y_continuous(labels = scales::unit_format(unit = "M", scale = 1e-6),
+                     transform = "log10")+
+  theme_bw()
+
+bi_plot_ab6
+
+
+
+points_plot <- ggplot(data = pop_compare_wide_usacan,
+                      aes(x = primary_breeding_habitat_major,
+                          y = dif_mag_new_trad))+
+  geom_boxplot()+
+  geom_point(aes(group = species),position = position_dodge(width = 0.3))+
+  geom_text_repel(aes(label = species_ebird),
+                  size = 2,min.segment.length = 0)+
+  scale_y_continuous(transform = "log10",
+                     breaks = c(1,2,3,5,10,30))+
+  ylab("Magnitude increase in population estimate")
+
+
+points_plot
+
+
+
+
+points_plot <- ggplot(data = pop_compare_wide_usacan,
+                      aes(x = primary_breeding_habitat_major,
+                          y = dif_mag_eBird_trad))+
+  geom_boxplot()+
+  geom_point(aes(group = species),position = position_dodge(width = 0.3))+
+  geom_text_repel(aes(label = species_ebird),
+                  size = 2,min.segment.length = 0,
+                  position = position_dodge(width = 0.3))+
+  scale_y_continuous(transform = "log10",
+                     breaks = c(1,2,3,5,10,30))+
+  ylab("Magnitude increase in population estimate from eBird")
+
+
+points_plot
+
 
 
 pop_compare_stack <- pop_compare_stack_sel %>%
