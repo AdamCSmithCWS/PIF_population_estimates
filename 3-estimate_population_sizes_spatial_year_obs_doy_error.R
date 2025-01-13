@@ -447,12 +447,12 @@ output_dir <- "D:/PIF_pop_estimates/output"
 output_dir <- "output"
 
 for(sp_sel in rev(sps_list$english[1:348])){#sp_example[-wh_drop]){#list$english){
-#sp_sel = "Bank Swallow"
+sp_sel = "Hermit Thrush"
  sp_aou <- bbsBayes2::search_species(sp_sel)$aou[1]
   sp_ebird <- ebirdst::get_species(sp_sel)
 
 
-  if(file.exists(paste0(output_dir,"/calibration_fit_alt_",
+  if(file.exists(paste0(output_dir,"/calibration_fit_error_",
                         vers,sp_aou,"_",sp_ebird,".rds")) &
      !re_fit){next}
 
@@ -499,6 +499,7 @@ combined <- rel_abund %>%
 inner_join(.,raw_counts,
            by = "route_name") %>%
   mutate(logm = log(ebird_abund),
+         logm_sd = ebird_abund_logsd,
          day_of_year = doy,
          route = as.integer(factor(route_name)),
          prov_state = str_extract(pattern = ".+(?=[[:punct:]])",string = route_name),
@@ -548,7 +549,7 @@ y_2020 <- combined %>%
 
 
 mean_abund <- combined %>%
-  select(route_obs,logm) %>%
+  select(route_obs,logm,logm_sd) %>%
   distinct() %>%
   arrange(.,route_obs)
 
@@ -590,6 +591,7 @@ stan_data <- list(n_route_obs = max(combined$route_obs),
                   ebird_year = yr_ebird-(min(combined$year)-1),
                   yrev = seq(from = (yr_ebird-(min(combined$year))),to = 1, by = -1),
                   log_mean_rel_abund = mean_abund$logm,
+                  log_mean_rel_abund_sd = mean_abund$logm_sd,
                   y_2020 = as.integer(unname(unlist(y_2020$y_2020))),
                   zero_gammas = rep(0,max(combined$strata)),
                   n_edges = neighbours$N_edges,
@@ -631,13 +633,13 @@ adjs$n_routes <- stan_data$n_routes
 
 
 
-model <- cmdstanr::cmdstan_model("models/ebird_rel_abund_calibration_spatial_year_doy_obs.stan")
+model <- cmdstanr::cmdstan_model("models/ebird_rel_abund_error_calibration_spatial_year_doy_obs.stan")
 
 
 fit <- model$sample(data = stan_data,
                     parallel_chains = 4,
-                    refresh = 500,
-                    iter_warmup = 2000,
+                    refresh = 1000,
+                    iter_warmup = 5000,
                     iter_sampling = 2000,
                     adapt_delta = 0.8,
                     max_treedepth = 11,
@@ -685,10 +687,10 @@ summ <- fit$summary(variables = params_to_summarise)
 #shinystan::launch_shinystan(fit)
 
 
-fit$save_object(paste0(output_dir,"/calibration_fit_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
+fit$save_object(paste0(output_dir,"/calibration_fit_error_",vers,sp_aou,"_",sp_ebird,".rds"))
 
-#fit <- readRDS(paste0(output_dir,"/calibration_fit_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
-saveRDS(summ,paste0("convergence/parameter_summary_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
+#fit <- readRDS(paste0(output_dir,"/calibration_fit_error_",vers,sp_aou,"_",sp_ebird,".rds"))
+saveRDS(summ,paste0("convergence/parameter_summary_error_",vers,sp_aou,"_",sp_ebird,".rds"))
 
 
 
@@ -812,7 +814,7 @@ param_infer <- bind_rows(cali_alt,
          sp_eBird = sp_ebird,
          aou = sp_aou)
 
-saveRDS(param_infer,paste0(output_dir,"/parameter_inference_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
+saveRDS(param_infer,paste0(output_dir,"/parameter_inference_error_",vers,sp_aou,"_",sp_ebird,".rds"))
 
 adjs[1,"calibration"] <- as.numeric(cali$mean)
 adjs[1,"calibration_sd"] <- as.numeric(cali$sd)
@@ -1200,7 +1202,7 @@ comp_trad_new_plot <- ggplot(data = strata_compare,
   labs(title = paste(sp_sel,"population estimates by BBS strata"),
        subtitle = "Diagonal lines = 1:1, 2:1, and 5:1")
 
-png(filename = paste0("Figures/comp_trad_new_alt_",vers,sp_aou,"_",sp_ebird,".png"),
+png(filename = paste0("Figures/comp_trad_new_error_",vers,sp_aou,"_",sp_ebird,".png"),
     res = 300,
     height = 6,
     width = 6,
@@ -1258,7 +1260,7 @@ abund_map <- ggplot()+
 
 #
 
-png(filename = paste0("Figures/abund_map_alt_",vers,sp_aou,"_",sp_ebird,".png"),
+png(filename = paste0("Figures/abund_map_error_",vers,sp_aou,"_",sp_ebird,".png"),
     res = 400,
     height = 7,
     width = 6.5,
@@ -1267,8 +1269,8 @@ print(abund_map)
 dev.off()
 
 
-saveRDS(comp_trad_new_plot,paste0("figures/saved_ggplots/trad_vs_new_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
-saveRDS(abund_map,paste0("figures/saved_ggplots/abund_map_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
+saveRDS(comp_trad_new_plot,paste0("figures/saved_ggplots/trad_vs_new_error_",vers,sp_aou,"_",sp_ebird,".rds"))
+saveRDS(abund_map,paste0("figures/saved_ggplots/abund_map_error_",vers,sp_aou,"_",sp_ebird,".rds"))
 
 
 
@@ -1414,7 +1416,7 @@ abund_map_bcrs <- ggplot()+
 
 #
 
-png(filename = paste0("Figures/abund_map_bcrs_alt_",vers,sp_aou,"_",sp_ebird,".png"),
+png(filename = paste0("Figures/abund_map_bcrs_error_",vers,sp_aou,"_",sp_ebird,".png"),
     res = 400,
     height = 7,
     width = 6.5,
@@ -1550,7 +1552,7 @@ pop_ests_out <- bind_rows(USACAN_abund,
 # Sum of population estimates
 
 write_excel_csv(pop_ests_out,
-                paste0("estimates/pop_ests_alt_",vers,sp_aou,sp_ebird,".csv"))
+                paste0("estimates/pop_ests_error_",vers,sp_aou,sp_ebird,".csv"))
 
 
 pop_ests_out_trad_sel <- pop_ests_out_trad %>%
@@ -1585,10 +1587,10 @@ side_plot <- ggplot(data = pop_compare_stack_sel,
   theme_bw()
 
 
-saveRDS(side_plot,paste0("figures/saved_ggplots/side_plot_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
+saveRDS(side_plot,paste0("figures/saved_ggplots/side_plot_error_",vers,sp_aou,"_",sp_ebird,".rds"))
 
-saveRDS(combined,paste0("data/main_data_df_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
-pdf(paste0("figures/estimate_plots_alt_",vers,sp_aou,"_",sp_ebird,".pdf"),
+saveRDS(combined,paste0("data/main_data_df_error_",vers,sp_aou,"_",sp_ebird,".rds"))
+pdf(paste0("figures/estimate_plots_error_",vers,sp_aou,"_",sp_ebird,".pdf"),
     width = 11,
     height = 8.5)
 print(vis_relationship)

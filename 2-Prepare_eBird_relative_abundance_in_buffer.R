@@ -36,8 +36,13 @@ sps_list <- readRDS("data/all_bbs_data_species_list.rds")
 
 qual_ebird <- ebirdst_runs
 
-re_calc <- FALSE # TRUE if want to re-calcluate the eBird-BBS overlap
+re_calc <- TRUE # TRUE if want to re-calcluate the eBird-BBS overlap
       # e.g., when new route spatial data
+
+use_weekly <- TRUE # only use TRUE if goal is to model all species
+      # as weekly abundance, including breeding distributions
+      #
+metric_used <- "max" #options are "mean" or "median" (although "median" won't work for seasonal)
 
 for(i in rev(1:nrow(sps_list))){
 
@@ -49,10 +54,11 @@ species_ebird <- ebirdst::get_species(sp_sel)
 #        "_derived_breeding_relative_abundance.rds")
 
 
-if(file.exists(paste0("data/species_relative_abundance/",
+if((file.exists(paste0("data/species_relative_abundance/",
                       species_ebird,"_relative_abundance.rds")) &
    file.exists(paste0("data/species_relative_abundance/",
-                      species_ebird,"_derived_breeding_relative_abundance.rds"))){
+                      species_ebird,"_derived_breeding_relative_abundance.rds"))) &
+   !re_calc){
   next
 }
 
@@ -86,7 +92,7 @@ if(!resident & breed_qual > 0) {
                                              download_abundance = TRUE,
                                              download_occurrence = FALSE,
                                              force = FALSE,
-                                             pattern = "abundance_seasonal_mean_3km_"),
+                                             pattern = "abundance_seasonal_",metric_used,"_3km_"),
             silent = TRUE)
 }
 
@@ -132,7 +138,15 @@ if(resident){
 
   abd_weekly_abundance_bbs_season <- abd_weekly_abundance[[as.character(bbs_weeks)]]
 
-  breed_abundance <- terra::mean(abd_weekly_abundance_bbs_season)
+  if(metric_used == "max"){
+  breed_abundance <- terra::max(abd_weekly_abundance_bbs_season)
+  }
+  if(metric_used == "median"){
+    breed_abundance <- terra::median(abd_weekly_abundance_bbs_season)
+  }
+  if(metric_used == "mean"){
+    breed_abundance <- terra::mean(abd_weekly_abundance_bbs_season)
+  }
 
 }else{
 
@@ -140,7 +154,8 @@ if(resident){
   abd_seasonal_abundance <- ebirdst::load_raster(species = species_ebird,
                                                  resolution = "3km",
                                                  period = "seasonal",
-                                                 product = "abundance")  #3km high resolution
+                                                 product = "abundance",
+                                                 metric = metric_used)  #3km high resolution
 
   breed_abundance <- abd_seasonal_abundance[["breeding"]]
 }
