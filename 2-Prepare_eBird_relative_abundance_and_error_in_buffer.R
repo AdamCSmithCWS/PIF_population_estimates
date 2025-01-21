@@ -288,11 +288,13 @@ saveRDS(breed_abundance_sd,paste0("data/species_relative_abundance/",species_ebi
 
 
 
-# Calculating SD of abundance ---------------------------------------------
-
 
 
 # # clipping ebird data to BBS strata region --------------------------------
+# # this clipping is done only to speed up the overlay between BBS and ebird
+#  the rest of the ebird distribution map is unaffected for the eventual
+#  predictions of density across the full species' range (i.e., see
+#  saveRDS() call above)
 bbs_strata <- bbsBayes2::load_map("bbs_usgs") %>%
   st_buffer(., dist = 10000) #add 10km buffer for clipping eBird data
 
@@ -354,9 +356,13 @@ abundance_df <- data.frame(route_name = routes_buf_proj$route_name,
                              ebird_abund = abundance_in_buffers[[1]],
                            ebird_abund_logsd = abundance_sd_in_buffers[[1]],
                            ebird_abund_ci = abundance_ci_in_buffers[[1]]) %>%
-  filter(!is.na(ebird_abund),
-         ebird_abund > 0) %>%
+  filter(
+    ebird_abund > 0,
+    !is.na(ebird_abund)
+    ) %>%
   distinct()
+
+
 
 # ## displaying routes with no abundance data
 # tstrt <- routes_buf %>%

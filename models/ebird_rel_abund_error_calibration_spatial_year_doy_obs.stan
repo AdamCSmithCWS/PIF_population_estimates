@@ -279,10 +279,6 @@ if(use_t){
   adj = 1;
 }
 
-for(y in 1:n_years){
-  raw_prediction[y,1] = exp(min(true_log_mean_rel_abund + DOY_pred[mean_doy] + BETA + YearEffect[y] + 0.5*(sd_beta/adj)^2));
-  raw_prediction[y,2] = exp(max(true_log_mean_rel_abund + DOY_pred[mean_doy] + BETA + YearEffect[y] + 0.5*(sd_beta/adj)^2));
-}
 // posterior predictive check
 for(i in 1:n_counts){
 y_rep[i] = neg_binomial_2_log_rng(beta[route[i]] + doy_pred[doy[i],strata[i]] + yeareffect[strata[i],year[i]] + true_log_mean_rel_abund[route[i]],phi);
@@ -347,5 +343,11 @@ y_rep[i] = neg_binomial_2_log_rng(beta[route[i]] + doy_pred[doy[i],strata[i]] + 
   calibration_median = quantile(calibration_r,0.5);
   // The difference between these two calibration metrics may be a good criterion
   // by which to identify non-log-normal variation among routes
+
+
+for(y in 1:n_years){
+  raw_prediction[y,1] = calibration_median * exp(min(true_log_mean_rel_abund) + DOY_pred[mean_doy] + YearEffect[y] );
+  raw_prediction[y,2] = calibration_median * exp(max(true_log_mean_rel_abund) + DOY_pred[mean_doy] + YearEffect[y] );
+}
 
 }

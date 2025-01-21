@@ -256,11 +256,18 @@ generated quantities {
   vector[2] p_avail_min;
   real cd;
   real c_area;
+  real pred_count;
+  real pred_count_alt1;
+  real pred_count_alt2;
+  real pred_count_mean;
+  real pred_count_median;
   real calibration;
-  real calibration_alt;
+  real calibration_alt1;
+  real calibration_alt2;
   real calibration_median;
-  real calibration_log;
+  real calibration_mean;
   vector[n_route_obs] calibration_r;
+  vector[n_route_obs] pred_count_r;
   real adj;
   array[n_counts] int<lower=0> y_rep;
   array[n_years,2] real raw_prediction;
@@ -272,10 +279,6 @@ if(use_t){
   adj = 1;
 }
 
-for(y in 1:n_years){
-  raw_prediction[y,1] = exp(min(log_mean_rel_abund + DOY_pred[mean_doy] + BETA + YearEffect[y] + 0.5*(sd_beta/adj)^2));
-  raw_prediction[y,2] = exp(max(log_mean_rel_abund + DOY_pred[mean_doy] + BETA + YearEffect[y] + 0.5*(sd_beta/adj)^2));
-}
 // posterior predictive check
 for(i in 1:n_counts){
 y_rep[i] = neg_binomial_2_log_rng(beta[route[i]] + doy_pred[doy[i],strata[i]] + yeareffect[strata[i],year[i]] + log_mean_rel_abund[route[i]],phi);
@@ -300,8 +303,8 @@ y_rep[i] = neg_binomial_2_log_rng(beta[route[i]] + doy_pred[doy[i],strata[i]] + 
   p_avail_min[2] = 1.0;
   p_avail_max[2] = 0.0001;
   p_avail_min[1] = p_avail;
-  p_avail_max[1] = p_avail;
   p_avail = min(p_avail_min);
+  p_avail_max[1] = p_avail;
   p_avail = max(p_avail_max);
 
   ct = 1/p_avail;
@@ -311,8 +314,8 @@ y_rep[i] = neg_binomial_2_log_rng(beta[route[i]] + doy_pred[doy[i],strata[i]] + 
   p_avail_min[2] = 1.0;
   p_avail_max[2] = 0.0001;
   p_avail_min[1] = p_avail;
-  p_avail_max[1] = p_avail;
   p_avail = min(p_avail_min);
+  p_avail_max[1] = p_avail;
   p_avail = max(p_avail_max);
   }
 
@@ -328,17 +331,32 @@ y_rep[i] = neg_binomial_2_log_rng(beta[route[i]] + doy_pred[doy[i],strata[i]] + 
 
 // this calibration assumes the distribution of route-level betas is symetrical
   calibration = (exp(BETA + 0.5*(sd_beta/adj)^2) * cp * ct) / c_area;
-  calibration_log = (BETA + 0.5*(sd_beta/adj)^2 + log(cp) + log(ct)) -log(c_area);
+  calibration_alt1 = (exp(BETA + 0.5*(sd_beta)^2) * cp * ct) / c_area;
+  calibration_alt2 = (exp(BETA) * cp * ct) / c_area;
+
+  pred_count = exp(BETA + 0.5*(sd_beta/adj)^2);
+  pred_count_alt1 = exp(BETA + 0.5*(sd_beta)^2);
+  pred_count_alt2 = exp(BETA);
+
 
   for(j in 1:n_route_obs){
     calibration_r[j] = (exp(beta[j]) * cp * ct) / c_area;
-  }
+    pred_count_r[j] = (exp(beta[j]));
+ }
   // this calibration does not assume a normal distribution of beta[j]
   // but also assumes estimates a mean across the realised set of routes
   // it is also highly sensitive to long tails of the distribution of route-level variation
-  calibration_alt = mean(calibration_r);
+  calibration_mean = mean(calibration_r);
   calibration_median = quantile(calibration_r,0.5);
+  pred_count_mean = mean(pred_count_r);
+  pred_count_median = quantile(pred_count_r,0.5);
   // The difference between these two calibration metrics may be a good criterion
   // by which to identify non-log-normal variation among routes
+
+
+for(y in 1:n_years){
+  raw_prediction[y,1] = exp(min(log_mean_rel_abund) + BETA + 0.5*(sd_beta)^2 + YearEffect[y] );
+  raw_prediction[y,2] = exp(max(log_mean_rel_abund) + BETA + 0.5*(sd_beta)^2 + YearEffect[y] );
+}
 
 }

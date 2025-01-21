@@ -446,9 +446,14 @@ re_fit <- TRUE # set to true to fit model and re-run plotting and summaries
 
 output_dir <- "D:/PIF_pop_estimates/output"
 output_dir <- "output"
+trim_rel_abund <- FALSE
 
-for(sp_sel in rev(sps_list$english[1:348])){#sp_example[-wh_drop]){#list$english){
-sp_sel = "Brown-headed Nuthatch"
+
+for(sp_sel in c("Hermit Thrush","Cliff Swallow",
+                "Bank Swallow",
+                "Northern Rough-winged Swallow",
+                "Barn Swallow")){ # rev(sps_list$english[1:348])){#sp_example[-wh_drop]){#list$english){
+#sp_sel = "Baird's Sparrow"
  sp_aou <- bbsBayes2::search_species(sp_sel)$aou[1]
   sp_ebird <- ebirdst::get_species(sp_sel)
 
@@ -494,7 +499,11 @@ rel_abund <- readRDS(paste0("data/species_relative_abundance/",
                             sp_ebird,"_relative_abundance.rds"))
 
 
-
+if(trim_rel_abund){
+  tenth_percentile <- unname(quantile(rel_abund$ebird_abund,0.1))
+  rel_abund <- rel_abund %>%
+    filter(ebird_abund >= tenth_percentile)
+}
 
 combined <- rel_abund %>%
 inner_join(.,raw_counts,
@@ -666,9 +675,10 @@ params_to_summarise <- c("nu",
                          "p_avail",
                          "c_area",
                          "calibration",
-                         "calibration_alt",
+                         "calibration_alt2",
                          "calibration_median",
-                         "calibration_log",
+                         "calibration_alt1",
+                         "calibration_mean",
                          "calibration_r",
                          "adj",
                          "raw_prediction",
@@ -679,7 +689,13 @@ params_to_summarise <- c("nu",
                          "DOY_b",
                          "doy_b",
                          "DOY_pred",
-                         "doy_pred")
+                         "doy_pred",
+                         "pred_count",
+                         "pred_count_alt2",
+                         "pred_count_median",
+                         "pred_count_alt1",
+                         "pred_count_mean",
+                         "pred_count_r")
 
 summ <- fit$summary(variables = params_to_summarise)
 #shinystan::launch_shinystan(fit)
@@ -759,9 +775,36 @@ cali_lognormal <- fit$summary(variable = "calibration",
   mutate(inference = "calibration assuming log normal variation among routes",
          variable = "calibration_lognormal")
 
+cali_lognormal_alt1 <- fit$summary(variable = "calibration_alt1",
+                              "mean",
+                              "median",
+                              "sd",
+                              "rhat",
+                              "ess_bulk",
+                              q2_5 = ~quant(.x,q = 0.025),
+                              q10 = ~quant(.x,q = 0.10),
+                              q90 = ~quant(.x,q = 0.90),
+                              q97_5 = ~quant(.x,q = 0.975))%>%
+  mutate(inference = "calibration assuming log normal variation among routes removing t-dist factor",
+         variable = "calibration_alt1")
 
 
-cali_alt <- fit$summary(variable = "calibration_alt",
+cali_lognormal_alt2 <- fit$summary(variable = "calibration_alt2",
+                                   "mean",
+                                   "median",
+                                   "sd",
+                                   "rhat",
+                                   "ess_bulk",
+                                   q2_5 = ~quant(.x,q = 0.025),
+                                   q10 = ~quant(.x,q = 0.10),
+                                   q90 = ~quant(.x,q = 0.90),
+                                   q97_5 = ~quant(.x,q = 0.975))%>%
+  mutate(inference = "calibration assuming log normal variation among routes removing variance",
+         variable = "calibration_alt2")
+
+
+
+cali_alt <- fit$summary(variable = "calibration_mean",
                     "mean",
                     "median",
                     "sd",
@@ -771,20 +814,8 @@ cali_alt <- fit$summary(variable = "calibration_alt",
                     q10 = ~quant(.x,q = 0.10),
                     q90 = ~quant(.x,q = 0.90),
                     q97_5 = ~quant(.x,q = 0.975))%>%
-  mutate(inference = "calibration realised mean across groups")
+  mutate(inference = "calibration realised mean across route-observer")
 
-
-cali_log <- fit$summary(variable = "calibration_log",
-                        "mean",
-                        "median",
-                        "sd",
-                        "rhat",
-                        "ess_bulk",
-                        q2_5 = ~quant(.x,q = 0.025),
-                        q10 = ~quant(.x,q = 0.10),
-                        q90 = ~quant(.x,q = 0.90),
-                        q97_5 = ~quant(.x,q = 0.975))%>%
-  mutate(inference = "calibration log-scale")
 
 cali <- fit$summary(variable = "calibration_median",
                     "mean",
@@ -796,14 +827,94 @@ cali <- fit$summary(variable = "calibration_median",
                     q10 = ~quant(.x,q = 0.10),
                     q90 = ~quant(.x,q = 0.90),
                     q97_5 = ~quant(.x,q = 0.975))%>%
-  mutate(inference = "calibration realised median across routes")
+  mutate(inference = "calibration realised median across route-observer")
+
+
+
+
+
+
+pred_count_lognormal <- fit$summary(variable = "pred_count",
+                              "mean",
+                              "median",
+                              "sd",
+                              "rhat",
+                              "ess_bulk",
+                              q2_5 = ~quant(.x,q = 0.025),
+                              q10 = ~quant(.x,q = 0.10),
+                              q90 = ~quant(.x,q = 0.90),
+                              q97_5 = ~quant(.x,q = 0.975))%>%
+  mutate(inference = "pred_count assuming log normal variation among routes",
+         variable = "pred_count_lognormal")
+
+pred_count_lognormal_alt1 <- fit$summary(variable = "pred_count_alt1",
+                                   "mean",
+                                   "median",
+                                   "sd",
+                                   "rhat",
+                                   "ess_bulk",
+                                   q2_5 = ~quant(.x,q = 0.025),
+                                   q10 = ~quant(.x,q = 0.10),
+                                   q90 = ~quant(.x,q = 0.90),
+                                   q97_5 = ~quant(.x,q = 0.975))%>%
+  mutate(inference = "pred_count assuming log normal variation among routes removing t-dist factor",
+         variable = "pred_count_alt1")
+
+
+pred_count_lognormal_alt2 <- fit$summary(variable = "pred_count_alt2",
+                                   "mean",
+                                   "median",
+                                   "sd",
+                                   "rhat",
+                                   "ess_bulk",
+                                   q2_5 = ~quant(.x,q = 0.025),
+                                   q10 = ~quant(.x,q = 0.10),
+                                   q90 = ~quant(.x,q = 0.90),
+                                   q97_5 = ~quant(.x,q = 0.975))%>%
+  mutate(inference = "pred_count assuming log normal variation among routes removing variance",
+         variable = "pred_count_alt2")
+
+
+
+pred_count_alt <- fit$summary(variable = "pred_count_mean",
+                        "mean",
+                        "median",
+                        "sd",
+                        "rhat",
+                        "ess_bulk",
+                        q2_5 = ~quant(.x,q = 0.025),
+                        q10 = ~quant(.x,q = 0.10),
+                        q90 = ~quant(.x,q = 0.90),
+                        q97_5 = ~quant(.x,q = 0.975))%>%
+  mutate(inference = "pred_count realised mean across route-observer")
+
+
+pred_count <- fit$summary(variable = "pred_count_median",
+                    "mean",
+                    "median",
+                    "sd",
+                    "rhat",
+                    "ess_bulk",
+                    q2_5 = ~quant(.x,q = 0.025),
+                    q10 = ~quant(.x,q = 0.10),
+                    q90 = ~quant(.x,q = 0.90),
+                    q97_5 = ~quant(.x,q = 0.975))%>%
+  mutate(inference = "pred_count realised median across route-observer")
+
+
 
 
 
 param_infer <- bind_rows(cali_alt,
                          cali,
-                         cali_log,
                          cali_lognormal,
+                         cali_lognormal_alt1,
+                         cali_lognormal_alt2,
+                         pred_count_alt,
+                         pred_count,
+                         pred_count_lognormal,
+                         pred_count_lognormal_alt1,
+                         pred_count_lognormal_alt2,
                          avail_correction_realised,
                          p_avail_realised,
                          edr_realised,
@@ -823,8 +934,12 @@ adjs[1,"calibration_mean_sd"] <- as.numeric(cali_alt$sd)
 adjs[1,"calibration_lognormal"] <- as.numeric(cali_lognormal$mean)
 adjs[1,"calibration_lognormal_sd"] <- as.numeric(cali_lognormal$sd)
 
-adjs[1,"calibration_log"] <- as.numeric(cali_log$mean)
-adjs[1,"calibration_log_sd"] <- as.numeric(cali_log$sd)
+adjs[1,"calibration_lognormal_alt1"] <- as.numeric(cali_lognormal_alt1$mean)
+adjs[1,"calibration_lognormal_alt1_sd"] <- as.numeric(cali_lognormal_alt1$sd)
+
+adjs[1,"calibration_lognormal_alt2"] <- as.numeric(cali_lognormal_alt2$mean)
+adjs[1,"calibration_lognormal_alt2_sd"] <- as.numeric(cali_lognormal_alt2$sd)
+
 # BETA_post <- fit$draws(variables = "BETA",
 #                        format = "df")
 
@@ -832,9 +947,13 @@ adjs[1,"calibration_log_sd"] <- as.numeric(cali_log$sd)
 cali_lognormal_post <- fit$draws(variables = "calibration",
                        format = "df")
 
-cali_alt_post <- fit$draws(variables = "calibration_alt",
-                           format = "df")
-cali_log_post <- fit$draws(variables = "calibration_log",
+cali_lognormal_alt1_post <- fit$draws(variables = "calibration_alt1",
+                                 format = "df")
+
+cali_lognormal_alt2_post <- fit$draws(variables = "calibration_alt2",
+                                 format = "df")
+
+cali_alt_post <- fit$draws(variables = "calibration_mean",
                            format = "df")
 
 cali_post <- fit$draws(variables = "calibration_median",
@@ -856,17 +975,46 @@ adjs[1,"beta_skew"] <- as.numeric(skew_flag)
 adjs[1,"beta_kurtosis"] <- as.numeric(kurtosis_flag)
 
 
-route_obs_link <- combined %>% select(route,route_name,observer,route_obs) %>% distinct() %>%
+route_obs_link <- combined %>%
+  group_by(route,route_name,strata_name,observer,route_obs) %>%
+  summarise(mean_count = mean(count),
+            mean_ebird_abund = mean(ebird_abund),
+            .groups = "drop") %>%
   arrange(route_obs)
+
+
 routes_buf_extra <- routes_buf %>%
   sf::st_buffer(10000)
+
+calibration_by_rts <- summ %>% filter(grepl("calibration_r[",variable,fixed = TRUE)) %>%
+  select(mean, median,sd,rhat,ess_bulk) %>%
+  rename_with(.fn = ~ paste0("calib_rt_",.x))
+
+
+pred_count_by_rts <- summ %>% filter(grepl("pred_count_r[",variable,fixed = TRUE)) %>%
+  select(mean, median,sd,rhat,ess_bulk) %>%
+  rename_with(.fn = ~ paste0("pred_count_rt_",.x))
+
 betas_by_route <- betas %>%
   bind_cols(route_obs_link) %>%
-  group_by(route_name) %>%
+  bind_cols(calibration_by_rts) %>%
+  bind_cols(pred_count_by_rts) %>%
+  group_by(route_name,strata_name) %>%
   summarise(n_obs = n(),
             mean_beta = mean(mean),
             min_beta = min(mean),
-            max_beta = max(mean))
+            max_beta = max(mean),
+            mean_calibration = mean(calib_rt_median),
+            min_calibration = min(calib_rt_median),
+            max_calibration = max(calib_rt_median),
+            mean_pred_count = mean(pred_count_rt_median),
+            min_pred_count = min(pred_count_rt_median),
+            max_pred_count = max(pred_count_rt_median),
+            mean_count = mean(mean_count),
+            mean_ebird_abund = mean(mean_ebird_abund),
+            .groups = "drop")
+
+
 betas_plot <- routes_buf_extra %>%
   left_join(betas_by_route, by = "route_name")
 
@@ -881,22 +1029,103 @@ beta_distr <- ggplot()+
                                                    show.limits = TRUE),
                          option = "H")
 
-beta_distr
+
+flags <- data.frame(name = c("Mean across routes",
+                             "Median across routes"),
+                    value = c(mean(betas_by_route$mean_beta),
+                              median(betas_by_route$mean_beta)))
+
+
+beta_hist <- ggplot()+
+  geom_histogram(data = betas_by_route,
+                 aes(x = mean_beta),
+                 bins = 100)+
+  geom_vline(data = flags,
+             aes(colour = name,
+                 xintercept = value))+
+  geom_point(data = flags,
+             aes(colour = name,y = 0,x = value))+
+  theme_bw()+
+  scale_colour_viridis_d()
+
+
+flags <- data.frame(name = c("Mean across routes",
+                              "Median across routes",
+                              "Calibration assuming lognormal and t-dist",
+                              "Calibration assuming lognormal",
+                              "Calibration using only hyperparameter (median of lognormal)",
+                              "Calibration using posterior median across routes"),
+                    value = c(mean(betas_by_route$mean_calibration),
+                              median(betas_by_route$mean_calibration),
+                              cali_lognormal$mean,
+                              cali_lognormal_alt1$mean,
+                              cali_lognormal_alt2$mean,
+                              cali$mean))
+
+calib_hist <- ggplot()+
+  geom_histogram(data = betas_by_route,
+                 aes(x = mean_calibration),
+                 bins = 100)+
+  geom_vline(data = flags,
+             aes(colour = name,
+                 xintercept = value))+
+  geom_point(data = flags,
+              aes(colour = name,y = 0,x = value))+
+  theme_bw()+
+  scale_colour_viridis_d()+
+  scale_x_continuous(transform = "log", labels = scales::label_comma())
+
+
+
+
+flags <- data.frame(name = c("Mean observed count across routes",
+                             "Mean predicted count across routes",
+                             "Expected count assuming lognormal and t-dist",
+                             "Expected count assuming lognormal",
+                             "Expected count using only hyperparameter (median of lognormal)",
+                             "Expected count using posterior median across routes"),
+                    value = c(mean(combined$count),
+                              mean(betas_by_route$mean_pred_count),
+                              pred_count_lognormal$mean,
+                              pred_count_lognormal_alt1$mean,
+                              pred_count_lognormal_alt2$mean,
+                              pred_count$mean))
+count_hist <- ggplot()+
+  geom_histogram(data = betas_by_route,
+                 aes(x = mean_count),
+                 bins = 100)+
+  geom_vline(data = flags,
+             aes(colour = name,
+                 xintercept = value))+
+  geom_point(data = flags,
+             aes(colour = name,y = 0,x = value))+
+  theme_bw()+
+  scale_colour_viridis_d()+
+  scale_x_continuous(labels = scales::label_comma())
+
+saveRDS(betas_by_route,paste0(output_dir,"/betas_by_route_alt_",
+               vers,sp_aou,"_",sp_ebird,".rds"))
+
 
 # Posterior predictive check ----------------------------------------------
 
 
 y_rep <- fit$draws("y_rep",format = "df") %>%
-  slice_sample(n = 400)
+  slice_sample(n = 100)
 
 y_rep <- posterior::as_draws_matrix(y_rep)
-p975 <- quantile(stan_data$count,0.99)
+p99 <- quantile(stan_data$count,1)
 ppc <- bayesplot::ppc_dens_overlay_grouped(y = stan_data$count,
                 yrep = y_rep,
-                group = combined$year)+
-  coord_cartesian(xlim = c(0,p975))
+                group = combined$year,
+                trim = TRUE)+
+  coord_cartesian(xlim = c(0,p99))
 
-
+ppc_alt <- bayesplot::ppc_violin_grouped(y = stan_data$count,
+                    yrep = y_rep,
+                    group = combined$strata_name,
+                    y_draw = "both") +
+  coord_cartesian(ylim = c(0,p99))
 # R-squared ---------------------------------------------------------------
 
 
@@ -968,6 +1197,38 @@ vis_season <- ggplot(data = seasonal_strat,
   scale_colour_viridis_d()+
   theme(legend.position = "none")
 
+
+
+
+
+# Annual variation ------------------------------------------
+
+
+annual_strat <- summ %>% filter(grepl("yeareffect[",variable,fixed = TRUE)) %>%
+  mutate(year = rep(c(1:stan_data$n_years),each = stan_data$n_strata) + (min(combined$year)-1),
+         strata = rep(c(1:stan_data$n_strata),times = stan_data$n_years)) %>%
+  inner_join(strat_names,by = "strata")
+
+
+strat_labs <- annual_strat %>%
+  filter(year == min(combined$year))
+
+vis_annual <- ggplot(data = annual_strat,
+                     aes(x = year,y = mean,
+                         group = strata_name,
+                         colour = strata_name))+
+  # geom_ribbon(aes(ymin = q5, ymax = q95),
+  #             alpha = 0.2)+
+  geom_line(alpha = 0.3)+
+  coord_cartesian(xlim = c(2008,2023))+
+  ggrepel::geom_text_repel(data = strat_labs, aes(label = strata_name),
+                           size = 1.5,
+                           min.segment.length = 0,
+                           #xlim = c(200,240),
+                           nudge_x = -2)+
+  scale_colour_viridis_d()+
+  scale_y_continuous(transform = "exp")+
+  theme(legend.position = "none")
 
 
 # explore relationship ----------------------------------------------------
@@ -1414,13 +1675,13 @@ abund_map_bcrs <- ggplot()+
 
 #
 
-png(filename = paste0("Figures/abund_map_bcrs_alt_",vers,sp_aou,"_",sp_ebird,".png"),
-    res = 400,
-    height = 7,
-    width = 6.5,
-    units = "in")
-print(abund_map_bcrs)
-dev.off()
+# png(filename = paste0("Figures/abund_map_bcrs_alt_",vers,sp_aou,"_",sp_ebird,".png"),
+#     res = 400,
+#     height = 7,
+#     width = 6.5,
+#     units = "in")
+# print(abund_map_bcrs)
+# dev.off()
 
 
 
@@ -1596,9 +1857,13 @@ print(vis_relationship2)
 print(comp_trad_new_plot)
 print(abund_map)
 print(side_plot)
-print(abund_map_bcrs)
+#print(abund_map_bcrs)
 print(ppc)
 print(vis_season)
+print(vis_annual)
+print(beta_distr)
+print(beta_hist)
+print(count_hist / calib_hist)
 dev.off()
 
 write_csv(adjs_out,paste0("adjs_out",vers,today,".csv"))
