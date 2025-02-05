@@ -42,9 +42,9 @@ re_calc <- TRUE # TRUE if want to re-calcluate the eBird-BBS overlap
 use_weekly <- TRUE # only use TRUE if goal is to model all species
       # as weekly abundance, including breeding distributions
       #
-metric_used <- "max" #options are "mean" or "median" (although "median" won't work for seasonal)
+metric_used <- "mean" #options are "max", "mean" or "median" (although "median" won't work for seasonal)
 
-for(i in rev(1:nrow(sps_list))){
+for(i in rev(1:234)){#nrow(sps_list))){
 
   sp_sel <- unname(unlist(sps_list[i,"english"]))
 species_ebird <- ebirdst::get_species(sp_sel)
@@ -87,12 +87,8 @@ if(!resident & breed_qual == 0){
   next
 }
 if(!resident & breed_qual > 0) {
-  down <- try(ebirdst::ebirdst_download_status(species_ebird,
-                                             download_ranges = FALSE,
-                                             download_abundance = TRUE,
-                                             download_occurrence = FALSE,
-                                             force = FALSE,
-                                             pattern = "abundance_seasonal_",metric_used,"_3km_"),
+  down <- try(ebirdst::ebirdst_download_status(species_ebird,force = FALSE,
+                                               pattern = paste0("abundance_seasonal_",metric_used,"_3km_")),
             silent = TRUE)
 }
 
@@ -218,5 +214,6 @@ abundance_df <- data.frame(route_name = routes_buf_proj$route_name,
 saveRDS(abundance_df,
         paste0("data/species_relative_abundance/",species_ebird,"_relative_abundance.rds"))
 
+print(species_ebird)
 
 }

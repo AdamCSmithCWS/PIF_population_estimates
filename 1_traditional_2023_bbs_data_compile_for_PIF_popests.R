@@ -17,7 +17,7 @@ counts <- all_dat$birds %>%  # positive counts of each species during every BBS 
   select(route_data_id,aou,species_total) #dropping all but the critical columns
 
 sampling_events <- all_dat$routes %>%  # date, time, starting location, for every BBS survey since 1966
-  filter(year > 2011) %>% #selecting data from last 10 years only
+  filter(year > 2012) %>% # 10 years from 2013 - 2023, missing 2020.
   select(country,state,st_abrev,route_name,bcr,
          country_num,state_num,route,
          latitude,longitude,

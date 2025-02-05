@@ -8,8 +8,10 @@ library(bbsBayes2)
 library(cmdstanr)
 library(ggrepel)
 library(tidyterra)
-library(napops)
+#library(napops)
 library(tidybayes)
+library(doParallel)
+library(foreach)
 
 source("functions/GAM_basis_function_mgcv.R")
 source("functions/neighbours_define.R")
@@ -27,20 +29,20 @@ yr_ebird <- 2022 # prediction year for eBird relative abundance
 #	Purple Martin (or other species with substantial regional trend differences)
 #	Barn Swallow (or other largely visually-detected species)
 #	Verdin or Ash-throated Flycatcher or Black-throated Sparrow (to represent species with substantial breeding populations in both US and Mexico, to explore potential to extend estimates into Mexico)
-
-sp_example <- c("American Robin",
-                "Western Meadowlark","Clay-colored Sparrow",
-                "Sharp-tailed Grouse",
-                "Sora",
-                "Killdeer","Long-billed Curlew",
-                "Yellow-rumped Warbler","Olive-sided Flycatcher",
-                "Purple Martin",
-                "Barn Swallow",
-                "Verdin","Ash-throated Flycatcher","Black-throated Sparrow",
-                "Blue Jay","Varied Thrush","Veery","Wood Thrush","Chestnut-collared Longspur",
-                "Bobolink","Savannah Sparrow","Grasshopper Sparrow",
-                "Horned Lark","Baird's Sparrow",
-                "Eastern Whip-poor-will", "Common Nighthawk")
+#
+# sp_example <- c("American Robin",
+#                 "Western Meadowlark","Clay-colored Sparrow",
+#                 "Sharp-tailed Grouse",
+#                 "Sora",
+#                 "Killdeer","Long-billed Curlew",
+#                 "Yellow-rumped Warbler","Olive-sided Flycatcher",
+#                 "Purple Martin",
+#                 "Barn Swallow",
+#                 "Verdin","Ash-throated Flycatcher","Black-throated Sparrow",
+#                 "Blue Jay","Varied Thrush","Veery","Wood Thrush","Chestnut-collared Longspur",
+#                 "Bobolink","Savannah Sparrow","Grasshopper Sparrow",
+#                 "Horned Lark","Baird's Sparrow",
+#                 "Eastern Whip-poor-will", "Common Nighthawk")
 
 # Load BBS data -----------------------------------------------------------
 
@@ -224,13 +226,13 @@ write_csv(ExpAdjs,"Species_correction_factors_w_edr_availability.csv")
 }
 
 # ID species missing edrs or availability-rates
-corrections_example_sp <- ExpAdjs %>%
-  filter(cn %in% sp_example)
-
-if(any(!corrections_example_sp$use_availability) |
-   any(!corrections_example_sp$use_edr)){
-  warning("edr or availability missing for some species")
-}
+# corrections_example_sp <- ExpAdjs %>%
+#   filter(cn %in% sp_example)
+#
+# if(any(!corrections_example_sp$use_availability) |
+#    any(!corrections_example_sp$use_edr)){
+#   warning("edr or availability missing for some species")
+# }
 
 routes_buf_all <- readRDS("data/all_routes_buffered.rds")
 
@@ -368,7 +370,7 @@ skew <- function(x, na.rm = FALSE){
   n <- length(x)
   sum((x - mean(x))^3)/(n - 2)/var(x)^(3/2)
 }
-log_normal_calibration <- FALSE # conduct calibration assuming a lognormal
+log_normal_calibration <- TRUE # conduct calibration assuming a lognormal
 # distribution of variation among routes
 
 # base map for countries and continents -----------------------------------
@@ -426,34 +428,71 @@ today <- as_date(Sys.Date())
 
 
 # species loop -----------------------------------------------------
-use_traditional <- FALSE
+use_traditional <- TRUE
 if(use_traditional){
   vers <- "trad_"
 }else{
   vers <- ""
 }
 
-if(file.exists(paste0("adjs_out",vers,today,".csv"))){
-  adjs_out <- read_csv(paste0("adjs_out",vers,today,".csv"))
-  wh_drop_already <- which(sp_example %in% adjs_out$cn)
-  wh_drop <- c(wh_drop_already,8)
-}else{
-  wh_drop <- 8
-}
+# if(file.exists(paste0("adjs_out",vers,today,".csv"))){
+#   adjs_out <- read_csv(paste0("adjs_out",vers,today,".csv"))
+#   wh_drop_already <- which(sp_example %in% adjs_out$cn)
+#   wh_drop <- c(wh_drop_already,8)
+# }else{
+#   wh_drop <- 8
+# }
 
 
-re_fit <- TRUE # set to true to fit model and re-run plotting and summaries
+re_fit <- TRUE # set to true to re-run plotting and summaries
+re_run_model <- TRUE # set to true to rerun the stan model fit
 
-output_dir <- "D:/PIF_pop_estimates/output"
-output_dir <- "output"
-trim_rel_abund <- FALSE
+output_dir <- "G:/PIF_population_estimates/output"
+#output_dir <- "output"
+trim_rel_abund <- TRUE
+
+# Parallel species loop ---------------------------------------------------
+#n_cores <- 2
+
+#cluster <- makeCluster(n_cores, type = "PSOCK")
+# library(sf)
+# library(tidyverse)
+# library(ebirdst)
+# library(patchwork)
+# library(terra)
+# library(bbsBayes2)
+# library(cmdstanr)
+# library(ggrepel)
+# library(tidyterra)
+# library(napops)
+# library(tidybayes)
+# library(doParallel)
+# library(foreach)
+
+#registerDoParallel(cluster)
 
 
-for(sp_sel in c("Hermit Thrush","Cliff Swallow",
-                "Bank Swallow",
-                "Northern Rough-winged Swallow",
-                "Barn Swallow")){ # rev(sps_list$english[1:348])){#sp_example[-wh_drop]){#list$english){
-#sp_sel = "Baird's Sparrow"
+# test <- foreach(sp_sel = rev(sps_list$english)[1:8],
+#                 .packages = c("bbsBayes2",
+#                               "tidyverse",
+#                               "cmdstanr",
+#                               "ebirdst",
+#                               "patchwork",
+#                               "sf",
+#                               "tidybayes",
+#                               "posterior",
+#                               "napops",
+#                               "ggrepel",
+#                               "terra"),
+#                 .errorhandling = "pass") %dopar%
+#   {
+
+
+for(sp_sel in c("Hermit Thrush","American Robin",
+                "Barn Swallow",
+                "Blackpoll Warbler")[-1]){ # rev(sps_list$english[1:348])){#sp_example[-wh_drop]){#list$english){
+#sp_sel = "Bank Swallow"
+#for(sp_sel in rev(sps_list$english)[29]){
  sp_aou <- bbsBayes2::search_species(sp_sel)$aou[1]
   sp_ebird <- ebirdst::get_species(sp_sel)
 
@@ -558,9 +597,9 @@ y_2020 <- combined %>%
 
 
 mean_abund <- combined %>%
-  select(route_obs,logm) %>%
+  select(route,logm) %>%
   distinct() %>%
-  arrange(.,route_obs)
+  arrange(.,route)
 
 
 #adjustment scores
@@ -583,7 +622,8 @@ doy_gam <- gam_basis(combined$doy, nknots = 7,
 
 
 
-stan_data <- list(n_route_obs = max(combined$route_obs),
+stan_data <- list(n_routes = max(combined$route),
+                  n_obs = max(combined$observer),
                   n_counts = nrow(combined),
                   n_years = max(combined$yr),
                   n_knots_doy = 7,
@@ -592,7 +632,8 @@ stan_data <- list(n_route_obs = max(combined$route_obs),
                   n_strata = max(combined$strata),
 
                   count = combined$count,
-                  route = combined$route_obs,
+                  route = combined$route,
+                  observer = combined$observer,
                   year = combined$yr,
                   strata = combined$strata,
                   doy = combined$doy,
@@ -640,8 +681,57 @@ if(nrow(adjs) == 0){
 adjs$n_routes <- stan_data$n_routes
 
 
+if(re_run_model){
 
-model <- cmdstanr::cmdstan_model("models/ebird_rel_abund_calibration_spatial_year_doy_obs.stan")
+
+
+  params_to_summarise <- c("nu",
+                           "BETA",
+                           "beta_raw",
+                           "beta",
+                           "sd_beta",
+                           "sd_obs",
+                           "obs",
+                           "nu_obs",
+                           "sdnoise",
+                           "sd_gamma",
+                           "GAMMA",
+                           "sd_GAMMA",
+                           "gamma",
+                           "yeareffect",
+                           "YearEffect",
+                           "phi",
+                           "cp",
+                           "cp_sel",
+                           "ct",
+                           "cd",
+                           "p_avail",
+                           "c_area",
+                           "calibration",
+                           "calibration_alt2",
+                           "calibration_median",
+                           "calibration_alt1",
+                           "calibration_mean",
+                           "calibration_r",
+                           "adj",
+                           "raw_prediction",
+                           "sd_doy",
+                           "sd_DOY",
+                           "doy_raw",
+                           "DOY_raw",
+                           "DOY_b",
+                           "doy_b",
+                           "DOY_pred",
+                           "doy_pred",
+                           "pred_count",
+                           "pred_count_alt2",
+                           "pred_count_median",
+                           "pred_count_alt1",
+                           "pred_count_mean",
+                           "pred_count_r")
+
+
+    model <- cmdstanr::cmdstan_model("models/ebird_rel_abund_calibration_spatial_year_doy_sep_obs_rte.stan")
 
 
 fit <- model$sample(data = stan_data,
@@ -654,49 +744,6 @@ fit <- model$sample(data = stan_data,
                     show_exceptions = FALSE)
 
 
-
-params_to_summarise <- c("nu",
-                         "BETA",
-                         "beta_raw",
-                         "beta",
-                         "sd_beta",
-                         "sdnoise",
-                         "sd_gamma",
-                         "GAMMA",
-                         "sd_GAMMA",
-                         "gamma",
-                         "yeareffect",
-                         "YearEffect",
-                         "phi",
-                         "cp",
-                         "cp_sel",
-                         "ct",
-                         "cd",
-                         "p_avail",
-                         "c_area",
-                         "calibration",
-                         "calibration_alt2",
-                         "calibration_median",
-                         "calibration_alt1",
-                         "calibration_mean",
-                         "calibration_r",
-                         "adj",
-                         "raw_prediction",
-                         "sd_doy",
-                         "sd_DOY",
-                         "doy_raw",
-                         "DOY_raw",
-                         "DOY_b",
-                         "doy_b",
-                         "DOY_pred",
-                         "doy_pred",
-                         "pred_count",
-                         "pred_count_alt2",
-                         "pred_count_median",
-                         "pred_count_alt1",
-                         "pred_count_mean",
-                         "pred_count_r")
-
 summ <- fit$summary(variables = params_to_summarise)
 #shinystan::launch_shinystan(fit)
 
@@ -707,7 +754,108 @@ fit$save_object(paste0(output_dir,"/calibration_fit_alt_",vers,sp_aou,"_",sp_ebi
 saveRDS(summ,paste0("convergence/parameter_summary_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
 
 
+# test for zero inflation -------------------------------------------------
 
+
+# Posterior predictive check ----------------------------------------------
+
+
+y_rep <- fit$draws("y_rep",format = "df") %>%
+  slice_sample(n = 500)
+
+y_rep <- posterior::as_draws_matrix(y_rep)
+
+p_z_rep <- length(which(y_rep == 0))/length(y_rep)
+p_z_obs <- length(which(stan_data$count == 0))/stan_data$n_counts
+
+ZI <- ifelse(p_z_rep/p_z_obs > 0.85, FALSE, TRUE)
+p99 <- quantile(stan_data$count,0.95)
+# ppc <- bayesplot::ppc_dens_overlay_grouped(y = stan_data$count,
+#                 yrep = y_rep,
+#                 group = combined$year,
+#                 trim = TRUE)+
+#   coord_cartesian(xlim = c(0,p99))
+
+# ppc_alt <- bayesplot::ppc_violin_grouped(y = stan_data$count,
+#                     yrep = y_rep,
+#                     group = combined$year,
+#                     y_draw = "both",
+#                     alpha = 0.5) +
+#   coord_cartesian(ylim = c(0,p99))
+
+ppc <- bayesplot::ppc_bars_grouped(y = stan_data$count,
+                                   yrep = y_rep,
+                                   group = stan_data$year,
+                                   size = 0.1)+
+  coord_cartesian(xlim = c(0,p99))
+
+#
+# if(ZI){
+#   model <- cmdstanr::cmdstan_model("models/ebird_rel_abund_calibration_spatial_year_doy_sep_obs_rte_zip.stan")
+#
+#   params_to_summarise <- c(params_to_summarise,"theta")
+#
+#   fit <- model$sample(data = stan_data,
+#                       parallel_chains = 4,
+#                       refresh = 500,
+#                       iter_warmup = 2000,
+#                       iter_sampling = 2000,
+#                       adapt_delta = 0.8,
+#                       max_treedepth = 11,
+#                       show_exceptions = FALSE)
+#
+#
+#   summ <- fit$summary(variables = params_to_summarise)
+#   #shinystan::launch_shinystan(fit)
+#
+#
+#   fit$save_object(paste0(output_dir,"/calibration_fit_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
+#
+#   #fit <- readRDS(paste0(output_dir,"/calibration_fit_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
+#   saveRDS(summ,paste0("convergence/parameter_summary_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
+#
+#
+#   # test for zero inflation -------------------------------------------------
+#
+#
+#   # Posterior predictive check ----------------------------------------------
+#
+#
+#   y_rep <- fit$draws("y_rep",format = "df") %>%
+#     slice_sample(n = 500)
+#
+#   y_rep <- posterior::as_draws_matrix(y_rep)
+#
+#   p_z_rep <- length(which(y_rep == 0))/length(y_rep)
+#   p_z_obs <- length(which(stan_data$count == 0))/stan_data$n_counts
+#
+#   ZI <- ifelse(p_z_rep/p_z_obs > 0.85, FALSE, TRUE)
+#   p99 <- quantile(stan_data$count,0.95)
+#   # ppc <- bayesplot::ppc_dens_overlay_grouped(y = stan_data$count,
+#   #                 yrep = y_rep,
+#   #                 group = combined$year,
+#   #                 trim = TRUE)+
+#   #   coord_cartesian(xlim = c(0,p99))
+#
+#   # ppc_alt <- bayesplot::ppc_violin_grouped(y = stan_data$count,
+#   #                     yrep = y_rep,
+#   #                     group = combined$year,
+#   #                     y_draw = "both",
+#   #                     alpha = 0.5) +
+#   #   coord_cartesian(ylim = c(0,p99))
+#
+#   ppc <- bayesplot::ppc_bars_grouped(y = stan_data$count,
+#                                      yrep = y_rep,
+#                                      group = stan_data$year,
+#                                      size = 0.1)+
+#     coord_cartesian(xlim = c(0,p99))
+#
+# }
+
+}else{
+  fit <- readRDS(paste0(output_dir,"/calibration_fit_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
+  summ <- readRDS(paste0("convergence/parameter_summary_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
+}
 
 
 avail_correction_realised <- fit$summary(variable = "ct",
@@ -923,6 +1071,8 @@ param_infer <- bind_rows(cali_alt,
          sp_eBird = sp_ebird,
          aou = sp_aou)
 
+#param_infer2 <- readRDS(paste0(output_dir,"/parameter_inference_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
+
 saveRDS(param_infer,paste0(output_dir,"/parameter_inference_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
 
 adjs[1,"calibration"] <- as.numeric(cali$mean)
@@ -959,6 +1109,25 @@ cali_alt_post <- fit$draws(variables = "calibration_mean",
 cali_post <- fit$draws(variables = "calibration_median",
                               format = "df")
 
+trm_mean <- function(x,p = 0.1){
+  q1 <- quantile(x,p)
+  q2 <- quantile(x,1-p)
+  xtrim <- x[which(x > q1 & x < q2)]
+  trim_m <- mean(xtrim)
+  return(trim_m)
+}
+
+cali_route_post <- fit$draws(variables = "calibration_r",
+                           format = "df")
+
+cali_trim_post <- cali_alt_post
+
+for(i in 1:nrow(cali_route_post)){
+  cali_trim_post[i,1] <- trm_mean(as.numeric(cali_route_post[i,1:stan_data$n_routes]))
+}
+
+adjs[1,"calibration_trimmed"] <- mean(as.numeric(cali_trim_post$calibration_mean))
+adjs[1,"calibration_trimmed_sd"] <- sd(as.numeric(cali_trim_post$calibration_mean))
 
 # measure kurtosis and skew in betas -------------------------------------------------
 
@@ -975,12 +1144,13 @@ adjs[1,"beta_skew"] <- as.numeric(skew_flag)
 adjs[1,"beta_kurtosis"] <- as.numeric(kurtosis_flag)
 
 
-route_obs_link <- combined %>%
-  group_by(route,route_name,strata_name,observer,route_obs) %>%
+route_link <- combined %>%
+  group_by(route,route_name,strata_name) %>%
   summarise(mean_count = mean(count),
             mean_ebird_abund = mean(ebird_abund),
+            n_counts = n(),
             .groups = "drop") %>%
-  arrange(route_obs)
+  arrange(route)
 
 
 routes_buf_extra <- routes_buf %>%
@@ -992,27 +1162,18 @@ calibration_by_rts <- summ %>% filter(grepl("calibration_r[",variable,fixed = TR
 
 
 pred_count_by_rts <- summ %>% filter(grepl("pred_count_r[",variable,fixed = TRUE)) %>%
-  select(mean, median,sd,rhat,ess_bulk) %>%
+  select(mean, median,q5,q95,sd,rhat,ess_bulk) %>%
   rename_with(.fn = ~ paste0("pred_count_rt_",.x))
 
 betas_by_route <- betas %>%
-  bind_cols(route_obs_link) %>%
+  bind_cols(route_link) %>%
   bind_cols(calibration_by_rts) %>%
   bind_cols(pred_count_by_rts) %>%
-  group_by(route_name,strata_name) %>%
-  summarise(n_obs = n(),
-            mean_beta = mean(mean),
-            min_beta = min(mean),
-            max_beta = max(mean),
-            mean_calibration = mean(calib_rt_median),
-            min_calibration = min(calib_rt_median),
-            max_calibration = max(calib_rt_median),
-            mean_pred_count = mean(pred_count_rt_median),
-            min_pred_count = min(pred_count_rt_median),
-            max_pred_count = max(pred_count_rt_median),
-            mean_count = mean(mean_count),
-            mean_ebird_abund = mean(mean_ebird_abund),
-            .groups = "drop")
+  mutate(mean_beta = (mean),
+            median_calibration = (calib_rt_median),
+            mean_pred_count = (pred_count_rt_median),
+            min_pred_count = (pred_count_rt_q5),
+            max_pred_count = (pred_count_rt_q95))
 
 
 betas_plot <- routes_buf_extra %>%
@@ -1050,13 +1211,15 @@ beta_hist <- ggplot()+
 
 
 flags <- data.frame(name = c("Mean across routes",
+                             "Trimmed mean across routes",
                               "Median across routes",
                               "Calibration assuming lognormal and t-dist",
                               "Calibration assuming lognormal",
                               "Calibration using only hyperparameter (median of lognormal)",
                               "Calibration using posterior median across routes"),
-                    value = c(mean(betas_by_route$mean_calibration),
-                              median(betas_by_route$mean_calibration),
+                    value = c(mean(betas_by_route$median_calibration),
+                              mean(as.numeric(cali_trim_post$calibration_mean)),
+                              median(betas_by_route$median_calibration),
                               cali_lognormal$mean,
                               cali_lognormal_alt1$mean,
                               cali_lognormal_alt2$mean,
@@ -1064,7 +1227,7 @@ flags <- data.frame(name = c("Mean across routes",
 
 calib_hist <- ggplot()+
   geom_histogram(data = betas_by_route,
-                 aes(x = mean_calibration),
+                 aes(x = median_calibration),
                  bins = 100)+
   geom_vline(data = flags,
              aes(colour = name,
@@ -1107,25 +1270,32 @@ saveRDS(betas_by_route,paste0(output_dir,"/betas_by_route_alt_",
                vers,sp_aou,"_",sp_ebird,".rds"))
 
 
-# Posterior predictive check ----------------------------------------------
 
 
-y_rep <- fit$draws("y_rep",format = "df") %>%
-  slice_sample(n = 100)
+# flags <- data.frame(name = c("Mean observed count across routes",
+#                              "Mean predicted count across routes",
+#                              "Expected count assuming lognormal and t-dist",
+#                              "Expected count assuming lognormal",
+#                              "Expected count using only hyperparameter (median of lognormal)",
+#                              "Expected count using posterior median across routes"),
+#                     value = c(mean(combined$count),
+#                               mean(betas_by_route$mean_pred_count),
+#                               pred_count_lognormal$mean,
+#                               pred_count_lognormal_alt1$mean,
+#                               pred_count_lognormal_alt2$mean,
+#                               pred_count$mean))
 
-y_rep <- posterior::as_draws_matrix(y_rep)
-p99 <- quantile(stan_data$count,1)
-ppc <- bayesplot::ppc_dens_overlay_grouped(y = stan_data$count,
-                yrep = y_rep,
-                group = combined$year,
-                trim = TRUE)+
-  coord_cartesian(xlim = c(0,p99))
 
-ppc_alt <- bayesplot::ppc_violin_grouped(y = stan_data$count,
-                    yrep = y_rep,
-                    group = combined$strata_name,
-                    y_draw = "both") +
-  coord_cartesian(ylim = c(0,p99))
+obs_pred_count <- ggplot(data = betas_by_route,
+                         aes(y = mean_count,x = mean_ebird_abund ))+
+  geom_point(alpha = 0.3, aes(colour = pred_count_rt_median))+
+  theme_bw()+
+  scale_colour_viridis_c()+
+  scale_x_continuous(labels = scales::label_comma(),
+                     transform = "log10")+
+  scale_y_continuous(transform = "log10",labels = scales::label_comma())+
+  geom_smooth(method = "lm")
+
 # R-squared ---------------------------------------------------------------
 
 
@@ -1377,12 +1547,16 @@ post_abund <- function(x,draws = cali_post$calibration,
 ### 3^2 scaling is to account for the area of each grid-cell
 ###
 ###
-
+log_normal_calibration <- FALSE
+use_trimmed_calibration <- FALSE
 # select calibration ------------------------------------------------------
 if(log_normal_calibration){
-  cali_use <- cali_lognormal_post
+  cali_use <- cali_lognormal_alt1_post
 }else{
-  cali_use <- cali_post
+  cali_use <- cali_alt_post
+}
+if(use_trimmed_calibration){
+  cali_use <- cali_trim_post
 }
 names(cali_use)[1] <- "calibration"
 
@@ -1864,14 +2038,16 @@ print(vis_annual)
 print(beta_distr)
 print(beta_hist)
 print(count_hist / calib_hist)
+print(obs_pred_count)
 dev.off()
 
-write_csv(adjs_out,paste0("adjs_out",vers,today,".csv"))
+#write_csv(adjs_out,paste0("adjs_out",vers,today,".csv"))
 saveRDS(adjs,paste0("estimates/parameters_",vers,sp_aou,"_",sp_ebird,".rds"))
 
 
  } #end of species loop
 #
 
+#parallel::stopCluster(cluster)
 
 

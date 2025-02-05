@@ -10,6 +10,8 @@ library(bbsBayes2)
 # BBS route path buffers
 
 routes_buf <- readRDS("data/all_routes_buffered.rds")
+#routes_buf <- readRDS("all_routes_buffered_1km.rds")
+
 #
 # sps_list <- readRDS("data/all_counts_by_route.rds") %>%
 #   filter(count > 0) %>%
@@ -39,12 +41,12 @@ qual_ebird <- ebirdst_runs
 re_calc <- TRUE # TRUE if want to re-calcluate the eBird-BBS overlap
       # e.g., when new route spatial data
 
-#  use_weekly <- TRUE # only use TRUE if goal is to model all species
+use_weekly <- TRUE # only use TRUE if goal is to model all species
       # as weekly abundance, including breeding distributions
       #
-metric_used <- "mean" #options are "mean" or "median" (although "median" won't work for seasonal)
+metric_used <- "mean" #options are "max", mean" or "median" (although "median" won't work for seasonal)
 
-for(i in rev(1:nrow(sps_list))){
+for(i in rev(1:304)){#nrow(sps_list))){
 
   sp_sel <- unname(unlist(sps_list[i,"english"]))
 species_ebird <- ebirdst::get_species(sp_sel)
@@ -93,7 +95,7 @@ if(!resident & breed_qual == 0){
 }
 
 
-if(!resident & breed_qual > 0) {
+if(!resident & breed_qual > 0 & !use_weekly) {
   down <- try(ebirdst::ebirdst_download_status(species_ebird,
                                              download_ranges = FALSE,
                                              download_abundance = TRUE,
@@ -103,7 +105,7 @@ if(!resident & breed_qual > 0) {
             silent = TRUE)
 }
 
-if(resident) {
+if(resident | use_weekly) {
 
 down <- try(ebirdst::ebirdst_download_status(species_ebird,
                                              download_ranges = FALSE,
@@ -146,7 +148,7 @@ sps_list[i,"available_ebird_data"] <- "Yes"
 
 
 
-if(resident){
+if(resident | use_weekly){
 
   # The resident relative abundance is not linearly related
   # to the BBS mean observations (log-linear) (e.g., BCCH)
@@ -159,7 +161,7 @@ if(resident){
                                                product = "abundance")
 
   bbs_weeks <- try(as_date(names(abd_weekly_abundance)),silent = TRUE)
-  bbs_weeks <- bbs_weeks[which(bbs_weeks > as_date("2022-05-24") &
+  bbs_weeks <- bbs_weeks[which(bbs_weeks > as_date("2022-05-20") &
                                  bbs_weeks < as_date("2022-07-07"))]
 
   abd_weekly_abundance_bbs_season <- abd_weekly_abundance[[as.character(bbs_weeks)]]

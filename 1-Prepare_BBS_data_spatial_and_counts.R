@@ -262,7 +262,7 @@ saveRDS(raw_counts_route,
         "data/all_counts_by_route.rds")
 
 saveRDS(routes_buf,
-        "data/all_routes_buffered.rds")
+        "data/all_routes_buffered_1km.rds")
 
 
 
