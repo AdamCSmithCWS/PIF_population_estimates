@@ -734,3 +734,53 @@ side_plot1 <- ggplot(data = pop_compare_stack,
 side_plot1
 
 
+
+
+
+# compare adjustment factors ----------------------------------------------
+
+
+
+# dropping three species with availability estimates < 0.01 - unrealistically low
+ExpAdjs <- read_csv("Species_correction_factors_w_edr_availability.csv") %>%
+  mutate(availability = ifelse(Species %in% c("CORE",
+                                              "NESP",
+                                              "GFWO"),NA,availability),
+         tod = exp(TimeAdj.meanlog),
+         Tlr = log(1/(tod*availability)),
+         Alr = log(Dist2^2/edr^2))
+
+Trats <- ExpAdjs %>%
+  select(Species,cn,Tlr,Alr) %>%
+  pivot_longer(cols = c(Tlr,Alr),
+               names_to = "adjustment",
+               values_to = "LogRatio") %>%
+  mutate(factor = ifelse(adjustment == "Tlr",
+                         "Availability",
+                         "Area"))
+
+splabs <- Trats %>%
+  filter(LogRatio > 2 | LogRatio < -0.5)
+
+adj_plot <- ggplot(data = Trats,
+                      aes(x = factor,
+                          y = LogRatio))+
+  geom_hline(yintercept = 0)+
+  geom_violin(fill = NA)+
+  geom_point(aes(group = Species),position = position_dodge(width = 0.5),
+             alpha = 0.3)+
+  ylab("Log Ratio log(new/old)\n positive values = increased population estimate")+
+  xlab("Adjustment factor")+
+  geom_text_repel(aes(label = Species,group = Species),
+            position = position_dodge(width = 0.5),
+            min.segment.length = 0,
+            size = 3)+
+  theme_bw()
+
+pdf("Figures/Log-Ratios.pdf",
+    width = 3.5,
+    height = 4.5)
+print(adj_plot)
+dev.off()
+
+

@@ -175,7 +175,7 @@ for(i in 1:nrow(ExpAdjs)){
     print(paste("no napops avail for",ExpAdjs[i,"cn"]))
     next}
 
-  sp <- ExpAdjs[i,"Species"]
+  sp <- unlist(ExpAdjs[i,"Species"])
 
   # choose best supported model
   cefs <- napops::coef_removal(species = sp) |>
@@ -183,7 +183,8 @@ for(i in 1:nrow(ExpAdjs)){
 
   if(nrow(cefs) == 0){next} # skip if no napops output
 
-  w_mod <- cefs[1,"Model"]
+
+    w_mod <- cefs[1,"Model"]
 
   availability <- try(napops::avail(species = sp,
                            time = 3,
@@ -195,7 +196,17 @@ for(i in 1:nrow(ExpAdjs)){
               silent = TRUE)
 
 
-  if(class(availability) == "try-error"){
+  if(class(availability) == "try-error" |
+     availability$p_est < 0.1){
+    availability <- try(napops::avail(species = sp,
+                                      time = 3,
+                                      model = 1, #intercept model
+                                      od = mean_doy, # mean of the doy for all BBS surveys
+                                      tssr = mid_time, #mean of time of day for all BBS surveys
+                                      quantiles = c(0.1625), # 1 sd below the mean
+                                      samples = 1000),
+                        silent = TRUE)
+
     warning(paste("availability extraction did not work for",sp))
     next
   }
