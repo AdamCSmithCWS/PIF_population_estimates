@@ -195,9 +195,7 @@ for(i in 1:nrow(ExpAdjs)){
                           samples = 1000),
               silent = TRUE)
 
-
-  if(class(availability) == "try-error" |
-     availability$p_est < 0.1){
+  if(class(availability) == "try-error"){
     availability <- try(napops::avail(species = sp,
                                       time = 3,
                                       model = 1, #intercept model
@@ -206,10 +204,26 @@ for(i in 1:nrow(ExpAdjs)){
                                       quantiles = c(0.1625), # 1 sd below the mean
                                       samples = 1000),
                         silent = TRUE)
-
-    warning(paste("availability extraction did not work for",sp))
-    next
+    w_mod <- 1
+  }else{
+    if(availability$p_est < 0.1){
+      availability <- try(napops::avail(species = sp,
+                                        time = 3,
+                                        model = 1,
+                                        od = mean_doy, # mean of the doy for all BBS surveys
+                                        tssr = mid_time, #mean of time of day for all BBS surveys
+                                        quantiles = c(0.1625), # 1 sd below the mean
+                                        samples = 1000),
+                          silent = TRUE)
+      w_mod <- 1
+    }
   }
+
+    if(class(availability) == "try-error"){
+          warning(paste("availability extraction did not work for",sp))
+          next
+        }
+
 
 
   ExpAdjs[i,"availability"] <- as.numeric(availability$p_est)
@@ -501,7 +515,9 @@ trim_rel_abund <- TRUE
 
 for(sp_sel in c("Hermit Thrush","American Robin",
                 "Barn Swallow",
-                "Blackpoll Warbler")){ # rev(sps_list$english[1:348])){#sp_example[-wh_drop]){#list$english){
+                "Blackpoll Warbler","Brown Creeper","Canyon Wren",
+                "Black-capped Chickadee","Canada Warbler",
+                "Connecticut Warbler")){ # rev(sps_list$english[1:348])){#sp_example[-wh_drop]){#list$english){
 #sp_sel = "Bank Swallow"
 #for(sp_sel in rev(sps_list$english)[29]){
  sp_aou <- bbsBayes2::search_species(sp_sel)$aou[1]
