@@ -490,7 +490,7 @@ trim_rel_abund <- TRUE
 
 for(sp_sel in c("Hermit Thrush","American Robin",
                 "Barn Swallow",
-                "Blackpoll Warbler")[-1]){ # rev(sps_list$english[1:348])){#sp_example[-wh_drop]){#list$english){
+                "Blackpoll Warbler")){ # rev(sps_list$english[1:348])){#sp_example[-wh_drop]){#list$english){
 #sp_sel = "Bank Swallow"
 #for(sp_sel in rev(sps_list$english)[29]){
  sp_aou <- bbsBayes2::search_species(sp_sel)$aou[1]
@@ -1284,7 +1284,15 @@ saveRDS(betas_by_route,paste0(output_dir,"/betas_by_route_alt_",
 #                               pred_count_lognormal_alt1$mean,
 #                               pred_count_lognormal_alt2$mean,
 #                               pred_count$mean))
+y_pred_bind <- data.frame(year = rep(c(1:stan_data$n_years)+2012,2),
+                          ebird_abund = rep(c(min(combined$ebird_abund),max(combined$ebird_abund)),each = stan_data$n_years))
 
+predictions <- summ %>% filter(grepl("raw_prediction",variable)) %>%
+  cbind(y_pred_bind)
+
+
+predictions_sel <- predictions %>%
+  filter(year == 2022)
 
 obs_pred_count <- ggplot(data = betas_by_route,
                          aes(y = mean_count,x = mean_ebird_abund ))+
@@ -1294,6 +1302,9 @@ obs_pred_count <- ggplot(data = betas_by_route,
   scale_x_continuous(labels = scales::label_comma(),
                      transform = "log10")+
   scale_y_continuous(transform = "log10",labels = scales::label_comma())+
+  geom_line(data = predictions,aes(x = ebird_abund,y = mean, group = year),
+            alpha = 0.5)+
+  geom_line(data = predictions_sel,aes(x = ebird_abund,y = mean))+
   geom_smooth(method = "lm")
 
 # R-squared ---------------------------------------------------------------

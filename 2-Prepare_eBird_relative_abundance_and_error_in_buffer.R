@@ -43,10 +43,19 @@ re_calc <- TRUE # TRUE if want to re-calcluate the eBird-BBS overlap
 
 use_weekly <- TRUE # only use TRUE if goal is to model all species
       # as weekly abundance, including breeding distributions
-      #
+
+bbs_start <- as_date("2022-06-01") # Latest date for start of BBS-relevant breeding season
+bbs_end <- as_date("2022-07-01") # Latest data for end of BBS-relevant breeding season
+
+
+
 metric_used <- "mean" #options are "max", mean" or "median" (although "median" won't work for seasonal)
 
-for(i in rev(1:304)){#nrow(sps_list))){
+ii <- which(sps_list$english %in% c("Brown Creeper","Canyon Wren",
+                                    "Black-capped Chickadee","Canada Warbler",
+                                    "Connecticut Warbler"))
+
+for(i in ii){#rev(1:nrow(sps_list))){
 
   sp_sel <- unname(unlist(sps_list[i,"english"]))
 species_ebird <- ebirdst::get_species(sp_sel)
@@ -79,6 +88,22 @@ resident <- unname(unlist(qual_sel[,"is_resident"]))
 
 breeding_start <- unname(unlist(qual_sel[,"breeding_start"]))
 breeding_end <- unname(unlist(qual_sel[,"breeding_end"]))
+
+if(!resident){
+sel_start <- ifelse(as_date(breeding_start)>bbs_start, # if stable breeding season is later than the 1st of June (mostly only northern species)
+                    bbs_start,# then use the first of June
+                    as_date("2022-05-20")) # otherwise use May 20th as a compromise between stable breeding season and BBS observation dates
+
+
+sel_end <- ifelse(as_date(breeding_end)>bbs_end, # if stable breeding season ending is later than the 1st week of July
+                    bbs_end,# then use the last week of bbs season
+                    as_date("2022-07-07")) # otherwise use July 7 as a compromise between stable breeding season end and BBS observation dates
+
+
+}else{
+  sel_start <- as_date("2022-05-20") # use May 20, as start of BBS observations season for resident species
+  sel_end <- as_date("2022-07-07")# use July 7, as end of BBS observations season for resident species
+  }
 
 sps_list[i,"is_resident"] <- resident
 sps_list[i,"breeding_quality"] <- breed_qual
@@ -155,16 +180,18 @@ if(resident | use_weekly){
   # Therefore: if resident, then extract the weekly abundance data for the
   # BBS survey season and generate a breeding season abundance
 
+
+
   abd_weekly_abundance <- ebirdst::load_raster(species = species_ebird,
                                                resolution = "3km",
                                                period = "weekly",
                                                product = "abundance")
 
-  bbs_weeks <- try(as_date(names(abd_weekly_abundance)),silent = TRUE)
-  bbs_weeks <- bbs_weeks[which(bbs_weeks > as_date("2022-05-20") &
-                                 bbs_weeks < as_date("2022-07-07"))]
+  sel_weeks <- try(as_date(names(abd_weekly_abundance)),silent = TRUE)
+  sel_weeks <- sel_weeks[which(sel_weeks > sel_start &
+                                 sel_weeks < sel_end)]
 
-  abd_weekly_abundance_bbs_season <- abd_weekly_abundance[[as.character(bbs_weeks)]]
+  abd_weekly_abundance_bbs_season <- abd_weekly_abundance[[as.character(sel_weeks)]]
 
   if(metric_used == "max"){
   breed_abundance <- terra::quantile(abd_weekly_abundance_bbs_season,
@@ -195,13 +222,13 @@ if(resident | use_weekly){
                                                      metric = "upper")
 
 
-  abd_weekly_abundance_lower_bbs_season <- abd_weekly_abundance_lower[[as.character(bbs_weeks)]]
-  abd_weekly_abundance_upper_bbs_season <- abd_weekly_abundance_upper[[as.character(bbs_weeks)]]
+  abd_weekly_abundance_lower_bbs_season <- abd_weekly_abundance_lower[[as.character(sel_weeks)]]
+  abd_weekly_abundance_upper_bbs_season <- abd_weekly_abundance_upper[[as.character(sel_weeks)]]
 
   abd_weekly_abundance_ci <- abd_weekly_abundance_upper_bbs_season - abd_weekly_abundance_lower_bbs_season
 
-  abd_weekly_abundance_lower_bbs_season <- log(abd_weekly_abundance_lower[[as.character(bbs_weeks)]]+0.0001)
-  abd_weekly_abundance_upper_bbs_season <- log(abd_weekly_abundance_upper[[as.character(bbs_weeks)]]+0.0001)
+  abd_weekly_abundance_lower_bbs_season <- log(abd_weekly_abundance_lower[[as.character(sel_weeks)]]+0.0001)
+  abd_weekly_abundance_upper_bbs_season <- log(abd_weekly_abundance_upper[[as.character(sel_weeks)]]+0.0001)
 
   abd_weekly_abundance_logci <- abd_weekly_abundance_upper_bbs_season - abd_weekly_abundance_lower_bbs_season
 
@@ -250,17 +277,17 @@ if(resident | use_weekly){
                                                      product = "abundance",
                                                      metric = "upper")
 
-  bbs_weeks <- try(as_date(names(abd_weekly_abundance_upper)),silent = TRUE)
-  bbs_weeks <- bbs_weeks[which(bbs_weeks >= as_date(breeding_start) &
-                                 bbs_weeks <= as_date(breeding_end))]
+  sel_weeks <- try(as_date(names(abd_weekly_abundance_upper)),silent = TRUE)
+  sel_weeks <- sel_weeks[which(sel_weeks > sel_start &
+                                 sel_weeks < sel_end)]
 
-  abd_weekly_abundance_lower_bbs_season <- abd_weekly_abundance_lower[[as.character(bbs_weeks)]]
-  abd_weekly_abundance_upper_bbs_season <- abd_weekly_abundance_upper[[as.character(bbs_weeks)]]
+  abd_weekly_abundance_lower_bbs_season <- abd_weekly_abundance_lower[[as.character(sel_weeks)]]
+  abd_weekly_abundance_upper_bbs_season <- abd_weekly_abundance_upper[[as.character(sel_weeks)]]
 
     abd_weekly_abundance_ci <- abd_weekly_abundance_upper_bbs_season - abd_weekly_abundance_lower_bbs_season
 
-    abd_weekly_abundance_lower_bbs_season <- log(abd_weekly_abundance_lower[[as.character(bbs_weeks)]]+0.0001)
-    abd_weekly_abundance_upper_bbs_season <- log(abd_weekly_abundance_upper[[as.character(bbs_weeks)]]+0.0001)
+    abd_weekly_abundance_lower_bbs_season <- log(abd_weekly_abundance_lower[[as.character(sel_weeks)]]+0.0001)
+    abd_weekly_abundance_upper_bbs_season <- log(abd_weekly_abundance_upper[[as.character(sel_weeks)]]+0.0001)
 
     abd_weekly_abundance_logci <- abd_weekly_abundance_upper_bbs_season - abd_weekly_abundance_lower_bbs_season
 
