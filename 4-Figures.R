@@ -743,21 +743,26 @@ side_plot1
 
 # dropping three species with availability estimates < 0.01 - unrealistically low
 ExpAdjs <- read_csv("Species_correction_factors_w_edr_availability.csv") %>%
-  mutate(availability = ifelse(Species %in% c("CORE",
-                                              "NESP",
-                                              "GFWO"),NA,availability),
-         tod = exp(TimeAdj.meanlog),
-         Tlr = log(1/(tod*availability)),
-         Alr = log(Dist2^2/edr^2))
+  mutate(tod = exp(TimeAdj.meanlog),
+         availability = ifelse(Species %in% c("CORE"),NA,availability),
+         Tr = (1/(tod*availability)),
+         Ar = (Dist2^2/edr^2),
+         comb_r = Tr*Ar,
+         Tlr = log(Tr),
+         Alr = log(Ar),
+         clr = log(comb_r))
 
 Trats <- ExpAdjs %>%
-  select(Species,cn,Tlr,Alr) %>%
-  pivot_longer(cols = c(Tlr,Alr),
+  select(Species,cn,Tlr,Alr,clr) %>%
+  pivot_longer(cols = c(Tlr,Alr,clr),
                names_to = "adjustment",
                values_to = "LogRatio") %>%
   mutate(factor = ifelse(adjustment == "Tlr",
                          "Availability",
-                         "Area"))
+                         "Area"),
+         factor = ifelse(adjustment == "clr",
+                         "Combined",
+                         factor))
 
 splabs <- Trats %>%
   filter(LogRatio > 2 | LogRatio < -0.5)
@@ -765,7 +770,15 @@ splabs <- Trats %>%
 adj_plot <- ggplot(data = Trats,
                       aes(x = factor,
                           y = LogRatio))+
-  geom_hline(yintercept = 0)+
+  geom_hline(yintercept = c(log(10),
+                            log(0.1)),
+             alpha = 0.6)+
+  geom_hline(yintercept = c(log(5),
+                            log(0.2)),
+             alpha = 0.6,
+             linetype = 2)+
+  geom_hline(yintercept = c(0),
+             alpha = 0.3)+
   geom_violin(fill = NA)+
   geom_point(aes(group = Species),position = position_dodge(width = 0.5),
              alpha = 0.3)+
@@ -775,10 +788,10 @@ adj_plot <- ggplot(data = Trats,
             position = position_dodge(width = 0.5),
             min.segment.length = 0,
             size = 3)+
-  theme_bw()
+  theme_classic()
 
 pdf("Figures/Log-Ratios.pdf",
-    width = 3.5,
+    width = 6.5,
     height = 4.5)
 print(adj_plot)
 dev.off()
