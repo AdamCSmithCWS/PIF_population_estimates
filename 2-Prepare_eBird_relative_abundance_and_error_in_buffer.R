@@ -53,7 +53,11 @@ metric_used <- "mean" #options are "max", mean" or "median" (although "median" w
 
 ii <- which(sps_list$english %in% c("Brown Creeper","Canyon Wren",
                                     "Black-capped Chickadee","Canada Warbler",
-                                    "Connecticut Warbler"))
+                                    "Connecticut Warbler",
+                                    "Hermit Thrush","American Robin",
+                                      "Barn Swallow",
+                                      "Blackpoll Warbler","Baird's Sparrow",
+                                    "Chestnut-collared Longspur"))
 
 for(i in ii){#rev(1:nrow(sps_list))){
 
@@ -329,6 +333,17 @@ bbs_strata <- bbsBayes2::load_map("bbs_usgs") %>%
 
 # project boundary to match raster data
 region_boundary_proj <- st_transform(bbs_strata, st_crs(breed_abundance))
+
+bbs_strata2 <- bbsBayes2::load_map("bbs_usgs")
+strata_proj <- st_transform(bbs_strata2, st_crs(breed_abundance))
+
+routes_nm <- routes_buf %>%
+  select(route_name,route) %>%
+  st_transform(crs = st_crs(bbs_strata2)) %>%
+  sf::st_join(bbs_strata2, largest = TRUE) %>%
+  group_by(strata_name) %>%
+  summarise() %>%
+  sf::st_transform(crs = st_crs(breed_abundance))
 # crop and mask to boundary of BBS
 breed_abundance <- crop(breed_abundance, region_boundary_proj) |>
   mask(region_boundary_proj)
@@ -353,6 +368,20 @@ abundance_in_buffers <- terra::extract(breed_abundance,
                                        ID = FALSE,
                                        exact = TRUE)
 
+abundance_in_strata <- terra::extract(breed_abundance,
+                                       strata_proj,
+                                       fun = mean,
+                                       na.rm = TRUE,
+                                       ID = FALSE,
+                                       exact = TRUE)
+
+total_abundance_in_strata <- terra::extract(breed_abundance,
+                                      strata_proj,
+                                      fun = sum,
+                                      na.rm = TRUE,
+                                      ID = FALSE,
+                                      exact = TRUE)
+
 abundance_sd_in_buffers <- terra::extract(breed_abundance_sd,
                                        routes_buf_proj,
                                        fun = mean,
@@ -366,6 +395,13 @@ abundance_ci_in_buffers <- terra::extract(breed_abundance_ci,
                                           na.rm = TRUE,
                                           ID = FALSE,
                                           exact = TRUE)
+
+abundance_sampled <- terra::extract(breed_abundance,
+                                       routes_nm,
+                                       fun = mean,
+                                       na.rm = TRUE,
+                                       ID = FALSE,
+                                       exact = TRUE)
 
 # this argument creates an area-weighted mean of the cells that are overlapped
 # by the buffer
@@ -406,5 +442,27 @@ abundance_df <- data.frame(route_name = routes_buf_proj$route_name,
 saveRDS(abundance_df,
         paste0("data/species_relative_abundance/",species_ebird,"_relative_abundance.rds"))
 
+abundance_strat <- bbs_strata2 %>%
+  sf::st_drop_geometry() %>%
+  mutate(mean_ebird_abundance = abundance_in_strata[[1]],
+         total_ebird_abundance = total_abundance_in_strata[[1]])
+
+abundance_strat[nrow(abundance_strat)+1,"strata_name"] <- "USA_CAN"
+abundance_strat[nrow(abundance_strat),"mean_ebird_abundance"] <- terra::global(breed_abundance, "mean", na.rm = TRUE)
+abundance_strat[nrow(abundance_strat),"total_ebird_abundance"] <- terra::global(breed_abundance, "sum", na.rm = TRUE)
+
+
+sampled_abund <- data.frame(strata_name = routes_nm$strata_name,
+                            sampled_abundance = abundance_sampled$mean)
+
+
+abundance_strat <- abundance_strat %>%
+  left_join(sampled_abund,
+            by = "strata_name") %>%
+  mutate(sampled_avail_ratio = sampled_abundance/mean_ebird_abundance,
+         log_ratio = log(sampled_avail_ratio))
+
+saveRDS(abundance_strat,
+        paste0("data/species_relative_abundance/",species_ebird,"_bbs_strata_relative_abundance.rds"))
 
 }

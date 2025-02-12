@@ -459,6 +459,7 @@ if(use_traditional){
 }else{
   vers <- ""
 }
+vers <- paste0(vers,"slope_")
 
 # if(file.exists(paste0("adjs_out",vers,today,".csv"))){
 #   adjs_out <- read_csv(paste0("adjs_out",vers,today,".csv"))
@@ -716,6 +717,7 @@ if(re_run_model){
 
   params_to_summarise <- c("nu",
                            "BETA",
+                           "RHO",
                            "beta_raw",
                            "beta",
                            "sd_beta",
@@ -760,7 +762,7 @@ if(re_run_model){
                            "pred_count_r")
 
 
-    model <- cmdstanr::cmdstan_model("models/ebird_rel_abund_calibration_spatial_year_doy_sep_obs_rte.stan")
+    model <- cmdstanr::cmdstan_model("models/ebird_rel_abund_calibration_spatial_year_doy_sep_obs_rte_slope.stan")
 
 
 fit <- model$sample(data = stan_data,
@@ -1007,6 +1009,19 @@ cali <- fit$summary(variable = "calibration_median",
   mutate(inference = "calibration realised median across route-observer")
 
 
+rho <- fit$summary(variable = "RHO",
+                    "mean",
+                    "median",
+                    "sd",
+                    "rhat",
+                    "ess_bulk",
+                    q2_5 = ~quant(.x,q = 0.025),
+                    q10 = ~quant(.x,q = 0.10),
+                    q90 = ~quant(.x,q = 0.90),
+                    q97_5 = ~quant(.x,q = 0.975))%>%
+  mutate(inference = "exponential coefficient")
+
+
 
 
 
@@ -1082,7 +1097,8 @@ pred_count <- fit$summary(variable = "pred_count_median",
 
 
 
-param_infer <- bind_rows(cali_alt,
+param_infer <- bind_rows(rho = rho,
+                         cali_alt,
                          cali,
                          cali_lognormal,
                          cali_lognormal_alt1,
@@ -1103,6 +1119,9 @@ param_infer <- bind_rows(cali_alt,
 #param_infer2 <- readRDS(paste0(output_dir,"/parameter_inference_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
 
 saveRDS(param_infer,paste0(output_dir,"/parameter_inference_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
+
+adjs[1,"exponential"] <- as.numeric(rho$mean)
+adjs[1,"exponential_sd"] <- as.numeric(rho$sd)
 
 adjs[1,"calibration"] <- as.numeric(cali$mean)
 adjs[1,"calibration_sd"] <- as.numeric(cali$sd)
@@ -1138,6 +1157,9 @@ cali_alt_post <- fit$draws(variables = "calibration_mean",
 cali_post <- fit$draws(variables = "calibration_median",
                               format = "df")
 
+rho_post <- fit$draws(variables = "RHO",
+                       format = "df")
+
 trm_mean <- function(x,p = 0.1){
   q1 <- quantile(x,p)
   q2 <- quantile(x,1-p)
@@ -1145,6 +1167,7 @@ trm_mean <- function(x,p = 0.1){
   trim_m <- mean(xtrim)
   return(trim_m)
 }
+
 
 cali_route_post <- fit$draws(variables = "calibration_r",
                            format = "df")
@@ -1181,14 +1204,8 @@ route_link <- combined %>%
             .groups = "drop") %>%
   arrange(route)
 
-count_22 <- combined %>%
-  filter(year %in% c(2021:2023)) %>%
-  group_by(route) %>%
-  summarise(obs_count_22 = mean(count,na.rm = TRUE))
 
-route_link <- route_link %>%
-  left_join(count_22, by = "route")
-routes_buf_extra <- routcountroutes_buf_extra <- routes_buf %>%
+routes_buf_extra <- routes_buf %>%
   sf::st_buffer(10000)
 
 calibration_by_rts <- summ %>% filter(grepl("calibration_r[",variable,fixed = TRUE)) %>%
@@ -1209,8 +1226,7 @@ betas_by_route <- betas %>%
             mean_pred_count = (pred_count_rt_median),
             min_pred_count = (pred_count_rt_q5),
             max_pred_count = (pred_count_rt_q95),
-         mean_residual = mean_count - mean_pred_count,
-         residual_2022 = obs_count_22 - mean_pred_count)
+         mean_residual = mean_count - mean_pred_count)
 
 
 betas_plot <- routes_buf_extra %>%
@@ -1228,18 +1244,6 @@ beta_distr <- ggplot()+
                          option = "H")
 
 
-resid_distr2 <- ggplot()+
-  geom_sf(data = strata)+
-  geom_sf(data = betas_plot,
-          aes(colour = residual_2022,
-              fill = residual_2022))+
-  scale_colour_viridis_b(aesthetics = c("colour","fill"),
-                         breaks = as.numeric(quantile(betas_plot$residual_2022,
-                                             seq(0,1,by = 0.1), na.rm = TRUE)),
-                         guide = guide_coloursteps(even.steps = FALSE,
-                                                   show.limits = TRUE),
-                         option = "H")
-
 resid_distr <- ggplot()+
   geom_sf(data = strata)+
   geom_sf(data = betas_plot,
@@ -1247,7 +1251,7 @@ resid_distr <- ggplot()+
               fill = mean_residual))+
   scale_colour_viridis_b(aesthetics = c("colour","fill"),
                          breaks = as.numeric(quantile(betas_plot$mean_residual,
-                                                      seq(0,1,by = 0.1))),
+                                             seq(0,1,by = 0.1))),
                          guide = guide_coloursteps(even.steps = FALSE,
                                                    show.limits = TRUE),
                          option = "H")
@@ -1586,8 +1590,10 @@ abundance_in_strata <- terra::extract(breed_abundance_full,
 
 
 ## function to estimate full posterior of abundance
+use_log_calib <- FALSE
 
 post_abund <- function(x,draws = cali_post$calibration,
+                       rho_draws = rho_post$RHO,
                        fun = "mean",
                        p = 0.025,
                        use_log = FALSE){
@@ -1600,9 +1606,9 @@ post_abund <- function(x,draws = cali_post$calibration,
   if(fun == "mean"){
   for(i in 1:length(x)){
     if(use_log){
-      y[i] <- exp(mean(xl[i]+as.numeric(draws)))
+      y[i] <- exp(mean(as.numeric(rho_draws)*xl[i]+as.numeric(draws)))
     }else{
-     y[i] <- mean(x[i]*as.numeric(draws))
+     y[i] <- mean((x[i]^as.numeric(rho_draws))*as.numeric(draws))
     }
   }
   }
@@ -1610,10 +1616,10 @@ post_abund <- function(x,draws = cali_post$calibration,
   if(fun == "quantile"){
     for(i in 1:length(x)){
       if(use_log){
-        y[i] <- exp(quantile(xl[i]+as.numeric(draws),p, names = FALSE))
+        y[i] <- exp(quantile(as.numeric(rho_draws)*xl[i]+as.numeric(draws),p, names = FALSE))
 
       }else{
-      y[i] <- quantile(x[i]*as.numeric(draws),p, names = FALSE)
+      y[i] <- quantile((x[i]^as.numeric(rho_draws))*as.numeric(draws),p, names = FALSE)
       }
     }
   }
@@ -1642,31 +1648,26 @@ strata_abund <- data.frame(region = strata_proj$strata_name,
                            region_type = "strata",
                            sum_abund = 3^2 * unlist(abundance_in_strata[[2]])) %>%
   filter(!is.na(sum_abund)) %>%
-  mutate(pop_mean = post_abund(sum_abund, use_log = FALSE,
-                               draws = cali_use$calibration,
+  mutate(pop_mean = post_abund(sum_abund, use_log = use_log_calib,
+                               draws = cali_use$calibration, rho_draws = rho_post$RHO,
                                  fun = "mean"),
-         pop_median = post_abund(sum_abund, use_log = FALSE, draws = cali_use$calibration,
+         pop_median = post_abund(sum_abund, use_log = use_log_calib, draws = cali_use$calibration, rho_draws = rho_post$RHO,
                                  fun = "quantile",p = 0.5),
-         pop_lci_80 = post_abund(sum_abund, use_log = FALSE,draws = cali_use$calibration,
+         pop_lci_80 = post_abund(sum_abund, use_log = use_log_calib,draws = cali_use$calibration, rho_draws = rho_post$RHO,
                                  fun = "quantile",p = 0.1),
-         pop_uci_80 = post_abund(sum_abund, use_log = FALSE,draws = cali_use$calibration,
+         pop_uci_80 = post_abund(sum_abund, use_log = use_log_calib,draws = cali_use$calibration, rho_draws = rho_post$RHO,
                                  fun = "quantile",p = 0.9),
-         pop_lci_95 = post_abund(sum_abund, use_log = FALSE,draws = cali_use$calibration,
+         pop_lci_95 = post_abund(sum_abund, use_log = use_log_calib,draws = cali_use$calibration, rho_draws = rho_post$RHO,
                                  fun = "quantile",p = 0.025),
-         pop_uci_95 = post_abund(sum_abund, use_log = FALSE,draws = cali_use$calibration,
+         pop_uci_95 = post_abund(sum_abund, use_log = use_log_calib,draws = cali_use$calibration, rho_draws = rho_post$RHO,
                                  fun = "quantile",p = 0.975),
          species = sp_sel,
          species_ebird = sp_ebird,
          strata_name = region) %>%
   left_join(.,strata_names)
   #filter(pop_mean != 0)
-strata_sampled <- readRDS(paste0("data/species_relative_abundance/",species_ebird,"_bbs_strata_relative_abundance.rds")) %>%
-  select(strata_name,mean_ebird_abundance:diff_sampled_avail) %>%
-  mutate(diff_p_avail = diff_sampled_avail/mean_ebird_abundance)
 
-strata_abund <- strata_abund %>%
-  left_join(strata_sampled,
-            by = "strata_name")
+
 
 comp_plot <- ggplot(data = strata_abund,
                     aes(x = strata_name,
@@ -1702,23 +1703,19 @@ comp_trad_new_plot <- ggplot(data = strata_compare,
   geom_abline(slope = 1, intercept = 0)+
   geom_abline(slope = 2, intercept = 0,linetype = 2)+
   geom_abline(slope = 5, intercept = 0,linetype = 3)+
-  geom_errorbar(aes(ymin = pop_lci_80,ymax = pop_uci_80,
-                    colour = diff_sampled_avail),
+  geom_errorbar(aes(ymin = pop_lci_80,ymax = pop_uci_80),
                 alpha = 0.3, width = 0)+
   geom_errorbarh(aes(xmin = LCI80.PopEst,xmax = UCI80.PopEst),
                 alpha = 0.3)+
-  geom_point(aes(colour = diff_sampled_avail))+
+  geom_point()+
   geom_text_repel(aes(label = strata_name),
                   size = 3)+
   scale_x_continuous(labels = scales::unit_format(unit = "M", scale = 1e-6))+
   scale_y_continuous(labels = scales::unit_format(unit = "M", scale = 1e-6))+
-  colorspace::scale_color_binned_diverging(rev = TRUE,palette = "Blue-Red 3",
-                                           breaks = c(-Inf,-0.15,0,0.15,Inf))+
   xlab("Traditional PIF population estimate")+
   ylab("PIF-Calibrated eBird relative abundance estimate")+
   labs(title = paste(sp_sel,"population estimates by BBS strata"),
-       subtitle = "Diagonal lines = 1:1, 2:1, and 5:1")+
-  theme_bw()
+       subtitle = "Diagonal lines = 1:1, 2:1, and 5:1")
 
 png(filename = paste0("Figures/comp_trad_new_alt_",vers,sp_aou,"_",sp_ebird,".png"),
     res = 300,
@@ -1823,17 +1820,17 @@ abundance_in_countries <- abundance_in_countries %>%
 country_abund <- data.frame(region = countries_proj$country_name[abundance_in_countries$ID],
                             region_type = "country",
                            sum_abund = 3^2 * unlist(abundance_in_countries[[2]])) %>%
-  mutate(pop_mean = post_abund(sum_abund, use_log = FALSE, draws = cali_use$calibration,
+  mutate(pop_mean = post_abund(sum_abund, use_log = use_log_calib, draws = cali_use$calibration, rho_draws = rho_post$RHO,
                                fun = "mean"),
-         pop_median = post_abund(sum_abund, use_log = FALSE, draws = cali_use$calibration,
+         pop_median = post_abund(sum_abund, use_log = use_log_calib, draws = cali_use$calibration, rho_draws = rho_post$RHO,
                                  fun = "quantile",p = 0.5),
-         pop_lci_80 = post_abund(sum_abund, use_log = FALSE,draws = cali_use$calibration,
+         pop_lci_80 = post_abund(sum_abund, use_log = use_log_calib,draws = cali_use$calibration, rho_draws = rho_post$RHO,
                                  fun = "quantile",p = 0.1),
-         pop_uci_80 = post_abund(sum_abund, use_log = FALSE,draws = cali_use$calibration,
+         pop_uci_80 = post_abund(sum_abund, use_log = use_log_calib,draws = cali_use$calibration, rho_draws = rho_post$RHO,
                                  fun = "quantile",p = 0.9),
-         pop_lci_95 = post_abund(sum_abund, use_log = FALSE,draws = cali_use$calibration,
+         pop_lci_95 = post_abund(sum_abund, use_log = use_log_calib,draws = cali_use$calibration, rho_draws = rho_post$RHO,
                                  fun = "quantile",p = 0.025),
-         pop_uci_95 = post_abund(sum_abund, use_log = FALSE,draws = cali_use$calibration,
+         pop_uci_95 = post_abund(sum_abund, use_log = use_log_calib,draws = cali_use$calibration, rho_draws = rho_post$RHO,
                                  fun = "quantile",p = 0.975),
          species = sp_sel,
          species_ebird = sp_ebird)
@@ -1870,17 +1867,17 @@ bcr_abund <- data.frame(region = as.character(bcr_proj$BCR[abundance_in_bcr$ID])
                             region_type = "bcr",
                             sum_abund = 3^2 * unlist(abundance_in_bcr[[2]])) %>%
   filter(!is.na(sum_abund)) %>%
-  mutate(pop_mean = post_abund(sum_abund, use_log = FALSE, draws = cali_use$calibration,
+  mutate(pop_mean = post_abund(sum_abund, use_log = use_log_calib, draws = cali_use$calibration, rho_draws = rho_post$RHO,
                                fun = "mean"),
-         pop_median = post_abund(sum_abund, use_log = FALSE, draws = cali_use$calibration,
+         pop_median = post_abund(sum_abund, use_log = use_log_calib, draws = cali_use$calibration, rho_draws = rho_post$RHO,
                                  fun = "quantile",p = 0.5),
-         pop_lci_80 = post_abund(sum_abund, use_log = FALSE,draws = cali_use$calibration,
+         pop_lci_80 = post_abund(sum_abund, use_log = use_log_calib,draws = cali_use$calibration, rho_draws = rho_post$RHO,
                                  fun = "quantile",p = 0.1),
-         pop_uci_80 = post_abund(sum_abund, use_log = FALSE,draws = cali_use$calibration,
+         pop_uci_80 = post_abund(sum_abund, use_log = use_log_calib,draws = cali_use$calibration, rho_draws = rho_post$RHO,
                                  fun = "quantile",p = 0.9),
-         pop_lci_95 = post_abund(sum_abund, use_log = FALSE,draws = cali_use$calibration,
+         pop_lci_95 = post_abund(sum_abund, use_log = use_log_calib,draws = cali_use$calibration, rho_draws = rho_post$RHO,
                                  fun = "quantile",p = 0.025),
-         pop_uci_95 = post_abund(sum_abund, use_log = FALSE,draws = cali_use$calibration,
+         pop_uci_95 = post_abund(sum_abund, use_log = use_log_calib,draws = cali_use$calibration, rho_draws = rho_post$RHO,
                                  fun = "quantile",p = 0.975),
          species = sp_sel,
          species_ebird = sp_ebird)
@@ -1968,16 +1965,16 @@ abundance_in_USACAN <- terra::extract(breed_abundance,
 USACAN_abund <- data.frame(region = "USACAN",
                           region_type = "USACAN",
                             sum_abund = 3^2 * unlist(abundance_in_USACAN[[2]])) %>%
-  mutate(pop_mean = post_abund(sum_abund, use_log = FALSE, fun = "mean"),
-         pop_median = post_abund(sum_abund, use_log = FALSE, draws = cali_use$calibration,
+  mutate(pop_mean = post_abund(sum_abund, use_log = use_log_calib, fun = "mean"),
+         pop_median = post_abund(sum_abund, use_log = use_log_calib, draws = cali_use$calibration, rho_draws = rho_post$RHO,
                                  fun = "quantile",p = 0.5),
-         pop_lci_80 = post_abund(sum_abund, use_log = FALSE,draws = cali_use$calibration,
+         pop_lci_80 = post_abund(sum_abund, use_log = use_log_calib,draws = cali_use$calibration, rho_draws = rho_post$RHO,
                                  fun = "quantile",p = 0.1),
-         pop_uci_80 = post_abund(sum_abund, use_log = FALSE,draws = cali_use$calibration,
+         pop_uci_80 = post_abund(sum_abund, use_log = use_log_calib,draws = cali_use$calibration, rho_draws = rho_post$RHO,
                                  fun = "quantile",p = 0.9),
-         pop_lci_95 = post_abund(sum_abund, use_log = FALSE,draws = cali_use$calibration,
+         pop_lci_95 = post_abund(sum_abund, use_log = use_log_calib,draws = cali_use$calibration, rho_draws = rho_post$RHO,
                                  fun = "quantile",p = 0.025),
-         pop_uci_95 = post_abund(sum_abund, use_log = FALSE,draws = cali_use$calibration,
+         pop_uci_95 = post_abund(sum_abund, use_log = use_log_calib,draws = cali_use$calibration, rho_draws = rho_post$RHO,
                                  fun = "quantile",p = 0.975),
          species = sp_sel,
          species_ebird = sp_ebird)
@@ -2014,16 +2011,16 @@ abundance_in_continents <- abundance_in_continents %>%
 continents_abund <- data.frame(region = as.character(continents_proj$CC[abundance_in_continents$ID]),
                            region_type = "continent",
                            sum_abund = 3^2 * unlist(abundance_in_continents[[2]])) %>%
-  mutate(pop_mean = post_abund(sum_abund, use_log = FALSE, fun = "mean"),
-         pop_median = post_abund(sum_abund, use_log = FALSE, draws = cali_use$calibration,
+  mutate(pop_mean = post_abund(sum_abund, use_log = use_log_calib, fun = "mean"),
+         pop_median = post_abund(sum_abund, use_log = use_log_calib, draws = cali_use$calibration, rho_draws = rho_post$RHO,
                                  fun = "quantile",p = 0.5),
-         pop_lci_80 = post_abund(sum_abund, use_log = FALSE,draws = cali_use$calibration,
+         pop_lci_80 = post_abund(sum_abund, use_log = use_log_calib,draws = cali_use$calibration, rho_draws = rho_post$RHO,
                                  fun = "quantile",p = 0.1),
-         pop_uci_80 = post_abund(sum_abund, use_log = FALSE,draws = cali_use$calibration,
+         pop_uci_80 = post_abund(sum_abund, use_log = use_log_calib,draws = cali_use$calibration, rho_draws = rho_post$RHO,
                                  fun = "quantile",p = 0.9),
-         pop_lci_95 = post_abund(sum_abund, use_log = FALSE,draws = cali_use$calibration,
+         pop_lci_95 = post_abund(sum_abund, use_log = use_log_calib,draws = cali_use$calibration, rho_draws = rho_post$RHO,
                                  fun = "quantile",p = 0.025),
-         pop_uci_95 = post_abund(sum_abund, use_log = FALSE,draws = cali_use$calibration,
+         pop_uci_95 = post_abund(sum_abund, use_log = use_log_calib,draws = cali_use$calibration, rho_draws = rho_post$RHO,
                                  fun = "quantile",p = 0.975),
          species = sp_sel,
          species_ebird = sp_ebird)
@@ -2040,17 +2037,17 @@ abundance_in_global <- sum(values(breed_abundance_full),na.rm = TRUE)
 global_abund <- data.frame(region = "global",
                            region_type = "global",
                            sum_abund = 3^2 * abundance_in_global) %>%
-  mutate(pop_mean = post_abund(sum_abund, use_log = FALSE, draws = cali_use$calibration,
+  mutate(pop_mean = post_abund(sum_abund, use_log = use_log_calib, draws = cali_use$calibration, rho_draws = rho_post$RHO,
                                fun = "mean"),
-         pop_median = post_abund(sum_abund, use_log = FALSE, draws = cali_use$calibration,
+         pop_median = post_abund(sum_abund, use_log = use_log_calib, draws = cali_use$calibration, rho_draws = rho_post$RHO,
                                  fun = "quantile",p = 0.5),
-         pop_lci_80 = post_abund(sum_abund, use_log = FALSE,draws = cali_use$calibration,
+         pop_lci_80 = post_abund(sum_abund, use_log = use_log_calib,draws = cali_use$calibration, rho_draws = rho_post$RHO,
                                  fun = "quantile",p = 0.1),
-         pop_uci_80 = post_abund(sum_abund, use_log = FALSE,draws = cali_use$calibration,
+         pop_uci_80 = post_abund(sum_abund, use_log = use_log_calib,draws = cali_use$calibration, rho_draws = rho_post$RHO,
                                  fun = "quantile",p = 0.9),
-         pop_lci_95 = post_abund(sum_abund, use_log = FALSE,draws = cali_use$calibration,
+         pop_lci_95 = post_abund(sum_abund, use_log = use_log_calib,draws = cali_use$calibration, rho_draws = rho_post$RHO,
                                  fun = "quantile",p = 0.025),
-         pop_uci_95 = post_abund(sum_abund, use_log = FALSE,draws = cali_use$calibration,
+         pop_uci_95 = post_abund(sum_abund, use_log = use_log_calib,draws = cali_use$calibration, rho_draws = rho_post$RHO,
                                  fun = "quantile",p = 0.975),
          species = sp_sel,
          species_ebird = sp_ebird)
@@ -2122,7 +2119,6 @@ print(vis_season)
 print(vis_annual)
 print(beta_distr)
 print(resid_distr)
-print(resid_distr2)
 print(beta_hist)
 print(count_hist / calib_hist)
 print(obs_pred_count)
