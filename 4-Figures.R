@@ -62,19 +62,17 @@ strata_names <- strata %>%
 
 # Example figure for roadside bias ----------------------------------------------------------
 demo_sp <- data.frame(species = c("American Robin",
-                                  "Clay-colored Sparrow",
-                                  "Varied Thrush",
-                                  "Horned Lark",
-                                  "Mountain Chickadee",
-                                  "Mountain Bluebird",
-                                  "Black-throated Green Warbler"),
-                      region = c("CA-YT-4",
-                                 "CA-AB-6",
-                                 "CA-BC-9",
-                                 "US-CA-33",
-                                 "CA-BC-9",
-                                 "US-ID-9",
-                                 "CA-AB-6"))
+                                  "American Robin",
+                                  "American Robin",
+                                  "American Robin",
+                                  "American Robin",
+                                  "American Robin"),
+                      region = c("CA-BC-5",
+                                 "US-NM-35",
+                                 "US-TX-21",
+                                 "US-SD-17",
+                                 "US-MS-27",
+                                 "US-MO-26"))
 
 
 
@@ -85,7 +83,7 @@ abund_maps_save <- vector(mode = "list",length = nrow(demo_sp))
 names(abund_maps_save) <- demo_sp$species
 
 
-for(i in 1:nrow(demo_sp)){
+for(i in 4:nrow(demo_sp)){
 sp_sel <- demo_sp[i,"species"]
 reg_sel <- demo_sp[i,"region"]
 
@@ -172,7 +170,7 @@ abund_map <- ggplot()+
 
 #
 
-png(filename = paste0("Figures/Figure_1_",sp_aou,"_",sp_ebird,".png"),
+png(filename = paste0("Figures/Figure_1_",sp_aou,"_",reg_sel,".png"),
     res = 400,
     height = 7,
     width = 6.5,
@@ -180,7 +178,7 @@ png(filename = paste0("Figures/Figure_1_",sp_aou,"_",sp_ebird,".png"),
 print(abund_map)
 dev.off()
 
-abund_maps_save[[sp_sel]] <- abund_map
+abund_maps_save[[paste0(sp_sel,"_",reg_sel)]] <- abund_map
 
 }
 

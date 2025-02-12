@@ -1660,21 +1660,20 @@ strata_abund <- data.frame(region = strata_proj$strata_name,
          strata_name = region) %>%
   left_join(.,strata_names)
   #filter(pop_mean != 0)
-strata_sampled <- readRDS(paste0("data/species_relative_abundance/",species_ebird,"_bbs_strata_relative_abundance.rds")) %>%
-  select(strata_name,mean_ebird_abundance:diff_sampled_avail) %>%
-  mutate(diff_p_avail = diff_sampled_avail/mean_ebird_abundance)
+strata_sampled <- readRDS(paste0("data/species_relative_abundance/",sp_ebird,"_bbs_strata_relative_abundance.rds")) %>%
+  select(strata_name,mean_ebird_abundance:log_ratio)
 
 strata_abund <- strata_abund %>%
   left_join(strata_sampled,
             by = "strata_name")
 
-comp_plot <- ggplot(data = strata_abund,
-                    aes(x = strata_name,
-                        y = pop_mean))+
-  geom_errorbar(aes(ymin = pop_lci_80,ymax = pop_uci_80),
-                alpha = 0.3, width = 0)+
-  geom_point()+
-  coord_flip()
+# comp_plot <- ggplot(data = strata_abund,
+#                     aes(x = strata_name,
+#                         y = pop_mean))+
+#   geom_errorbar(aes(ymin = pop_lci_80,ymax = pop_uci_80),
+#                 alpha = 0.3, width = 0)+
+#   geom_point()+
+#   coord_flip()
 
 #comp_plot
 
@@ -1692,9 +1691,12 @@ strata_trad_j <- strata_trad %>%
 strata_compare <- strata_abund %>%
   full_join(.,strata_trad_j,
             by = c("prov_state" = "st_abrev",
-                   "bcr" = "BCR"))
+                   "bcr" = "BCR")) %>%
+  mutate(ratio_cat = cut(log_ratio,breaks = c(-Inf,-0.15,0.15,Inf)),
+         log_pop_ratio = log(pop_median/med.PopEst))
 
-
+div_pal <- RColorBrewer::brewer.pal(n = 3,name = "RdBu")
+names(div_pal) <- levels(strata_compare$ratio_cat)
 
 comp_trad_new_plot <- ggplot(data = strata_compare,
                              aes(x = med.PopEst,
@@ -1702,18 +1704,20 @@ comp_trad_new_plot <- ggplot(data = strata_compare,
   geom_abline(slope = 1, intercept = 0)+
   geom_abline(slope = 2, intercept = 0,linetype = 2)+
   geom_abline(slope = 5, intercept = 0,linetype = 3)+
-  geom_errorbar(aes(ymin = pop_lci_80,ymax = pop_uci_80,
-                    colour = diff_sampled_avail),
+  geom_smooth(method = "lm",alpha = 0.2)+
+  geom_errorbar(aes(ymin = pop_lci_80,ymax = pop_uci_80),
                 alpha = 0.3, width = 0)+
   geom_errorbarh(aes(xmin = LCI80.PopEst,xmax = UCI80.PopEst),
                 alpha = 0.3)+
-  geom_point(aes(colour = diff_sampled_avail))+
+  geom_point()+
   geom_text_repel(aes(label = strata_name),
                   size = 3)+
   scale_x_continuous(labels = scales::unit_format(unit = "M", scale = 1e-6))+
   scale_y_continuous(labels = scales::unit_format(unit = "M", scale = 1e-6))+
-  colorspace::scale_color_binned_diverging(rev = TRUE,palette = "Blue-Red 3",
-                                           breaks = c(-Inf,-0.15,0,0.15,Inf))+
+  # colorspace::scale_color_binned_diverging(rev = TRUE,palette = "Blue-Red 2",
+  #                                          mid = 0,
+  #                                          breaks = c(-Inf,-0.2,0,0.2,Inf))+
+  #scale_colour_manual(values = div_pal)+
   xlab("Traditional PIF population estimate")+
   ylab("PIF-Calibrated eBird relative abundance estimate")+
   labs(title = paste(sp_sel,"population estimates by BBS strata"),
