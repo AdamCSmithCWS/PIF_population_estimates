@@ -216,14 +216,15 @@ model {
   sd_doy ~ gamma(2,10); // weak shrinkage prior with zero-avoidance
   sd_DOY ~ normal(0,1);
   DOY_raw ~ normal(0,1);         // GAM hyper coefficients for doy
-  for(s in 1:n_strata){
- doy_raw[s,1:n_knots_doy] ~ normal(0,1);         // GAM strata level parameters for doy
-}
-
-// alternate spatial treatment of doy effects
-//   for(k in 1:n_knots_doy){
-//  doy_raw[k,] ~ icar_normal(nstrata, node1, node2);         // GAM strata level parameters
+// alternate non-spatial treatment of doy effects
+//   for(s in 1:n_strata){
+//  doy_raw[s,1:n_knots_doy] ~ normal(0,1);         // GAM strata level parameters for doy
 // }
+
+// spatial treatment of doy effects
+  for(k in 1:n_knots_doy){
+ doy_raw[k,] ~ icar_normal(nstrata, node1, node2);         // GAM strata level parameters for doy
+}
 
   sd_gamma ~ student_t(3,0,0.2); // prior on sd of differences among strata
   sd_GAMMA ~ student_t(3,0,0.1); // prior on sd of mean hyperparameter differences
