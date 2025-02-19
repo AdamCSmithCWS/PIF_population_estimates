@@ -39,71 +39,73 @@ Output.dir <- "Stanton_2019_code/output_EDR/" #paste(Output.dir, '/', sep="")
 ## See associated manuscript for details and source references
 
 # Species specific adjustment factors (Time of Day, Detection Distance, Pair)
-ExpAdjs <- read.csv(paste(Inputfiles.dir, 'Species_PSEst_Adjustments.csv', sep=''), stringsAsFactors=FALSE)
-
-
+ExpAdjs_orig <- read.csv(paste(Inputfiles.dir, 'Species_PSEst_Adjustments.csv', sep=''), stringsAsFactors=FALSE)
+#
+#
 # Add na-pops EDRs --------------------------------------------------------
-
-library(napops)
-napops_species <- list_species() |>
-  dplyr::select(Species,Common_Name)
-ExpAdjs <- ExpAdjs |>
-  dplyr::left_join(napops_species,
-            by = c("cn" = "Common_Name"))
-
-for(i in 1:nrow(ExpAdjs)){
-  if(is.na(ExpAdjs[i,"Species"])){next}
-
-  sp <- ExpAdjs[i,"Species"]
-
-  # choose better supported model between models 1 (intercept) and 2 (roadside)
-cefs <- coef_distance(species = sp) |>
-  dplyr::filter(Model %in% c(1,2)) |>
-  dplyr::arrange(AIC)
-
-if(nrow(cefs) == 0){next} # skip if no napops output
-
-w_mod <- cefs[1,"Model"]
-
-edrt <- try(edr(species = sp,
-              model = w_mod,
-              forest = 0.5,
-              road = TRUE,
-              quantiles = c(0.1625),
-              samples = 1000),
-              silent = TRUE)
-
-if(edrt$EDR_est > 500){ # two species where the model 2 estimates of edr are silly (> 5 km!)
-  edrt <- try(edr(species = sp,
-                  model = 1,
-                  forest = 0.5,
-                  road = TRUE,
-                  quantiles = c(0.1625),
-                  samples = 1000),
-              silent = TRUE)
-  w_mod <- 1
-}
-
-if(class(edrt) == "try-error"){
-    break(paste("edr extraction did not work for",sp))
-
-    }
-
-
-  ExpAdjs[i,"edr"] <- as.numeric(edrt$EDR_est)
-
-  if("EDR_16.25" %in% names(edrt)){
-    ExpAdjs[i,"edr_sd"] <- as.numeric(edrt$EDR_est)-as.numeric(edrt$EDR_16.25)
-  }
-
-  ExpAdjs[i,"EDR_model"] <- ifelse(w_mod == 1,"Intercept","Roadside")
-
-  rm(edrt, w_mod)
-}
-
-ExpAdjs <- ExpAdjs |>
-  dplyr::mutate(edr = ifelse(edr == 1,NA,edr),
-                use_edr = ifelse(is.na(edr),FALSE,TRUE))
+#
+# library(napops)
+# napops_species <- list_species() |>
+#   dplyr::select(Species,Common_Name)
+# ExpAdjs <- ExpAdjs |>
+#   dplyr::left_join(napops_species,
+#             by = c("cn" = "Common_Name"))
+#
+# for(i in 1:nrow(ExpAdjs)){
+#   if(is.na(ExpAdjs[i,"Species"])){next}
+#
+#   sp <- ExpAdjs[i,"Species"]
+#
+#   # choose better supported model between models 1 (intercept) and 2 (roadside)
+# cefs <- coef_distance(species = sp) |>
+#   dplyr::filter(Model %in% c(1,2)) |>
+#   dplyr::arrange(AIC)
+#
+# if(nrow(cefs) == 0){next} # skip if no napops output
+#
+# w_mod <- cefs[1,"Model"]
+#
+# edrt <- try(edr(species = sp,
+#               model = w_mod,
+#               forest = 0.5,
+#               road = TRUE,
+#               quantiles = c(0.1625),
+#               samples = 1000),
+#               silent = TRUE)
+#
+# if(edrt$EDR_est > 500){ # two species where the model 2 estimates of edr are silly (> 5 km!)
+#   edrt <- try(edr(species = sp,
+#                   model = 1,
+#                   forest = 0.5,
+#                   road = TRUE,
+#                   quantiles = c(0.1625),
+#                   samples = 1000),
+#               silent = TRUE)
+#   w_mod <- 1
+# }
+#
+# if(class(edrt) == "try-error"){
+#     break(paste("edr extraction did not work for",sp))
+#
+#     }
+#
+#
+#   ExpAdjs[i,"edr"] <- as.numeric(edrt$EDR_est)
+#
+#   if("EDR_16.25" %in% names(edrt)){
+#     ExpAdjs[i,"edr_sd"] <- as.numeric(edrt$EDR_est)-as.numeric(edrt$EDR_16.25)
+#   }
+#
+#   ExpAdjs[i,"EDR_model"] <- ifelse(w_mod == 1,"Intercept","Roadside")
+#
+#   rm(edrt, w_mod)
+# }
+#
+# ExpAdjs <- ExpAdjs |>
+#   dplyr::mutate(edr = ifelse(edr == 1,NA,edr),
+#                 use_edr = ifelse(is.na(edr),FALSE,TRUE))
+#
+#
 # Species Global and WH range adjustment factors
 WH.GL.Adj <- read.csv(paste(Inputfiles.dir,'Species_Global_WH_Adjustments.csv', sep=''), stringsAsFactors=FALSE)
 # Species by Polygon (ProvBCR) range adjustment factors
@@ -116,9 +118,35 @@ PolyRngAdj <- read.csv(paste(Inputfiles.dir, 'Species_byRange_Adjs_BorrowPoly.cs
 PolyAreas <- read.csv(paste(Inputfiles.dir,'PolygonRangeAreas.csv', sep=''), stringsAsFactors=FALSE)
 ##############################################################
 
+cn_swap <- data.frame(cn = c("Gray Jay",
+                             "Le Conte's Sparrow",
+                             "McCown's Longspur",
+                             "Le Conte's Thrasher"),
+                      cn_expadj = c("Canada Jay",
+                                    "LeConte's Sparrow",
+                                    "Thick-billed Longspur",
+                                    "LeConte's Thrasher"))
+
+for(jj in 1:nrow(cn_swap)){
+  cni = cn_swap[jj,"cn"]
+  cnn <- cn_swap[jj,"cn_expadj"]
+
+  WH.GL.Adj[which(WH.GL.Adj$cn == cni),"cn"] <- cnn
+  Rng.Adj[which(Rng.Adj$cn == cni),"cn"] <- cnn
+  PS.othersources[which(PS.othersources$cn == cni),"cn"] <- cnn
+  PolyRngAdj[which(PolyRngAdj$cn == cni),"cn"] <- cnn
+
+
+}
+
 library(msm)
 library(tidyverse)
 library(plyr)
+
+
+
+ExpAdjs <- read_csv("Species_correction_factors_w_edr_availability.csv")
+
 
 PrettyUp <- function(x){
   out <- x
@@ -140,10 +168,16 @@ PS.score <- function(x){
   return(score)
 }
 
+raw_counts_route <- readRDS("data/all_counts_by_route.rds")
+counts_keep <- unique(raw_counts_route$route_data_id)
+
+## filter to only the same counts for which we have temporary spatial data
 all_data <- readRDS("Stanton_2019_code/input_files/All_BBS_data_by_strata_name.rds")|>
   dplyr::filter(aou %in% ExpAdjs$Aou,
-                !is.na(strata_name_numeric)) |>
+                !is.na(strata_name_numeric),
+                route_data_id %in% counts_keep) |>
   mutate(ProvBCR = strata_name_numeric)
+
 
 region.lkup <- all_data |>
   dplyr::select(st_abrev,state_num) |>
@@ -191,7 +225,7 @@ Spp.ProvBCR <- data.frame()
 # Species Loop ------------------------------------------------------------
 
 
-for(i in 1:length(Spp.aou)){ #Begin loop through each species
+for(i in 134:length(Spp.aou)){ #Begin loop through each species
   spp.i <- Spp.aou[i]
   cn.i <- ExpAdjs$cn[as.character(ExpAdjs$Aou)==spp.i]
   df.spp.i <- all_data[which(all_data$aou == spp.i),] |>
@@ -211,22 +245,22 @@ for(i in 1:length(Spp.aou)){ #Begin loop through each species
    #### Lookup Adjustment values based on Expert opinion/analysis
   if(!is.na(ExpAdjs[ExpAdjs$Aou %in% spp.i, 'edr'])){
     use_edr <- TRUE
-    Dist.adj.i <- ExpAdjs[ExpAdjs$Aou %in% spp.i, 'edr']
+    Dist.adj.i <- unname(unlist(ExpAdjs[ExpAdjs$Aou %in% spp.i, 'edr']))
     Dist.adj.sd <- ifelse(is.na(ExpAdjs[ExpAdjs$Aou %in% spp.i, 'edr_sd']),
                           20,
-                          ExpAdjs[ExpAdjs$Aou %in% spp.i, 'edr_sd'])
+                          unname(unlist(ExpAdjs[ExpAdjs$Aou %in% spp.i, 'edr_sd'])))
 
   }else{
     use_edr <- FALSE
-    Dist.adj.i <- ExpAdjs[ExpAdjs$Aou %in% spp.i, 'Dist2']
+    Dist.adj.i <- unname(unlist(ExpAdjs[ExpAdjs$Aou %in% spp.i, 'Dist2']))
     Dist.adj.LB <- Dist.adjparms$L.bound[Dist.adjparms$Dist.adj==Dist.adj.i]
     Dist.adj.UB <- Dist.adjparms$U.bound[Dist.adjparms$Dist.adj==Dist.adj.i]
 
   }
 
-  Time.adj.meanlog <- ExpAdjs[ExpAdjs$Aou %in% spp.i, 'TimeAdj.meanlog']
-  Time.adj.sdlog <- ExpAdjs[ExpAdjs$Aou %in% spp.i, 'TimeAdj.sdlog']
-  Pair.adj.i <- ExpAdjs[ExpAdjs$Aou %in% spp.i, 'Pair2']
+  Time.adj.meanlog <- unname(unlist(ExpAdjs[ExpAdjs$Aou %in% spp.i, 'TimeAdj.meanlog']))
+  Time.adj.sdlog <- unname(unlist(ExpAdjs[ExpAdjs$Aou %in% spp.i, 'TimeAdj.sdlog']))
+  Pair.adj.i <- unname(unlist(ExpAdjs[ExpAdjs$Aou %in% spp.i, 'Pair2']))
 
   regions <- unique(df.spp.i$ProvBCR)
   ##### Lookup any Range Adjustments for each region area
