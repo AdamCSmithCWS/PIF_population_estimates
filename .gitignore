@@ -3,7 +3,7 @@
 .RData
 .Ruserdata
 input_files/
-output/
 data/
 figures/
 **arch/
+**Spp.out/

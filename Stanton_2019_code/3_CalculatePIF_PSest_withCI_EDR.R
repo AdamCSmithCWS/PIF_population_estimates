@@ -31,7 +31,6 @@ Inputfiles.dir <- "Stanton_2019_code/input_files/" #paste(Inputfiles.dir, '/', s
 # Provide Path to where model output should be written
 # Output.dir <- readline("Provide directory path to store output files: ")
 # if(!file.exists(Output.dir)) stop("Provide valid directory path to output files. ")
-Output.dir <- "Stanton_2019_code/output_EDR/" #paste(Output.dir, '/', sep="")
 ###########################################################
 
 ##### dependent datasets  #####
@@ -223,9 +222,13 @@ Spp.ProvBCR <- data.frame()
 
 
 # Species Loop ------------------------------------------------------------
+EDR_for_all <- FALSE
+vers <- ifelse(EDR_for_all,"EDR","Traditional")
 
+Output.dir <- ifelse(EDR_for_all,"Stanton_2019_code/output_EDR/",
+                     "Stanton_2019_code/output/") #paste(Output.dir, '/', sep="")
 
-for(i in 134:length(Spp.aou)){ #Begin loop through each species
+for(i in 1:length(Spp.aou)){ #Begin loop through each species
   spp.i <- Spp.aou[i]
   cn.i <- ExpAdjs$cn[as.character(ExpAdjs$Aou)==spp.i]
   df.spp.i <- all_data[which(all_data$aou == spp.i),] |>
@@ -243,7 +246,8 @@ for(i in 134:length(Spp.aou)){ #Begin loop through each species
   # merge location data for each route (state, provence, BCR, lat, long, ect...)
   # df.spp.i <- merge(x=df.spp.i, y=route.info, by='rteno', all.x=TRUE)
    #### Lookup Adjustment values based on Expert opinion/analysis
-  if(!is.na(ExpAdjs[ExpAdjs$Aou %in% spp.i, 'edr'])){
+  if(!is.na(ExpAdjs[ExpAdjs$Aou %in% spp.i, 'edr'])
+     & EDR_for_all ){
     use_edr <- TRUE
     Dist.adj.i <- unname(unlist(ExpAdjs[ExpAdjs$Aou %in% spp.i, 'edr']))
     Dist.adj.sd <- ifelse(is.na(ExpAdjs[ExpAdjs$Aou %in% spp.i, 'edr_sd']),
@@ -552,7 +556,7 @@ write.csv(missing,
           row.names = FALSE)
 
 
-
+if(EDR_for_all){
 # Compare w published 2019 ------------------------------------------------
 
 pif_trad <- read_csv("Stanton_2019_code/output/PSest_Global_WH_NA__100iter.csv") |>
@@ -782,3 +786,4 @@ dev.off()
 
 write.csv(pif_comp,"comparison_pif_EDR_traditional.csv",row.names = FALSE)
 
+}
