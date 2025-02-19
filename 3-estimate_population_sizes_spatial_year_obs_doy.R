@@ -717,6 +717,7 @@ if(re_run_model){
   params_to_summarise <- c("nu",
                            "BETA",
                            "beta_raw",
+                           "RHO",
                            "beta",
                            "sd_beta",
                            "sd_obs",
@@ -760,7 +761,7 @@ if(re_run_model){
                            "pred_count_r")
 
 
-    model <- cmdstanr::cmdstan_model("models/ebird_rel_abund_calibration_spatial_year_doy_sep_obs_rte.stan")
+    model <- cmdstanr::cmdstan_model("models/ebird_rel_abund_calibration_spatial_year_doy_sep_obs_rte_rho.stan")
 
 
 fit <- model$sample(data = stan_data,
@@ -1080,29 +1081,19 @@ pred_count <- fit$summary(variable = "pred_count_median",
 
 
 
+rho <- fit$summary(variable = "RHO",
+                          "mean",
+                          "median",
+                          "sd",
+                          "rhat",
+                          "ess_bulk",
+                          q2_5 = ~quant(.x,q = 0.025),
+                          q10 = ~quant(.x,q = 0.10),
+                          q90 = ~quant(.x,q = 0.90),
+                          q97_5 = ~quant(.x,q = 0.975))%>%
+  mutate(inference = "slope of log-log relationship")
 
 
-param_infer <- bind_rows(cali_alt,
-                         cali,
-                         cali_lognormal,
-                         cali_lognormal_alt1,
-                         cali_lognormal_alt2,
-                         pred_count_alt,
-                         pred_count,
-                         pred_count_lognormal,
-                         pred_count_lognormal_alt1,
-                         pred_count_lognormal_alt2,
-                         avail_correction_realised,
-                         p_avail_realised,
-                         edr_realised,
-                         surveyed_area_realised) %>%
-  mutate(english = sp_sel,
-         sp_eBird = sp_ebird,
-         aou = sp_aou)
-
-#param_infer2 <- readRDS(paste0(output_dir,"/parameter_inference_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
-
-saveRDS(param_infer,paste0(output_dir,"/parameter_inference_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
 
 adjs[1,"calibration"] <- as.numeric(cali$mean)
 adjs[1,"calibration_sd"] <- as.numeric(cali$sd)
@@ -1366,8 +1357,7 @@ obs_pred_count <- ggplot(data = betas_by_route,
   scale_y_continuous(transform = "log10",labels = scales::label_comma())+
   geom_line(data = predictions,aes(x = ebird_abund,y = mean, group = year),
             alpha = 0.5)+
-  geom_line(data = predictions_sel,aes(x = ebird_abund,y = mean))+
-  geom_smooth(method = "lm")
+  geom_line(data = predictions_sel,aes(x = ebird_abund,y = mean))
 
 
 
@@ -1397,12 +1387,65 @@ R_squared_not_route <- (var_fit/(var_resid+var_fit))
 
 #hist(R_squared_not_route)
 
-adjs$R_squared_w_route <- mean(R_squared_w_route)
-adjs$R_squared_w_route_lci <- quantile(R_squared_w_route,0.05)
-adjs$R_squared_w_route_uci <- quantile(R_squared_w_route,0.95)
-adjs$R_squared_not_route <- mean(R_squared_not_route)
-adjs$R_squared_not_route_lci <- quantile(R_squared_not_route,0.05)
-adjs$R_squared_not_route_uci <- quantile(R_squared_not_route,0.95)
+
+
+
+
+param_infer <- bind_rows(cali_alt,
+                         cali,
+                         cali_lognormal,
+                         cali_lognormal_alt1,
+                         cali_lognormal_alt2,
+                         pred_count_alt,
+                         pred_count,
+                         pred_count_lognormal,
+                         pred_count_lognormal_alt1,
+                         pred_count_lognormal_alt2,
+                         avail_correction_realised,
+                         p_avail_realised,
+                         edr_realised,
+                         surveyed_area_realised,
+                         rho)
+
+
+adjs[1,"calibration_trimmed"] <- mean(as.numeric(cali_trim_post$calibration_mean))
+adjs[1,"calibration_trimmed_sd"] <- sd(as.numeric(cali_trim_post$calibration_mean))
+
+rsq <- data.frame(mean = c(mean(R_squared_w_route),
+         mean(R_squared_not_route),
+         mean(as.numeric(cali_trim_post$calibration_mean)),
+         as.numeric(skew_flag),
+         as.numeric(kurtosis_flag)),
+q10 = c(quantile(R_squared_w_route,0.05),
+        quantile(R_squared_not_route,0.05),
+        quantile(as.numeric(cali_trim_post$calibration_mean),0.05),
+        NA,
+        NA),
+q90 = c(quantile(R_squared_w_route,0.95),
+        quantile(R_squared_not_route,0.95),
+        quantile(as.numeric(cali_trim_post$calibration_mean),0.95),
+        NA,
+        NA),
+inference = c("R-squared including route-level variation",
+              "R-squared excluding route-level variation",
+              "calibration based on post-hoc trimmed posterior mean",
+              "skewness of betas positive is heavy right-tail",
+              "kurtosis of betas excess-kurtosis positive is heavy-tailed"))
+
+adjs[1,"beta_skew"] <- as.numeric(skew_flag)
+adjs[1,"beta_kurtosis"] <- as.numeric(kurtosis_flag)
+
+
+param_infer <- param_infer %>%
+  bind_rows(rsq) %>%
+  mutate(english = sp_sel,
+         sp_eBird = sp_ebird,
+         aou = sp_aou)
+
+#param_infer2 <- readRDS(paste0(output_dir,"/parameter_inference_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
+
+saveRDS(param_infer,paste0(output_dir,"/parameter_inference_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
+
 
 
 adjs_out <- bind_rows(adjs_out,adjs)
