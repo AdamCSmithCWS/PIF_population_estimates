@@ -739,10 +739,11 @@ side_plot1
 
 
 
-# dropping three species with availability estimates < 0.01 - unrealistically low
+# dropping one species with availability estimates < 0.01 - unrealistically low
 ExpAdjs <- read_csv("Species_correction_factors_w_edr_availability.csv") %>%
   mutate(tod = exp(TimeAdj.meanlog),
          availability = ifelse(Species %in% c("CORE"),NA,availability),
+         avail_tod_scaled = 1/availability,
          Tr = (1/(tod*availability)),
          Ar = (Dist2^2/edr^2),
          comb_r = Tr*Ar,
@@ -757,13 +758,29 @@ Trats <- ExpAdjs %>%
                values_to = "LogRatio") %>%
   mutate(factor = ifelse(adjustment == "Tlr",
                          "Availability",
-                         "Area"),
+                         "Distance"),
          factor = ifelse(adjustment == "clr",
                          "Combined",
                          factor))
 
+sp_label <- c("American Robin",
+              "Mountain Bluebird",
+              #"Eastern Phoebe",
+              #"Rose-breasted Grosbeak",
+              "Canyon Wren",
+              "Downy Woodpecker",
+              #"Red-winged Blackbird",
+              #"Western Meadowlark",
+              #"Black-capped Chickadee",
+              "Scarlet Tanager",
+              "Say's Phoebe",
+              #"Brown Creeper",
+              "Black-chinned Hummingbird")
+
 splabs <- Trats %>%
-  filter(LogRatio > 2 | LogRatio < -0.5)
+  filter(cn %in% sp_label)
+splab <- splabs %>%
+  filter(factor == "Distance")
 
 adj_plot <- ggplot(data = Trats,
                       aes(x = factor,
@@ -778,20 +795,172 @@ adj_plot <- ggplot(data = Trats,
   geom_hline(yintercept = c(0),
              alpha = 0.3)+
   geom_violin(fill = NA)+
-  geom_point(aes(group = Species),position = position_dodge(width = 0.5),
-             alpha = 0.3)+
-  ylab("Log Ratio log(new/old)\n positive values = increased population estimate")+
+  geom_point(aes(group = Species),position = position_dodge(width = 0.05),
+             alpha = 0.1)+
+  geom_line(data = splabs,
+             aes(group = Species,
+                 colour = Species),#position = position_dodge(width = 0.05),
+             alpha = 0.6)+
+  geom_point(data = splabs,
+             aes(group = Species,
+                 colour = Species),#position = position_dodge(width = 0.05),
+             alpha = 1)+
+  ylab("Log Ratio log(new/existing)\n positive values = increased population estimate")+
   xlab("Adjustment factor")+
-  geom_text_repel(aes(label = Species,group = Species),
-            position = position_dodge(width = 0.5),
+  geom_label_repel(data = splab,
+                  aes(label = Species,group = Species,
+                      colour = Species),
+            #position = position_dodge(width = 0.05),
             min.segment.length = 0,
-            size = 3)+
-  theme_classic()
+            size = 3,alpha = 0.9,point.padding = 0.3,label.size = 0.5,
+            nudge_x = 0.6)+
+  scale_colour_brewer(type = "qual",palette = "Dark2")+
+  scale_x_discrete(expand = expansion(c(0.2,0.5)))+
+  theme_classic()+
+  theme(legend.position = "none")
 
 pdf("Figures/Log-Ratios.pdf",
     width = 6.5,
     height = 4.5)
 print(adj_plot)
+dev.off()
+
+
+
+table_2_full <- ExpAdjs %>%
+  mutate(species = cn,
+         sp_code = Species,
+         distance_existing = Dist2,
+         distance_existing_lower = Dist.Lower,
+         distance_existing_upper = Dist.Upper,
+         distance_edr = edr,
+         distance_edr_sd = edr_sd,
+         edr_model = EDR_model,
+         time_of_day_existing = 1/exp(TimeAdj.meanlog),
+         tod_uci = 1/exp(TimeAdj.meanlog+TimeAdj.sdlog),
+         tod_lci = 1/exp(TimeAdj.meanlog-TimeAdj.sdlog),
+         time_of_day_existing_approx_sd = (tod_lci-tod_uci)/2,
+         availability = availability,
+         availability_sd = availability_sd,
+         availability_model = availability_model,
+         log_ratio_distance = Alr,
+         log_ratio_availability = Tlr,
+         log_ratio_combined = clr) %>%
+  select(species,
+         sp_code,
+         distance_existing,
+         distance_existing_lower,
+         distance_existing_upper,
+         distance_edr,
+         distance_edr_sd,
+         edr_model,
+         time_of_day_existing,
+         time_of_day_existing_approx_sd,
+         availability,
+         availability_sd,
+         availability_model,
+         log_ratio_distance,
+         log_ratio_availability,
+         log_ratio_combined) %>%
+  mutate(across(where(is.double), ~round(.x,3)),
+         sp_code = ifelse(is.na(sp_code),"",sp_code))
+
+write_excel_csv(table_2_full,
+                "adjustment_factors_existing_new_PIF_pop_est.csv")
+
+
+# table_2 <- table_2_full %>%
+#   filter(species %in% sp_label) %>%
+#   select(species,sp_code,
+#          distance_existing,
+#          distance_edr,
+#          )
+
+
+
+
+
+
+# comparison of estimates using non-ebird approach ------------------------
+
+out_long <- NULL
+for(EDR_for_all in c(TRUE,FALSE)){
+
+Output.dir <- ifelse(EDR_for_all,"Stanton_2019_code/output_EDR_alldata/",
+                     "Stanton_2019_code/output_alldata/")
+
+tmp1 <- read_csv(paste(Output.dir, 'PSest_Global_WH_NA_', Spp.dat.date, "_", n.samp, 'iter.csv', sep='')) %>%
+  rename_with(.fn= ~tolower(gsub(".","_",.x, fixed = TRUE))) %>%
+  mutate(adjustments = ifelse(EDR_for_all,"New","Existing"))
+
+out_long <- bind_rows(out_long,tmp1)
+
+pref <- ifelse(EDR_for_all,"New","Existing")
+tmp1 <- tmp1 %>%
+  rename_with(.cols = -c(cn,aou),.fn = ~paste(pref,.x,sep = "_"))
+
+
+if(EDR_for_all){
+  out_wide <- tmp1
+}else{
+  out_wide <- out_wide %>%
+    inner_join(tmp1,by = c("cn","aou"))
+}
+
+}
+
+splabs <- Trats %>%
+  filter(factor == "Combined")
+
+out_wide_sel <- out_wide %>%
+  filter(New_distance == "new") %>%
+  left_join(splabs)
+
+
+out_wide_lab <- out_wide_sel %>%
+  filter(cn %in% sp_label)
+
+line5 <- data.frame(Existing_gl_med_popest = c(c(1e3,1e9),c(1e3,1e9),c(1e3,1e9),c(1e3,1e9)),
+                    New_gl_med_popest = c(c(1e3,1e9),c(2e3,2e9),c(5e3,5e9),c(5e3,5e9)*2),
+                    multi = c(1,1,2,2,5,5,10,10),
+                    multif = factor(c(1,1,2,2,5,5,10,10)))
+
+cross_plot <- ggplot(data = out_wide_sel,
+                     aes(x = Existing_gl_med_popest,
+                         y = New_gl_med_popest))+
+  geom_line(data = line5,
+            aes(group = multi,
+                linetype = multif))+
+  geom_linerange(aes(xmin = Existing_gl_95lci_popest,
+                      xmax = Existing_gl_95uci_popest),
+                 alpha = 0.3)+
+  geom_linerange(aes(ymin = New_gl_95lci_popest,
+                     ymax = New_gl_95uci_popest),
+                 alpha = 0.2)+
+  geom_point(alpha = 0.3)+
+  geom_point(data = out_wide_lab,
+             aes(colour = Species))+
+  scale_colour_brewer(type = "qual",palette = "Dark2")+
+  scale_y_continuous(labels = scales::unit_format(unit = "M", scale = 1e-6),
+                     transform = "log10")+
+  scale_x_continuous(labels = scales::unit_format(unit = "M", scale = 1e-6),
+                     transform = "log10")+
+  geom_label_repel(data = out_wide_lab,
+                   aes(label = Species,group = Species,
+                       colour = Species),
+                   min.segment.length = 0,
+                   size = 3,alpha = 0.9,point.padding = 0.3,label.size = 0.5)+
+  theme_bw()+
+  theme(legend.position = "none")+
+  ylab("Population estimate \n updated for distance and availability")+
+  xlab("Existing population estimate")
+
+
+
+pdf("Figures/xy_comparison.pdf",
+    width = 6.5,
+    height = 4.5)
+print(cross_plot)
 dev.off()
 
 
