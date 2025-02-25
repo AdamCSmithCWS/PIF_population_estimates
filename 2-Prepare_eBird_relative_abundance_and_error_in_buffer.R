@@ -45,19 +45,25 @@ use_weekly <- TRUE # only use TRUE if goal is to model all species
       # as weekly abundance, including breeding distributions
 
 bbs_start <- as_date("2022-06-01") # Latest date for start of BBS-relevant breeding season
-bbs_end <- as_date("2022-07-01") # Latest data for end of BBS-relevant breeding season
+bbs_end <- as_date("2022-07-07") # Latest data for end of BBS-relevant breeding season
 
 
 
 metric_used <- "mean" #options are "max", mean" or "median" (although "median" won't work for seasonal)
 
 ii <- which(sps_list$english %in% c("Brown Creeper","Canyon Wren",
-                                    "Black-capped Chickadee","Canada Warbler",
-                                    "Connecticut Warbler",
-                                    "Hermit Thrush","American Robin",
-                                      "Barn Swallow",
-                                      "Blackpoll Warbler","Baird's Sparrow",
-                                    "Chestnut-collared Longspur"))
+                                    "Black-capped Chickadee","American Robin",
+                                    "Barn Swallow",
+                                    "Blackpoll Warbler","Baird's Sparrow",
+                                    "Western Meadowlark",
+                                                  "Mountain Bluebird",
+                                                  "Eastern Phoebe",
+                                                  "Rose-breasted Grosbeak",
+                                                  "Downy Woodpecker",
+                                                  "Red-winged Blackbird",
+                                                  "Scarlet Tanager",
+                                                  "Say's Phoebe",
+                                                  "Black-chinned Hummingbird")[9:16])
 
 for(i in ii){#rev(1:nrow(sps_list))){
 
@@ -96,12 +102,12 @@ breeding_end <- unname(unlist(qual_sel[,"breeding_end"]))
 if(!resident){
 sel_start <- ifelse(as_date(breeding_start)>bbs_start, # if stable breeding season is later than the 1st of June (mostly only northern species)
                     bbs_start,# then use the first of June
-                    as_date("2022-05-20")) # otherwise use May 20th as a compromise between stable breeding season and BBS observation dates
+                    as_date("2022-05-20")) # otherwise use May 20th to match the earliest BBS observation dates
 
 
-sel_end <- ifelse(as_date(breeding_end)>bbs_end, # if stable breeding season ending is later than the 1st week of July
-                    bbs_end,# then use the last week of bbs season
-                    as_date("2022-07-07")) # otherwise use July 7 as a compromise between stable breeding season end and BBS observation dates
+sel_end <- ifelse(as_date(breeding_end)>bbs_end, # if stable breeding season ending is later than the 2nd week of July
+                    bbs_end,# then use the latest week of bbs season (2nd week of july)
+                  as_date(breeding_end)) # otherwise use the end of the stable breeding season
 
 
 }else{
