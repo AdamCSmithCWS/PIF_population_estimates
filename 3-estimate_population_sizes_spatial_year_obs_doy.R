@@ -86,7 +86,7 @@ Inputfiles.dir <- "Stanton_2019_code/input_files/" #paste(Inputfiles.dir, '/', s
 napops_species <- napops::list_species() |>
   dplyr::select(Species,Common_Name)
 
-re_napops <- FALSE # set to True to re-run the napops extraction
+re_napops <- TRUE # set to True to re-run the napops extraction
 
 if(re_napops){
 # Species specific adjustment factors (Time of Day, Detection Distance, Pair)
@@ -115,10 +115,16 @@ for(i in 1:nrow(ExpAdjs)){
   sp <- ExpAdjs[i,"Species"]
 
   # choose better supported model between models 1 (intercept) and 2 (roadside)
+  # Unless the road model suggests that EDR is smaller on roads (contrary to physics)
   cefs <- napops::coef_distance(species = sp) |>
     dplyr::filter(Model %in% c(1,2)) |>
     dplyr::arrange(AIC)
-
+if(nrow(cefs) > 1){
+  if(cefs[1,"Model"] == 2 & cefs[1,"Road"] < 0){
+    cefs <- cefs |>
+      dplyr::filter(Model == 1)
+  }
+}
   if(nrow(cefs) == 0){next} # skip if no napops output
 
   w_mod <- cefs[1,"Model"]
@@ -127,7 +133,7 @@ for(i in 1:nrow(ExpAdjs)){
                   model = w_mod,
                   forest = 0.5,
                   road = TRUE,
-                  quantiles = c(0.1625), # 1 sd below the mean
+                  quantiles = c(0.1625,0.8375), # 1 sd below the mean
                   samples = 1000),
               silent = TRUE)
 
@@ -136,7 +142,7 @@ for(i in 1:nrow(ExpAdjs)){
                     model = 1,
                     forest = 0.5,
                     road = TRUE,
-                    quantiles = c(0.1625),# 1 sd below the mean
+                    quantiles = c(0.1625,0.8375), # 1 sd below the mean
                     samples = 1000),
                 silent = TRUE)
     w_mod <- 1
@@ -151,7 +157,7 @@ for(i in 1:nrow(ExpAdjs)){
   ExpAdjs[i,"edr"] <- as.numeric(edrt$EDR_est)
 
   if("EDR_16.25" %in% names(edrt)){
-    ExpAdjs[i,"edr_sd"] <- as.numeric(edrt$EDR_est)-as.numeric(edrt$EDR_16.25)
+    ExpAdjs[i,"edr_sd"] <- c(as.numeric(edrt$EDR_83.75)-as.numeric(edrt$EDR_16.25))/2
   }
 
   ExpAdjs[i,"EDR_model"] <- ifelse(w_mod == 1,"Intercept","Roadside")
@@ -191,7 +197,7 @@ for(i in 1:nrow(ExpAdjs)){
                           model = w_mod,
                           od = mean_doy, # mean of the doy for all BBS surveys
                           tssr = mid_time, #mean of time of day for all BBS surveys
-                          quantiles = c(0.1625), # 1 sd below the mean
+                          quantiles = c(0.1625,0.8375), # 1 sd below the mean
                           samples = 1000),
               silent = TRUE)
 
@@ -201,7 +207,7 @@ for(i in 1:nrow(ExpAdjs)){
                                       model = 1, #intercept model
                                       od = mean_doy, # mean of the doy for all BBS surveys
                                       tssr = mid_time, #mean of time of day for all BBS surveys
-                                      quantiles = c(0.1625), # 1 sd below the mean
+                                      quantiles = c(0.1625,0.8375), # 1 sd below the mean
                                       samples = 1000),
                         silent = TRUE)
     w_mod <- 1
@@ -212,7 +218,7 @@ for(i in 1:nrow(ExpAdjs)){
                                         model = 1,
                                         od = mean_doy, # mean of the doy for all BBS surveys
                                         tssr = mid_time, #mean of time of day for all BBS surveys
-                                        quantiles = c(0.1625), # 1 sd below the mean
+                                        quantiles = c(0.1625,0.8375), # 1 sd below the mean
                                         samples = 1000),
                           silent = TRUE)
       w_mod <- 1
@@ -229,12 +235,12 @@ for(i in 1:nrow(ExpAdjs)){
   ExpAdjs[i,"availability"] <- as.numeric(availability$p_est)
 
   if("p_16.25" %in% names(availability)){
-    ExpAdjs[i,"availability_sd"] <- as.numeric(availability$p_est)-as.numeric(availability$p_16.25)
+    ExpAdjs[i,"availability_sd"] <- c(as.numeric(availability$p_83.75)-as.numeric(availability$p_16.25))/2
   }
 
   ExpAdjs[i,"availability_model"] <- w_mod
 
-  if(sp == "BOWA"){
+  if(sp %in% c("BOWA","CORE","CAHU")){
     ExpAdjs[i,"availability"] <- NA
     ExpAdjs[i,"availability_sd"] <- NA
   }
@@ -717,6 +723,7 @@ if(re_run_model){
   params_to_summarise <- c("nu",
                            "BETA",
                            "beta_raw",
+                           "RHO",
                            "beta",
                            "sd_beta",
                            "sd_obs",
@@ -760,7 +767,7 @@ if(re_run_model){
                            "pred_count_r")
 
 
-    model <- cmdstanr::cmdstan_model("models/ebird_rel_abund_calibration_spatial_year_doy_sep_obs_rte.stan")
+    model <- cmdstanr::cmdstan_model("models/ebird_rel_abund_calibration_spatial_year_doy_sep_obs_rte_rho.stan")
 
 
 fit <- model$sample(data = stan_data,
@@ -1080,29 +1087,19 @@ pred_count <- fit$summary(variable = "pred_count_median",
 
 
 
+rho <- fit$summary(variable = "RHO",
+                          "mean",
+                          "median",
+                          "sd",
+                          "rhat",
+                          "ess_bulk",
+                          q2_5 = ~quant(.x,q = 0.025),
+                          q10 = ~quant(.x,q = 0.10),
+                          q90 = ~quant(.x,q = 0.90),
+                          q97_5 = ~quant(.x,q = 0.975))%>%
+  mutate(inference = "slope of log-log relationship")
 
 
-param_infer <- bind_rows(cali_alt,
-                         cali,
-                         cali_lognormal,
-                         cali_lognormal_alt1,
-                         cali_lognormal_alt2,
-                         pred_count_alt,
-                         pred_count,
-                         pred_count_lognormal,
-                         pred_count_lognormal_alt1,
-                         pred_count_lognormal_alt2,
-                         avail_correction_realised,
-                         p_avail_realised,
-                         edr_realised,
-                         surveyed_area_realised) %>%
-  mutate(english = sp_sel,
-         sp_eBird = sp_ebird,
-         aou = sp_aou)
-
-#param_infer2 <- readRDS(paste0(output_dir,"/parameter_inference_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
-
-saveRDS(param_infer,paste0(output_dir,"/parameter_inference_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
 
 adjs[1,"calibration"] <- as.numeric(cali$mean)
 adjs[1,"calibration_sd"] <- as.numeric(cali$sd)
@@ -1366,8 +1363,7 @@ obs_pred_count <- ggplot(data = betas_by_route,
   scale_y_continuous(transform = "log10",labels = scales::label_comma())+
   geom_line(data = predictions,aes(x = ebird_abund,y = mean, group = year),
             alpha = 0.5)+
-  geom_line(data = predictions_sel,aes(x = ebird_abund,y = mean))+
-  geom_smooth(method = "lm")
+  geom_line(data = predictions_sel,aes(x = ebird_abund,y = mean))
 
 
 
@@ -1397,12 +1393,65 @@ R_squared_not_route <- (var_fit/(var_resid+var_fit))
 
 #hist(R_squared_not_route)
 
-adjs$R_squared_w_route <- mean(R_squared_w_route)
-adjs$R_squared_w_route_lci <- quantile(R_squared_w_route,0.05)
-adjs$R_squared_w_route_uci <- quantile(R_squared_w_route,0.95)
-adjs$R_squared_not_route <- mean(R_squared_not_route)
-adjs$R_squared_not_route_lci <- quantile(R_squared_not_route,0.05)
-adjs$R_squared_not_route_uci <- quantile(R_squared_not_route,0.95)
+
+
+
+
+param_infer <- bind_rows(cali_alt,
+                         cali,
+                         cali_lognormal,
+                         cali_lognormal_alt1,
+                         cali_lognormal_alt2,
+                         pred_count_alt,
+                         pred_count,
+                         pred_count_lognormal,
+                         pred_count_lognormal_alt1,
+                         pred_count_lognormal_alt2,
+                         avail_correction_realised,
+                         p_avail_realised,
+                         edr_realised,
+                         surveyed_area_realised,
+                         rho)
+
+
+adjs[1,"calibration_trimmed"] <- mean(as.numeric(cali_trim_post$calibration_mean))
+adjs[1,"calibration_trimmed_sd"] <- sd(as.numeric(cali_trim_post$calibration_mean))
+
+rsq <- data.frame(mean = c(mean(R_squared_w_route),
+         mean(R_squared_not_route),
+         mean(as.numeric(cali_trim_post$calibration_mean)),
+         as.numeric(skew_flag),
+         as.numeric(kurtosis_flag)),
+q10 = c(quantile(R_squared_w_route,0.05),
+        quantile(R_squared_not_route,0.05),
+        quantile(as.numeric(cali_trim_post$calibration_mean),0.05),
+        NA,
+        NA),
+q90 = c(quantile(R_squared_w_route,0.95),
+        quantile(R_squared_not_route,0.95),
+        quantile(as.numeric(cali_trim_post$calibration_mean),0.95),
+        NA,
+        NA),
+inference = c("R-squared including route-level variation",
+              "R-squared excluding route-level variation",
+              "calibration based on post-hoc trimmed posterior mean",
+              "skewness of betas positive is heavy right-tail",
+              "kurtosis of betas excess-kurtosis positive is heavy-tailed"))
+
+adjs[1,"beta_skew"] <- as.numeric(skew_flag)
+adjs[1,"beta_kurtosis"] <- as.numeric(kurtosis_flag)
+
+
+param_infer <- param_infer %>%
+  bind_rows(rsq) %>%
+  mutate(english = sp_sel,
+         sp_eBird = sp_ebird,
+         aou = sp_aou)
+
+#param_infer2 <- readRDS(paste0(output_dir,"/parameter_inference_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
+
+saveRDS(param_infer,paste0(output_dir,"/parameter_inference_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
+
 
 
 adjs_out <- bind_rows(adjs_out,adjs)
