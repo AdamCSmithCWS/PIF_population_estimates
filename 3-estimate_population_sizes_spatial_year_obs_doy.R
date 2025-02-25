@@ -248,7 +248,9 @@ for(i in 1:nrow(ExpAdjs)){
 }
 
 ExpAdjs <- ExpAdjs |>
-  dplyr::mutate(use_availability = ifelse(is.na(availability),FALSE,TRUE))
+  dplyr::mutate(use_availability = ifelse(is.na(availability),FALSE,TRUE),
+                availability_log_scaled = log(1/availability),
+                availability_sd_log_scaled = 0.5*(log(1/(availability-availability_sd))-log(1/(availability+availability_sd))))
 
 
 write_csv(ExpAdjs,"Species_correction_factors_w_edr_availability.csv")

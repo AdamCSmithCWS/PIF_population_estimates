@@ -170,54 +170,6 @@ PS.score <- function(x){
 raw_counts_route <- readRDS("data/all_counts_by_route.rds")
 counts_keep <- unique(raw_counts_route$route_data_id)
 
-## filter to only the same counts for which we have temporary spatial data
-all_data <- readRDS("Stanton_2019_code/input_files/All_BBS_data_by_strata_name.rds")|>
-  dplyr::filter(aou %in% ExpAdjs$Aou,
-                !is.na(strata_name_numeric),
-                route_data_id %in% counts_keep) |>
-  mutate(ProvBCR = strata_name_numeric)
-
-
-region.lkup <- all_data |>
-  dplyr::select(st_abrev,state_num) |>
-  dplyr::distinct() |>
-  dplyr::rename(Prov = state_num)
-
-
-# tmp <- all_data |>
-#   filter(is.na(ProvBCR))
-
-# Spp.dat <- list.files(Spp.dir)
-Spp.dat.date <- ""#unlist(strsplit(unlist(Spp.dat.date), "[.]"))[1]
-Spp.aou <- unique(all_data$aou)
-
-#Route Info
-#routes <- read.csv(unz(paste(Inputfiles.dir, 'Routes.zip',sep=''), filename='routes.csv'))
-# Letter to numeric code lookup for states/prov
-
-##################################################################################
-
-# build lookup table for Distance Adjustment sample parameters
-Dist.adj = c(20, 50, 80, 100, 125, 200, 300, 400, 800, 850)
-lower <- c(1)
-upper <- c(1)
-for(d in 2:length(Dist.adj)) {
-  lower[d] = Dist.adj[d-1]+(Dist.adj[d]-Dist.adj[d-1])*.2
-  upper[d] = Dist.adj[d]*1.1
-}
- Dist.adjparms <- data.frame(Dist.adj = Dist.adj[2:9], L.bound = lower[2:9], U.bound = upper[2:9])
-
-# routes$rteno <- paste(routes$countrynum, routes$statenum, routes$Route, sep="-")
-# routes$ProvBCR <- paste(routes$statenum, routes$BCR, sep='-')
-# route.info <- routes[ ,c('rteno', 'ProvBCR', "countrynum",  "statenum", 'BCR', "Latitude", "Longitude")]
-## above is already in the all_data object
-
-missing <- c()
-
-Spp.by.BCR.i <- list()
-Spp.by.Prov.i <- list()
-Spp.by.WH.GL.i <- list()
-Spp.ProvBCR <- data.frame()
 
 
 
@@ -233,18 +185,77 @@ if(use_all_data){
 Output.dir <- ifelse(EDR_for_all,"Stanton_2019_code/output_EDR_alldata/",
                      "Stanton_2019_code/output_alldata/")
 
+## filter to only the same counts for which we have temporary spatial data
+all_data <- readRDS("Stanton_2019_code/input_files/All_BBS_data_by_strata_name.rds")|>
+  dplyr::filter(aou %in% ExpAdjs$Aou,
+                !is.na(strata_name_numeric)) |>
+  mutate(ProvBCR = strata_name_numeric)
+
+
 }else{
 
   vers <- ifelse(EDR_for_all,"New","Traditional")
 
 Output.dir <- ifelse(EDR_for_all,"Stanton_2019_code/output_EDR/",
                      "Stanton_2019_code/output/") #paste(Output.dir, '/', sep="")
+
+
+## filter to only the same counts for which we have temporary spatial data
+all_data <- readRDS("Stanton_2019_code/input_files/All_BBS_data_by_strata_name.rds")|>
+  dplyr::filter(aou %in% ExpAdjs$Aou,
+                !is.na(strata_name_numeric),
+                route_data_id %in% counts_keep) |>
+  mutate(ProvBCR = strata_name_numeric)
+
+
 }
+
+
+    region.lkup <- all_data |>
+      dplyr::select(st_abrev,state_num) |>
+      dplyr::distinct() |>
+      dplyr::rename(Prov = state_num)
+
+
+    # tmp <- all_data |>
+    #   filter(is.na(ProvBCR))
+
+    # Spp.dat <- list.files(Spp.dir)
+    Spp.dat.date <- ""#unlist(strsplit(unlist(Spp.dat.date), "[.]"))[1]
+    Spp.aou <- unique(all_data$aou)
+
+    #Route Info
+    #routes <- read.csv(unz(paste(Inputfiles.dir, 'Routes.zip',sep=''), filename='routes.csv'))
+    # Letter to numeric code lookup for states/prov
+
+    ##################################################################################
+
+    # build lookup table for Distance Adjustment sample parameters
+    Dist.adj = c(20, 50, 80, 100, 125, 200, 300, 400, 800, 850)
+    lower <- c(1)
+    upper <- c(1)
+    for(d in 2:length(Dist.adj)) {
+      lower[d] = Dist.adj[d-1]+(Dist.adj[d]-Dist.adj[d-1])*.2
+      upper[d] = Dist.adj[d]*1.1
+    }
+    Dist.adjparms <- data.frame(Dist.adj = Dist.adj[2:9], L.bound = lower[2:9], U.bound = upper[2:9])
+
+    # routes$rteno <- paste(routes$countrynum, routes$statenum, routes$Route, sep="-")
+    # routes$ProvBCR <- paste(routes$statenum, routes$BCR, sep='-')
+    # route.info <- routes[ ,c('rteno', 'ProvBCR', "countrynum",  "statenum", 'BCR', "Latitude", "Longitude")]
+    ## above is already in the all_data object
+
+    missing <- c()
+
+    Spp.by.BCR.i <- list()
+    Spp.by.Prov.i <- list()
+    Spp.by.WH.GL.i <- list()
+    Spp.ProvBCR <- data.frame()
 
 
 for(i in 1:length(Spp.aou)){ #Begin loop through each species
   spp.i <- Spp.aou[i]
-  cn.i <- ExpAdjs$cn[as.character(ExpAdjs$Aou)==spp.i]
+  cn.i <- ExpAdjs$cn[ExpAdjs$Aou==spp.i]
   df.spp.i <- all_data[which(all_data$aou == spp.i),] |>
     dplyr::group_by(ProvBCR,route_name) |>
     dplyr::summarise(mean.count = mean(species_total,na.rm = TRUE),
@@ -260,7 +271,7 @@ for(i in 1:length(Spp.aou)){ #Begin loop through each species
   # merge location data for each route (state, provence, BCR, lat, long, ect...)
   # df.spp.i <- merge(x=df.spp.i, y=route.info, by='rteno', all.x=TRUE)
    #### Lookup Adjustment values based on Expert opinion/analysis
-  if(!is.na(ExpAdjs[ExpAdjs$Aou %in% spp.i, 'edr'])
+  if(!is.na(unname(unlist(ExpAdjs[ExpAdjs$Aou %in% spp.i, 'edr'])))
      & EDR_for_all ){
     use_edr <- TRUE
     Dist.adj.i <- unname(unlist(ExpAdjs[ExpAdjs$Aou %in% spp.i, 'edr']))
@@ -276,20 +287,14 @@ for(i in 1:length(Spp.aou)){ #Begin loop through each species
 
   }
 
-  if(!is.na(ExpAdjs[ExpAdjs$Aou %in% spp.i, 'availability'])
+  if(!is.na(unname(unlist(ExpAdjs[ExpAdjs$Aou %in% spp.i, 'availability'])))
      & EDR_for_all ){
     use_availability <- TRUE
-    Time.adj.meanlog <- unname(unlist(ExpAdjs[ExpAdjs$Aou %in% spp.i, 'availability']))
-    Time.adj.sdlog <- ifelse(is.na(ExpAdjs[ExpAdjs$Aou %in% spp.i, 'availability_sd']),
+    Time.adj.meanlog <- unname(unlist(ExpAdjs[ExpAdjs$Aou %in% spp.i, 'availability_log_scaled']))
+    Time.adj.sdlog <- ifelse(is.na(unname(unlist(ExpAdjs[ExpAdjs$Aou %in% spp.i, 'availability_sd_log_scaled']))),
                              0.2,
-                             unname(unlist(ExpAdjs[ExpAdjs$Aou %in% spp.i, 'availability_sd'])))
-    Time.adj.sdlog <- (log(1/(Time.adj.meanlog+Time.adj.sdlog))-log(1/(Time.adj.meanlog-Time.adj.sdlog)))/2
-
-      Time.adj.meanlog <- log(1/Time.adj.meanlog)
-
-      ExpAdjs[ExpAdjs$Aou %in% spp.i, 'availability_log_scaled'] <- Time.adj.meanlog
-      ExpAdjs[ExpAdjs$Aou %in% spp.i, 'availability_sd_log_scaled'] <- Time.adj.sdlog
-  }else{
+                             unname(unlist(ExpAdjs[ExpAdjs$Aou %in% spp.i, 'availability_sd_log_scaled'])))
+}else{
     use_availability <- FALSE
     Time.adj.meanlog <- unname(unlist(ExpAdjs[ExpAdjs$Aou %in% spp.i, 'TimeAdj.meanlog']))
     Time.adj.sdlog <- unname(unlist(ExpAdjs[ExpAdjs$Aou %in% spp.i, 'TimeAdj.sdlog']))
