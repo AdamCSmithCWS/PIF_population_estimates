@@ -86,7 +86,7 @@ Inputfiles.dir <- "Stanton_2019_code/input_files/" #paste(Inputfiles.dir, '/', s
 napops_species <- napops::list_species() |>
   dplyr::select(Species,Common_Name)
 
-re_napops <- FALSE # set to True to re-run the napops extraction
+re_napops <- TRUE # set to True to re-run the napops extraction
 
 if(re_napops){
 # Species specific adjustment factors (Time of Day, Detection Distance, Pair)
@@ -115,10 +115,16 @@ for(i in 1:nrow(ExpAdjs)){
   sp <- ExpAdjs[i,"Species"]
 
   # choose better supported model between models 1 (intercept) and 2 (roadside)
+  # Unless the road model suggests that EDR is smaller on roads (contrary to physics)
   cefs <- napops::coef_distance(species = sp) |>
     dplyr::filter(Model %in% c(1,2)) |>
     dplyr::arrange(AIC)
-
+if(nrow(cefs) > 1){
+  if(cefs[1,"Model"] == 2 & cefs[1,"Road"] < 0){
+    cefs <- cefs |>
+      dplyr::filter(Model == 1)
+  }
+}
   if(nrow(cefs) == 0){next} # skip if no napops output
 
   w_mod <- cefs[1,"Model"]
@@ -127,7 +133,7 @@ for(i in 1:nrow(ExpAdjs)){
                   model = w_mod,
                   forest = 0.5,
                   road = TRUE,
-                  quantiles = c(0.1625), # 1 sd below the mean
+                  quantiles = c(0.1625,0.8375), # 1 sd below the mean
                   samples = 1000),
               silent = TRUE)
 
@@ -136,7 +142,7 @@ for(i in 1:nrow(ExpAdjs)){
                     model = 1,
                     forest = 0.5,
                     road = TRUE,
-                    quantiles = c(0.1625),# 1 sd below the mean
+                    quantiles = c(0.1625,0.8375), # 1 sd below the mean
                     samples = 1000),
                 silent = TRUE)
     w_mod <- 1
@@ -151,7 +157,7 @@ for(i in 1:nrow(ExpAdjs)){
   ExpAdjs[i,"edr"] <- as.numeric(edrt$EDR_est)
 
   if("EDR_16.25" %in% names(edrt)){
-    ExpAdjs[i,"edr_sd"] <- as.numeric(edrt$EDR_est)-as.numeric(edrt$EDR_16.25)
+    ExpAdjs[i,"edr_sd"] <- c(as.numeric(edrt$EDR_83.75)-as.numeric(edrt$EDR_16.25))/2
   }
 
   ExpAdjs[i,"EDR_model"] <- ifelse(w_mod == 1,"Intercept","Roadside")
@@ -191,7 +197,7 @@ for(i in 1:nrow(ExpAdjs)){
                           model = w_mod,
                           od = mean_doy, # mean of the doy for all BBS surveys
                           tssr = mid_time, #mean of time of day for all BBS surveys
-                          quantiles = c(0.1625), # 1 sd below the mean
+                          quantiles = c(0.1625,0.8375), # 1 sd below the mean
                           samples = 1000),
               silent = TRUE)
 
@@ -201,7 +207,7 @@ for(i in 1:nrow(ExpAdjs)){
                                       model = 1, #intercept model
                                       od = mean_doy, # mean of the doy for all BBS surveys
                                       tssr = mid_time, #mean of time of day for all BBS surveys
-                                      quantiles = c(0.1625), # 1 sd below the mean
+                                      quantiles = c(0.1625,0.8375), # 1 sd below the mean
                                       samples = 1000),
                         silent = TRUE)
     w_mod <- 1
@@ -212,7 +218,7 @@ for(i in 1:nrow(ExpAdjs)){
                                         model = 1,
                                         od = mean_doy, # mean of the doy for all BBS surveys
                                         tssr = mid_time, #mean of time of day for all BBS surveys
-                                        quantiles = c(0.1625), # 1 sd below the mean
+                                        quantiles = c(0.1625,0.8375), # 1 sd below the mean
                                         samples = 1000),
                           silent = TRUE)
       w_mod <- 1
@@ -229,12 +235,12 @@ for(i in 1:nrow(ExpAdjs)){
   ExpAdjs[i,"availability"] <- as.numeric(availability$p_est)
 
   if("p_16.25" %in% names(availability)){
-    ExpAdjs[i,"availability_sd"] <- as.numeric(availability$p_est)-as.numeric(availability$p_16.25)
+    ExpAdjs[i,"availability_sd"] <- c(as.numeric(availability$p_83.75)-as.numeric(availability$p_16.25))/2
   }
 
   ExpAdjs[i,"availability_model"] <- w_mod
 
-  if(sp == "BOWA"){
+  if(sp %in% c("BOWA","CORE","CAHU")){
     ExpAdjs[i,"availability"] <- NA
     ExpAdjs[i,"availability_sd"] <- NA
   }
@@ -242,7 +248,9 @@ for(i in 1:nrow(ExpAdjs)){
 }
 
 ExpAdjs <- ExpAdjs |>
-  dplyr::mutate(use_availability = ifelse(is.na(availability),FALSE,TRUE))
+  dplyr::mutate(use_availability = ifelse(is.na(availability),FALSE,TRUE),
+                availability_log_scaled = log(1/availability),
+                availability_sd_log_scaled = 0.5*(log(1/(availability-availability_sd))-log(1/(availability+availability_sd))))
 
 
 write_csv(ExpAdjs,"Species_correction_factors_w_edr_availability.csv")
