@@ -275,7 +275,7 @@ for(i in 1:length(Spp.aou)){ #Begin loop through each species
      & EDR_for_all ){
     use_edr <- TRUE
     Dist.adj.i <- unname(unlist(ExpAdjs[ExpAdjs$Aou %in% spp.i, 'edr']))
-    Dist.adj.sd <- ifelse(is.na(ExpAdjs[ExpAdjs$Aou %in% spp.i, 'edr_sd']),
+    Dist.adj.sd <- ifelse(is.na(unname(unlist(ExpAdjs[ExpAdjs$Aou %in% spp.i, 'edr_sd']))),
                           20,
                           unname(unlist(ExpAdjs[ExpAdjs$Aou %in% spp.i, 'edr_sd'])))
 
@@ -551,8 +551,8 @@ for(i in 1:length(Spp.aou)){ #Begin loop through each species
                          PS.80UCI.Score = PS.score(quantile(lst, 0.9)/p.GL.i),
                          PS.95LCI.Score = PS.score(quantile(lst, 0.025)/p.GL.i),
                          PS.95UCI.Score = PS.score(quantile(lst, 0.975)/p.GL.i),
-                         availability <- ifelse(use_availability,TRUE,FALSE),
-                         edr <- ifelse(use_edr,TRUE,FALSE),
+                         availability = ifelse(use_availability,TRUE,FALSE),
+                         edr = ifelse(use_edr,TRUE,FALSE),
                          stringsAsFactors = FALSE, row.names = NULL)
 
   Spp.by.WH.GL.i[[spp.i]] <- temp.row
