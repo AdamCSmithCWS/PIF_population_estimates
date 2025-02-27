@@ -170,7 +170,7 @@ abund_map <- ggplot()+
 
 #
 
-png(filename = paste0("Figures/Figure_1_",sp_aou,"_",reg_sel,".png"),
+png(filename = paste0("final_figures/Figure_1_",sp_aou,"_",reg_sel,".png"),
     res = 400,
     height = 7,
     width = 6.5,
@@ -819,7 +819,7 @@ adj_plot <- ggplot(data = Trats,
   theme_classic()+
   theme(legend.position = "none")
 
-pdf("Figures/Log-Ratios.pdf",
+pdf("final_figures/Log-Ratios.pdf",
     width = 6.5,
     height = 4.5)
 print(adj_plot)
@@ -956,11 +956,58 @@ cross_plot <- ggplot(data = out_wide_sel,
 
 
 
-pdf("Figures/xy_comparison.pdf",
+pdf("final_figures/xy_comparison.pdf",
     width = 6.5,
     height = 4.5)
 print(cross_plot)
 dev.off()
+
+
+
+
+comparison_table <- out_wide %>%
+  rename(Used_EDR = New_edr____ifelse_use_edr__true__false_,
+         Used_availability = New_availability____ifelse_use_availability__true__false_,
+         species = cn) %>%
+  select(species,aou,
+         Used_EDR,
+         Used_availability,
+         contains("New_uscan"),
+         contains("Existing_uscan"),
+         contains("New_ps_"),
+         contains("Existing_ps_")) %>%
+  left_join(table_2_full,
+            by = c("species" = "species")) %>%
+  relocate(species,sp_code,aou)
+
+
+write_csv(comparison_table,"comparison_before_eBird_adjustment.csv")
+
+
+table_2 <- comparison_table %>%
+  filter(species %in% sp_label) %>%
+  select(species,sp_code,
+         distance_existing,
+         distance_edr,
+         time_of_day_existing,
+         availability,
+         New_uscan_med_popest,
+         Existing_uscan_med_popest,
+         log_ratio_distance,
+         log_ratio_availability,
+         log_ratio_combined) %>%
+  mutate(ratio_distance = exp(log_ratio_distance),
+         ratio_availability = exp(log_ratio_availability),
+         ratio_combined = exp(log_ratio_combined),
+         ratio_realised = New_uscan_med_popest/Existing_uscan_med_popest,
+         New_uscan_med_popest = New_uscan_med_popest/1e6,
+         Existing_uscan_med_popest = Existing_uscan_med_popest/1e6) %>%
+  select(species,sp_code,ratio_distance,ratio_availability,ratio_realised,
+         New_uscan_med_popest,Existing_uscan_med_popest) %>%
+  mutate(across(.cols = ratio_distance:Existing_uscan_med_popest,
+                .fns = ~signif(.x,3)))
+
+write_csv(table_2,"Table_2.csv")
 
 
 
@@ -1069,10 +1116,11 @@ for(sp_sel in c("Western Meadowlark","Baird's Sparrow","Brown Creeper",
 
 }
 
-saveRDS(sampl_bias,"estimates/example_species_strata_sampling_bias.rds")
+saveRDS(sampl_bias,"final_figures/example_species_strata_sampling_bias.rds")
 
 
-
+canw <- sampl_bias %>%
+  filter(species == "Canyon Wren")
 
 # calculate the ratio of existing and ebird estiates with edr -------------
 
@@ -1132,7 +1180,7 @@ us_can_wide <- us_can %>%
          log_ratio = log(ratio))
 
 
-write_csv(us_can_wide,"estimates/usa_canada_comparison_eBird_existing_w_EDR.csv")
+write_csv(us_can_wide,"final_figures/usa_canada_comparison_eBird_existing_w_EDR.csv")
 
 
 
@@ -1293,7 +1341,7 @@ for(sp_sel in c("Western Meadowlark","Baird's Sparrow","Brown Creeper",
 
     print(tmp)
 
-    pdf(paste0("Figures/pop_trajectory_",sp_ebird,".pdf"))
+    pdf(paste0("figures/pop_trajectory_",sp_ebird,".pdf"))
     print(tmp)
     dev.off()
 
@@ -1306,50 +1354,20 @@ for(sp_sel in c("Western Meadowlark","Baird's Sparrow","Brown Creeper",
 
 }
 
-write_csv(trend_effect_out,"estimates/trend_effect_summaries.csv")
-saveRDS(inds_out,"estimates/species_population_trajectories.rds")
-
-comparison_table <- out_wide %>%
-  rename(Used_EDR = New_edr____ifelse_use_edr__true__false_,
-         Used_availability = New_availability____ifelse_use_availability__true__false_,
-         species = cn) %>%
-  select(species,aou,
-         Used_EDR,
-         Used_availability,
-         contains("New_uscan"),
-         contains("Existing_uscan"),
-         contains("New_ps_"),
-         contains("Existing_ps_")) %>%
-  left_join(table_2_full,
-            by = c("species" = "species")) %>%
-  relocate(species,sp_code,aou)
+trend_effects <- trend_effect_out %>%
+  select(-c(lci,uci)) %>%
+  pivot_wider(values_from = c(med),
+              names_from = yr_eBird,
+              names_prefix = "y") %>%
+  rename(yr_2022 = yTRUE,
+         yr_others = yFALSE) %>%
+  mutate(ratio = yr_2022/yr_others,
+         log_ratio = log(ratio))
 
 
-write_csv(comparison_table,"comparison_before_eBird_adjustment.csv")
+write_csv(trend_effects,"final_figures/trend_effect_summaries.csv")
+saveRDS(inds_out,"final_figures/species_population_trajectories.rds")
 
 
-table_2 <- comparison_table %>%
-  filter(species %in% sp_label) %>%
-  select(species,sp_code,
-         distance_existing,
-         distance_edr,
-         time_of_day_existing,
-         availability,
-         New_uscan_med_popest,
-         Existing_uscan_med_popest,
-         log_ratio_distance,
-         log_ratio_availability,
-         log_ratio_combined) %>%
-  mutate(ratio_distance = exp(log_ratio_distance),
-         ratio_availability = exp(log_ratio_availability),
-         ratio_combined = exp(log_ratio_combined),
-         ratio_realised = New_uscan_med_popest/Existing_uscan_med_popest,
-         New_uscan_med_popest = New_uscan_med_popest/1e6,
-         Existing_uscan_med_popest = Existing_uscan_med_popest/1e6) %>%
-  select(species,sp_code,ratio_distance,ratio_availability,ratio_realised,
-           New_uscan_med_popest,Existing_uscan_med_popest) %>%
-  mutate(across(.cols = ratio_distance:Existing_uscan_med_popest,
-                .fns = ~signif(.x,3)))
 
-write_csv(table_2,"Table_2.csv")
 
