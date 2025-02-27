@@ -13,7 +13,9 @@ library(tidybayes)
 library(doParallel)
 library(foreach)
 
+if(Sys.info()[["nodename"]] == "WNCRLABN72960"){
 setwd("c:/Users/SmithAC/Documents/GitHub/PIF_population_estimates")
+}
 
 source("functions/GAM_basis_function_mgcv.R")
 source("functions/neighbours_define.R")
@@ -88,7 +90,7 @@ Inputfiles.dir <- "Stanton_2019_code/input_files/" #paste(Inputfiles.dir, '/', s
 napops_species <- napops::list_species() |>
   dplyr::select(Species,Common_Name)
 
-re_napops <- FALSE # set to True to re-run the napops extraction
+re_napops <- TRUE # set to True to re-run the napops extraction
 
 if(re_napops){
 # Species specific adjustment factors (Time of Day, Detection Distance, Pair)
@@ -123,7 +125,7 @@ for(i in 1:nrow(ExpAdjs)){
     dplyr::arrange(AIC)
 if(nrow(cefs) > 1){
   if((cefs[1,"Model"] == 2 & cefs[1,"Road"] < 0) |
-     sp == "Prairie Falcon"){ #one-off to remove the PRFA roadside estimates that have CI so wide that the sd is > mean
+     sp == "PRFA"){ #one-off to remove the PRFA roadside estimates that have CI so wide that the sd is > mean
     cefs <- cefs |>
       dplyr::filter(Model == 1)
   }
@@ -253,7 +255,10 @@ for(i in 1:nrow(ExpAdjs)){
 ExpAdjs <- ExpAdjs |>
   dplyr::mutate(use_availability = ifelse(is.na(availability),FALSE,TRUE),
                 availability_log_scaled = log(1/availability),
-                availability_sd_log_scaled = 0.5*(log(1/(availability-availability_sd))-log(1/(availability+availability_sd))))
+                availability_sd_log_scaled = 0.5*(log(1/(availability-availability_sd))-log(1/(availability+availability_sd))),
+                availability_sd_log_scaled = ifelse(is.na(availability_sd_log_scaled),
+                                                    log(1/(availability+availability_sd)),
+                                                    availability_sd_log_scaled))
 
 
 write_csv(ExpAdjs,"Species_correction_factors_w_edr_availability.csv")
