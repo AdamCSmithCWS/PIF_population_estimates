@@ -462,20 +462,14 @@ today <- as_date(Sys.Date())
 
 
 # species loop -----------------------------------------------------
-use_traditional <- TRUE
-if(use_traditional){
-  vers <- "trad_"
-}else{
-  vers <- ""
-}
+estimate_rho <- TRUE # set to true to allow the model to estimate a non-unit log-log slope
 
-# if(file.exists(paste0("adjs_out",vers,today,".csv"))){
-#   adjs_out <- read_csv(paste0("adjs_out",vers,today,".csv"))
-#   wh_drop_already <- which(sp_example %in% adjs_out$cn)
-#   wh_drop <- c(wh_drop_already,8)
-# }else{
-#   wh_drop <- 8
-# }
+use_traditional <- FALSE # if TRUE uses the traditional adjustments for TOD and distance
+if(use_traditional){
+  vers <- ifelse(estimate_rho,"trad_rho","trad")
+}else{
+  vers <- ifelse(estimate_rho,"_rho","")
+}
 
 
 re_fit <- TRUE # set to true to re-run plotting and summaries
@@ -522,13 +516,20 @@ trim_rel_abund <- TRUE
 #   {
 
 
-for(sp_sel in c("Brown Creeper","Canyon Wren",
-                                    "Black-capped Chickadee","Canada Warbler",
-                                    "Connecticut Warbler",
-                                    "Hermit Thrush","American Robin",
-                                      "Barn Swallow",
-                                      "Blackpoll Warbler","Baird's Sparrow",
-                                    "Chestnut-collared Longspur")){ # rev(sps_list$english[1:348])){#sp_example[-wh_drop]){#list$english){
+for(sp_sel in c("Western Meadowlark","Baird's Sparrow","Brown Creeper",
+                "Canyon Wren",
+                "Black-capped Chickadee","American Robin",
+                "Barn Swallow",
+                "Blackpoll Warbler",
+                "Mountain Bluebird",
+                "Eastern Phoebe",
+                "Rose-breasted Grosbeak",
+                "Downy Woodpecker",
+                "Red-winged Blackbird",
+                "Scarlet Tanager",
+                "Say's Phoebe",
+                "Black-chinned Hummingbird"
+                )[c(9:16)]){ # rev(sps_list$english[1:348])){#sp_example[-wh_drop]){#list$english){
 #sp_sel = "Bank Swallow"
 #for(sp_sel in rev(sps_list$english)[29]){
  sp_aou <- bbsBayes2::search_species(sp_sel)$aou[1]
@@ -704,7 +705,8 @@ stan_data <- list(n_routes = max(combined$route),
                   use_availability = ifelse(!use_traditional & adjs$use_availability,1,0),
                   use_pois = 0,
                   use_pair = 1,
-                  use_t = 1
+                  use_t = 1,
+                  est_rho = ifelse(estimate_rho,1,0)
                   )
 
 
@@ -770,7 +772,7 @@ if(re_run_model){
                            "pred_count_r")
 
 
-    model <- cmdstanr::cmdstan_model("models/ebird_rel_abund_calibration_spatial_year_doy_sep_obs_rte_rho.stan")
+    model <- cmdstanr::cmdstan_model("models/ebird_rel_abund_calibration_spatial_year_doy_sep_obs_rte_rhoopt.stan")
 
 
 fit <- model$sample(data = stan_data,
@@ -1184,7 +1186,7 @@ route_link <- combined %>%
 count_22 <- combined %>%
   filter(year %in% c(2021:2023)) %>%
   group_by(route) %>%
-  summarise(obs_count_22 = mean(count,na.rm = TRUE))
+  summarise(obs_count_mean_21_23 = mean(count,na.rm = TRUE))
 
 route_link <- route_link %>%
   left_join(count_22, by = "route")
@@ -1210,7 +1212,7 @@ betas_by_route <- betas %>%
             min_pred_count = (pred_count_rt_q5),
             max_pred_count = (pred_count_rt_q95),
          mean_residual = mean_count - mean_pred_count,
-         residual_2022 = obs_count_22 - mean_pred_count)
+         residual_2022 = obs_count_mean_21_23 - mean_pred_count)
 
 
 betas_plot <- routes_buf_extra %>%
@@ -1761,7 +1763,7 @@ comp_trad_new_plot <- ggplot(data = strata_compare,
                 alpha = 0.3, width = 0)+
   geom_errorbarh(aes(xmin = LCI80.PopEst,xmax = UCI80.PopEst),
                 alpha = 0.3)+
-  geom_point()+
+  geom_point(aes(colour = ratio_cat))+
   geom_text_repel(aes(label = strata_name),
                   size = 3)+
   scale_x_continuous(labels = scales::unit_format(unit = "M", scale = 1e-6))+
@@ -1769,7 +1771,7 @@ comp_trad_new_plot <- ggplot(data = strata_compare,
   # colorspace::scale_color_binned_diverging(rev = TRUE,palette = "Blue-Red 2",
   #                                          mid = 0,
   #                                          breaks = c(-Inf,-0.2,0,0.2,Inf))+
-  #scale_colour_manual(values = div_pal)+
+  scale_colour_manual(values = div_pal)+
   xlab("Traditional PIF population estimate")+
   ylab("PIF-Calibrated eBird relative abundance estimate")+
   labs(title = paste(sp_sel,"population estimates by BBS strata"),
@@ -1845,6 +1847,7 @@ dev.off()
 
 saveRDS(comp_trad_new_plot,paste0("figures/saved_ggplots/trad_vs_new_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
 saveRDS(abund_map,paste0("figures/saved_ggplots/abund_map_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
+saveRDS(strata_compare,paste0("estimates/strata_comparison_",vers,sp_aou,"_",sp_ebird,".rds"))
 
 
 
@@ -2193,4 +2196,37 @@ saveRDS(adjs,paste0("estimates/parameters_",vers,sp_aou,"_",sp_ebird,".rds"))
 
 #parallel::stopCluster(cluster)
 
+
+
+library(tidyverse)
+library(ebirdst)
+library(patchwork)
+library(terra)
+library(bbsBayes2)
+library(cmdstanr)
+library(ggrepel)
+
+output_dir <- "G:/PIF_population_estimates/output"
+
+
+params <- NULL
+for(sp_sel in c("Western Meadowlark","Baird's Sparrow","Brown Creeper","Canyon Wren",
+                "Black-capped Chickadee","American Robin",
+                "Barn Swallow",
+                "Blackpoll Warbler"
+)){
+for(vers in c("trad_rho","trad","_rho","")){
+# rev(sps_list$english[1:348])){#sp_example[-wh_drop]){#list$english){
+  #sp_sel = "Bank Swallow"
+  #for(sp_sel in rev(sps_list$english)[29]){
+  sp_aou <- bbsBayes2::search_species(sp_sel)$aou[1]
+  sp_ebird <- ebirdst::get_species(sp_sel)
+
+
+  param_infer2 <- readRDS(paste0(output_dir,"/parameter_inference_alt_",vers,sp_aou,"_",sp_ebird,".rds")) %>%
+    mutate(version = vers)
+
+params <- bind_rows(params,param_infer2)
+}# sp
+}# vers
 
