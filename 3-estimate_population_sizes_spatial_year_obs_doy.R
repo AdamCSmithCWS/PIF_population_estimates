@@ -13,6 +13,8 @@ library(tidybayes)
 library(doParallel)
 library(foreach)
 
+setwd("c:/Users/SmithAC/Documents/GitHub/PIF_population_estimates")
+
 source("functions/GAM_basis_function_mgcv.R")
 source("functions/neighbours_define.R")
 yr_ebird <- 2022 # prediction year for eBird relative abundance
@@ -86,7 +88,7 @@ Inputfiles.dir <- "Stanton_2019_code/input_files/" #paste(Inputfiles.dir, '/', s
 napops_species <- napops::list_species() |>
   dplyr::select(Species,Common_Name)
 
-re_napops <- TRUE # set to True to re-run the napops extraction
+re_napops <- FALSE # set to True to re-run the napops extraction
 
 if(re_napops){
 # Species specific adjustment factors (Time of Day, Detection Distance, Pair)
@@ -461,9 +463,16 @@ today <- as_date(Sys.Date())
 
 
 # species loop -----------------------------------------------------
-estimate_rho <- TRUE # set to true to allow the model to estimate a non-unit log-log slope
+estimate_rho <- FALSE # set to true to allow the model to estimate a non-unit log-log slope
 
-use_traditional <- FALSE # if TRUE uses the traditional adjustments for TOD and distance
+use_traditional <- TRUE # if TRUE uses the traditional adjustments for TOD and distance
+
+
+
+
+
+
+
 if(use_traditional){
   vers <- ifelse(estimate_rho,"trad_rho","trad")
 }else{
@@ -2040,7 +2049,7 @@ USACAN_abund <- data.frame(region = "USACAN",
          species = sp_sel,
          species_ebird = sp_ebird)
 
-USACAN_abund
+#USACAN_abund
 
 
 # Continent estimates -----------------------------------------
@@ -2086,7 +2095,7 @@ continents_abund <- data.frame(region = as.character(continents_proj$CC[abundanc
          species = sp_sel,
          species_ebird = sp_ebird)
 
-continents_abund
+#continents_abund
 
 
 
@@ -2196,36 +2205,4 @@ saveRDS(adjs,paste0("estimates/parameters_",vers,sp_aou,"_",sp_ebird,".rds"))
 #parallel::stopCluster(cluster)
 
 
-
-library(tidyverse)
-library(ebirdst)
-library(patchwork)
-library(terra)
-library(bbsBayes2)
-library(cmdstanr)
-library(ggrepel)
-
-output_dir <- "G:/PIF_population_estimates/output"
-
-
-params <- NULL
-for(sp_sel in c("Western Meadowlark","Baird's Sparrow","Brown Creeper","Canyon Wren",
-                "Black-capped Chickadee","American Robin",
-                "Barn Swallow",
-                "Blackpoll Warbler"
-)){
-for(vers in c("trad_rho","trad","_rho","")){
-# rev(sps_list$english[1:348])){#sp_example[-wh_drop]){#list$english){
-  #sp_sel = "Bank Swallow"
-  #for(sp_sel in rev(sps_list$english)[29]){
-  sp_aou <- bbsBayes2::search_species(sp_sel)$aou[1]
-  sp_ebird <- ebirdst::get_species(sp_sel)
-
-
-  param_infer2 <- readRDS(paste0(output_dir,"/parameter_inference_alt_",vers,sp_aou,"_",sp_ebird,".rds")) %>%
-    mutate(version = vers)
-
-params <- bind_rows(params,param_infer2)
-}# sp
-}# vers
 

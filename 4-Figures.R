@@ -964,3 +964,351 @@ print(cross_plot)
 dev.off()
 
 
+
+
+
+library(tidybayes)
+library(tidyverse)
+yr_ebird <- 2022 # prediction year for eBird relative abundance
+
+output_dir <- "G:/PIF_population_estimates/output"
+
+
+params <- NULL
+for(sp_sel in c("Western Meadowlark","Baird's Sparrow","Brown Creeper",
+                "Canyon Wren",
+                "Black-capped Chickadee","American Robin",
+                "Barn Swallow",
+                "Blackpoll Warbler",
+                "Mountain Bluebird",
+                "Eastern Phoebe",
+                "Rose-breasted Grosbeak",
+                "Downy Woodpecker",
+                "Red-winged Blackbird",
+                "Scarlet Tanager",
+                "Say's Phoebe",
+                "Black-chinned Hummingbird"
+)){
+  for(vers in c("trad_rho","trad","_rho","")[c(1,3:4)]){
+    # rev(sps_list$english[1:348])){#sp_example[-wh_drop]){#list$english){
+    #sp_sel = "Bank Swallow"
+    #for(sp_sel in rev(sps_list$english)[29]){
+    sp_aou <- bbsBayes2::search_species(sp_sel)$aou[1]
+    sp_ebird <- ebirdst::get_species(sp_sel)
+
+
+    param_infer2 <- readRDS(paste0(output_dir,"/parameter_inference_alt_",vers,sp_aou,"_",sp_ebird,".rds")) %>%
+      mutate(version = vers)
+
+    params <- bind_rows(params,param_infer2)
+  }# sp
+}# vers
+
+rhos <- params %>% filter(variable == "RHO", !is.na(rhat))
+area_surveyed <- params %>% filter(grepl("c_area",variable))
+
+
+
+
+# summarise sampling bias -------------------------------------------------
+
+w_mean_lg_rat <- function(x,w){
+  wx <- rep(NA,length(x))
+  sum_w <- sum(w,na.rm = TRUE)
+
+  for(i in 1:length(x)){
+    if(is.finite(x[i])){
+      wx[i] <- (x[i]*w[i])/sum_w
+    }else{
+      wx[i] <- (log(0.01)*w[i])/sum_w
+    }
+  }
+  return(sum(wx,na.rm = TRUE))
+}
+
+sampl_bias <- NULL
+
+for(sp_sel in c("Western Meadowlark","Baird's Sparrow","Brown Creeper",
+                "Canyon Wren",
+                "Black-capped Chickadee","American Robin",
+                "Barn Swallow",
+                "Blackpoll Warbler",
+                "Mountain Bluebird",
+                "Eastern Phoebe",
+                "Rose-breasted Grosbeak",
+                "Downy Woodpecker",
+                "Red-winged Blackbird",
+                "Scarlet Tanager",
+                "Say's Phoebe",
+                "Black-chinned Hummingbird"
+)){
+
+  species_ebird <- ebirdst::get_species(sp_sel)
+
+  # route_sampled <- readRDS(paste0("data/species_relative_abundance/",species_ebird,"_relative_abundance.rds"))
+  #
+  # mean_sampled_abund <- mean(route_sampled$ebird_abund,na.rm = TRUE)
+  #
+
+  sampl_bias1 <- readRDS(paste0("data/species_relative_abundance/",species_ebird,"_bbs_strata_relative_abundance.rds")) %>%
+    mutate(species = sp_sel,
+           sp_ebird = species_ebird)
+
+  tmp <- sampl_bias1 %>%
+    filter(strata_name != "USA_CAN",
+           !is.na(log_ratio)) %>%
+    mutate(ifelse(is.na(sampled_abundance),0,sampled_abundance))
+  #
+  wm_samp <- w_mean_lg_rat(tmp$log_ratio,tmp$total_ebird_abundance)
+  #
+  sampl_bias1 <- sampl_bias1 %>%
+    mutate(log_ratio = ifelse(strata_name == "USA_CAN",wm_samp,log_ratio),
+           sampled_avail_ratio = ifelse(strata_name == "USA_CAN",exp(log_ratio),sampled_avail_ratio))
+
+
+  sampl_bias <- bind_rows(sampl_bias,sampl_bias1)
+
+
+}
+
+saveRDS(sampl_bias,"estimates/example_species_strata_sampling_bias.rds")
+
+
+
+
+# calculate the ratio of existing and ebird estiates with edr -------------
+
+
+
+
+all_pop_ests <- NULL
+
+vers <- ""
+for(sp_sel in c("Western Meadowlark","Baird's Sparrow","Brown Creeper",
+                "Canyon Wren",
+                "Black-capped Chickadee","American Robin",
+                "Barn Swallow",
+                "Blackpoll Warbler",
+                "Mountain Bluebird",
+                "Eastern Phoebe",
+                "Rose-breasted Grosbeak",
+                "Downy Woodpecker",
+                "Red-winged Blackbird",
+                "Scarlet Tanager",
+                "Say's Phoebe",
+                "Black-chinned Hummingbird"
+)){
+
+  sp_aou <- bbsBayes2::search_species(sp_sel)$aou[1]
+  sp_ebird <- ebirdst::get_species(sp_sel)
+
+  if(file.exists(paste0("estimates/pop_ests_alt_",vers,sp_aou,sp_ebird,".csv"))){
+    pop_ests <- read_csv(paste0("estimates/pop_ests_alt_",vers,sp_aou,sp_ebird,".csv"))
+
+
+    all_pop_ests <- bind_rows(all_pop_ests,pop_ests)
+  }
+
+}
+
+
+us_can <- all_pop_ests %>%
+  filter(region == "USACAN") %>%
+  select(species,pop_median,pop_lci_80:pop_uci_95,
+         version)
+
+usa_can_exist <- read_csv("Stanton_2019_code/output_EDR/PSest_Global_WH_NA__100iter.csv") %>%
+  filter(cn %in% us_can$species) %>%
+  select(cn,USCAN.med.PopEst:USCAN.95UCI.PopEst) %>%
+  mutate(version = "Existing")
+
+names(usa_can_exist) <- names(us_can)
+
+us_can_long <- bind_rows(us_can,usa_can_exist)
+
+names(usa_can_exist) <- paste0(names(usa_can_exist),"_exist")
+us_can_wide <- us_can %>%
+  left_join(usa_can_exist,
+            by = c("species" = "species_exist")) %>%
+  mutate(ratio = pop_median/pop_median_exist,
+         log_ratio = log(ratio))
+
+
+write_csv(us_can_wide,"estimates/usa_canada_comparison_eBird_existing_w_EDR.csv")
+
+
+
+
+# calculate the time-series of strata-level estimates -------------
+
+
+
+
+trend_effect_out <- NULL
+inds_out <- NULL
+vers <- ""
+for(sp_sel in c("Western Meadowlark","Baird's Sparrow","Brown Creeper",
+                "Canyon Wren",
+                "Black-capped Chickadee","American Robin",
+                "Barn Swallow",
+                "Blackpoll Warbler",
+                "Mountain Bluebird",
+                "Eastern Phoebe",
+                "Rose-breasted Grosbeak",
+                "Downy Woodpecker",
+                "Red-winged Blackbird",
+                "Scarlet Tanager",
+                "Say's Phoebe",
+                "Black-chinned Hummingbird"
+)){
+
+  sp_aou <- bbsBayes2::search_species(sp_sel)$aou[1]
+  sp_ebird <- ebirdst::get_species(sp_sel)
+
+  if(file.exists(paste0(output_dir,"/calibration_fit_alt_",
+                        vers,sp_aou,"_",sp_ebird,".rds"))){
+
+    fit <- readRDS(paste0(output_dir,"/calibration_fit_alt_",
+                          vers,sp_aou,"_",sp_ebird,".rds"))
+
+    raw_dat <- readRDS(paste0("data/main_data_df_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
+    strats <- raw_dat %>%
+      select(strata_name,strata) %>%
+      distinct() %>%
+      arrange(strata)
+
+    n_yr <- max(raw_dat$yr)
+    n_strat <- max(raw_dat$strata)
+    fyr <- min(raw_dat$year)
+
+
+    yrs <- data.frame(year = fyr:(fyr+n_yr-1),
+                      yr = 1:n_yr)
+
+    yr22 <- yrs %>%
+      filter(year == yr_ebird) %>%
+      select(yr) %>%
+      unlist() %>%
+      unname()
+
+    pop_ests <- read_csv(paste0("estimates/pop_ests_alt_",vers,sp_aou,sp_ebird,".csv")) %>%
+      filter(region_type == "strata")
+
+    pop_ests <- pop_ests %>%
+      left_join(strats,by = c("strata_name"))%>%
+      mutate(w_bbs = ifelse(is.na(strata),FALSE,TRUE))
+
+    p_2022_w_bbs <- pop_ests %>%
+      group_by(w_bbs) %>%
+      summarise(pop = sum(pop_median)) %>%
+      mutate(p_pop = pop/sum(pop))
+
+    time_series <- pop_ests %>%
+      filter(!is.na(strata)) %>%
+      expand_grid(yrs)
+
+
+    year_draws <- gather_draws(fit, yeareffect[strata,yr]) %>%
+      mutate(.draw = factor(.draw))
+
+
+    time_series <- time_series %>%
+      inner_join(year_draws, by = c("strata","yr")) %>%
+      mutate(pop_time = pop_median*exp(.value)) %>%
+      ungroup()
+
+    inds_strat <- time_series %>%
+      group_by(species,species_ebird,
+               region,region_type,strata_name,country,country_code,prov_state,bcr,
+               year,yr) %>%
+      summarise(med = median(pop_time),
+                lci = quantile(pop_time,0.05),
+                uci = quantile(pop_time,0.95),
+                .groups = "drop")
+
+    inds_all <- time_series %>%
+      group_by(species,species_ebird,
+               year,yr,
+               .draw) %>%
+      summarise(pop_time = sum(pop_time),
+                .groups = "drop") %>%
+      group_by(species,species_ebird,
+               year,yr) %>%
+      summarise(med = median(pop_time),
+                lci = quantile(pop_time,0.05),
+                uci = quantile(pop_time,0.95),
+                .groups = "drop") %>%
+      mutate(region = "Survey wide")
+
+
+    yr_rest <- time_series %>%
+      filter(year != yr_ebird) %>%
+      group_by(species,species_ebird,
+               year,
+               .draw) %>%
+      summarise(pop_time_s = sum(pop_time),
+                .groups = "drop") %>%
+      group_by(species,species_ebird,
+               .draw) %>%
+      summarise(pop_time_s = mean(pop_time_s),
+                .groups = "drop") %>%
+      group_by(species,species_ebird) %>%
+      summarise(med = median(pop_time_s),
+                lci = quantile(pop_time_s,0.05),
+                uci = quantile(pop_time_s,0.95),
+                .groups = "drop")%>%
+      mutate(yr_eBird = FALSE)
+
+    yr_22 <- time_series %>%
+      filter(year == yr_ebird) %>%
+      group_by(species,species_ebird,
+               .draw) %>%
+      summarise(pop_time_s = sum(pop_time),
+                .groups = "drop") %>%
+      group_by(species,species_ebird) %>%
+      summarise(med = median(pop_time_s),
+                lci = quantile(pop_time_s,0.05),
+                uci = quantile(pop_time_s,0.95),.groups = "drop") %>%
+      mutate(yr_eBird = TRUE)
+
+
+
+    yr_22[1,"med"]/yr_rest[1,"med"]
+
+    trend_effect <- bind_rows(yr_rest,yr_22) %>%
+      mutate(species = sp_sel,
+             sp_eBird = sp_ebird)
+
+    tmp <- ggplot(data = inds_all, aes(x = year, y = med))+
+      geom_ribbon(aes(ymin = lci,ymax = uci),
+                  alpha = 0.2)+
+      geom_line()+
+      scale_y_continuous(limits = c(0,NA),
+                         labels = scales::unit_format(unit = "M", scale = 1e-6))+
+      theme_bw()+
+      labs(title = paste(sp_sel, "\n excluding",round(unlist(unname(p_2022_w_bbs[p_2022_w_bbs$w_bbs == FALSE,"p_pop"])),3)*100,
+                         "Percent of USA+Canada population outside BBS monitored strata"),
+           subtitle = paste(round(as.numeric(yr_22[1,"med"]/yr_rest[1,"med"]),2),
+                            "expected difference in 2022 population from average 2013-2023"))+
+      xlab("")+
+      ylab("Annual population size \n in BBS surveyed range")
+
+    print(tmp)
+
+    pdf(paste0("Figures/pop_trajectory_",sp_ebird,".pdf"))
+    print(tmp)
+    dev.off()
+
+
+    trend_effect_out <- bind_rows(trend_effect_out,trend_effect)
+    inds_out <- bind_rows(inds_out,inds_strat,inds_all)
+
+
+  }
+
+}
+
+write_csv(trend_effect_out,"estimates/trend_effect_summaries.csv")
+saveRDS(inds_out,"estimates/species_population_trajectories.rds")
+
+
