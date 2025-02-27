@@ -122,7 +122,8 @@ for(i in 1:nrow(ExpAdjs)){
     dplyr::filter(Model %in% c(1,2)) |>
     dplyr::arrange(AIC)
 if(nrow(cefs) > 1){
-  if(cefs[1,"Model"] == 2 & cefs[1,"Road"] < 0){
+  if((cefs[1,"Model"] == 2 & cefs[1,"Road"] < 0) |
+     sp == "Prairie Falcon"){ #one-off to remove the PRFA roadside estimates that have CI so wide that the sd is > mean
     cefs <- cefs |>
       dplyr::filter(Model == 1)
   }

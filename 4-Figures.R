@@ -869,12 +869,7 @@ write_excel_csv(table_2_full,
                 "adjustment_factors_existing_new_PIF_pop_est.csv")
 
 
-# table_2 <- table_2_full %>%
-#   filter(species %in% sp_label) %>%
-#   select(species,sp_code,
-#          distance_existing,
-#          distance_edr,
-#          )
+
 
 
 
@@ -889,7 +884,7 @@ for(EDR_for_all in c(TRUE,FALSE)){
 Output.dir <- ifelse(EDR_for_all,"Stanton_2019_code/output_EDR_alldata/",
                      "Stanton_2019_code/output_alldata/")
 
-tmp1 <- read_csv(paste(Output.dir, 'PSest_Global_WH_NA_', Spp.dat.date, "_", n.samp, 'iter.csv', sep='')) %>%
+tmp1 <- read_csv(paste(Output.dir, 'PSest_Global_WH_NA_',"_", 100, 'iter.csv', sep='')) %>%
   rename_with(.fn= ~tolower(gsub(".","_",.x, fixed = TRUE))) %>%
   mutate(adjustments = ifelse(EDR_for_all,"New","Existing"))
 
@@ -909,33 +904,37 @@ if(EDR_for_all){
 
 }
 
+
+
 splabs <- Trats %>%
   filter(factor == "Combined")
 
 out_wide_sel <- out_wide %>%
-  filter(New_distance == "new") %>%
+  rename(New_distance = New_edr____ifelse_use_edr__true__false_,
+         New_availability = New_availability____ifelse_use_availability__true__false_) %>%
+  filter(New_distance == TRUE) %>%
   left_join(splabs)
 
 
 out_wide_lab <- out_wide_sel %>%
   filter(cn %in% sp_label)
 
-line5 <- data.frame(Existing_gl_med_popest = c(c(1e3,1e9),c(1e3,1e9),c(1e3,1e9),c(1e3,1e9)),
-                    New_gl_med_popest = c(c(1e3,1e9),c(2e3,2e9),c(5e3,5e9),c(5e3,5e9)*2),
+line5 <- data.frame(Existing_uscan_med_popest = c(c(1e3,5e8),c(1e3,5e8),c(1e3,5e8),c(1e3,5e8)),
+                    New_uscan_med_popest = c(c(1e3,5e8),c(2e3,10e8),c(5e3,25e8),c(10e3,50e8)),
                     multi = c(1,1,2,2,5,5,10,10),
                     multif = factor(c(1,1,2,2,5,5,10,10)))
 
 cross_plot <- ggplot(data = out_wide_sel,
-                     aes(x = Existing_gl_med_popest,
-                         y = New_gl_med_popest))+
+                     aes(x = Existing_uscan_med_popest,
+                         y = New_uscan_med_popest))+
   geom_line(data = line5,
             aes(group = multi,
                 linetype = multif))+
-  geom_linerange(aes(xmin = Existing_gl_95lci_popest,
-                      xmax = Existing_gl_95uci_popest),
+  geom_linerange(aes(xmin = Existing_uscan_95lci_popest,
+                      xmax = Existing_uscan_95uci_popest),
                  alpha = 0.3)+
-  geom_linerange(aes(ymin = New_gl_95lci_popest,
-                     ymax = New_gl_95uci_popest),
+  geom_linerange(aes(ymin = New_uscan_95lci_popest,
+                     ymax = New_uscan_95uci_popest),
                  alpha = 0.2)+
   geom_point(alpha = 0.3)+
   geom_point(data = out_wide_lab,
@@ -962,7 +961,6 @@ pdf("Figures/xy_comparison.pdf",
     height = 4.5)
 print(cross_plot)
 dev.off()
-
 
 
 
@@ -1311,4 +1309,47 @@ for(sp_sel in c("Western Meadowlark","Baird's Sparrow","Brown Creeper",
 write_csv(trend_effect_out,"estimates/trend_effect_summaries.csv")
 saveRDS(inds_out,"estimates/species_population_trajectories.rds")
 
+comparison_table <- out_wide %>%
+  rename(Used_EDR = New_edr____ifelse_use_edr__true__false_,
+         Used_availability = New_availability____ifelse_use_availability__true__false_,
+         species = cn) %>%
+  select(species,aou,
+         Used_EDR,
+         Used_availability,
+         contains("New_uscan"),
+         contains("Existing_uscan"),
+         contains("New_ps_"),
+         contains("Existing_ps_")) %>%
+  left_join(table_2_full,
+            by = c("species" = "species")) %>%
+  relocate(species,sp_code,aou)
+
+
+write_csv(comparison_table,"comparison_before_eBird_adjustment.csv")
+
+
+table_2 <- comparison_table %>%
+  filter(species %in% sp_label) %>%
+  select(species,sp_code,
+         distance_existing,
+         distance_edr,
+         time_of_day_existing,
+         availability,
+         New_uscan_med_popest,
+         Existing_uscan_med_popest,
+         log_ratio_distance,
+         log_ratio_availability,
+         log_ratio_combined) %>%
+  mutate(ratio_distance = exp(log_ratio_distance),
+         ratio_availability = exp(log_ratio_availability),
+         ratio_combined = exp(log_ratio_combined),
+         ratio_realised = New_uscan_med_popest/Existing_uscan_med_popest,
+         New_uscan_med_popest = New_uscan_med_popest/1e6,
+         Existing_uscan_med_popest = Existing_uscan_med_popest/1e6) %>%
+  select(species,sp_code,ratio_distance,ratio_availability,ratio_realised,
+           New_uscan_med_popest,Existing_uscan_med_popest) %>%
+  mutate(across(.cols = ratio_distance:Existing_uscan_med_popest,
+                .fns = ~signif(.x,3)))
+
+write_csv(table_2,"Table_2.csv")
 
