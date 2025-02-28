@@ -1034,7 +1034,7 @@ for(sp_sel in c("Western Meadowlark","Baird's Sparrow","Brown Creeper",
                 "Say's Phoebe",
                 "Black-chinned Hummingbird"
 )){
-  for(vers in c("trad_rho","trad","_rho","")[c(1,3:4)]){
+  for(vers in c("trad_rho","trad","_rho","")[c(4)]){
     # rev(sps_list$english[1:348])){#sp_example[-wh_drop]){#list$english){
     #sp_sel = "Bank Swallow"
     #for(sp_sel in rev(sps_list$english)[29]){
@@ -1048,6 +1048,12 @@ for(sp_sel in c("Western Meadowlark","Baird's Sparrow","Brown Creeper",
     params <- bind_rows(params,param_infer2)
   }# sp
 }# vers
+
+
+retrans <- params %>%
+  filter(grepl("alibration",inference),
+         grepl("mean",inference))
+
 
 rhos <- params %>% filter(variable == "RHO", !is.na(rhat))
 area_surveyed <- params %>% filter(grepl("c_area",variable))
@@ -1288,7 +1294,6 @@ for(sp_sel in c("Western Meadowlark","Baird's Sparrow","Brown Creeper",
 
 
     yr_rest <- time_series %>%
-      filter(year != yr_ebird) %>%
       group_by(species,species_ebird,
                year,
                .draw) %>%
@@ -1367,6 +1372,31 @@ trend_effects <- trend_effect_out %>%
 
 write_csv(trend_effects,"final_figures/trend_effect_summaries.csv")
 saveRDS(inds_out,"final_figures/species_population_trajectories.rds")
+
+
+
+# Figure example strata compare -------------------------------------------
+library(patchwork)
+
+plot_t <- vector("list",2)
+names(plot_t) <- c("American Robin","Canyon Wren")
+vers <- ""
+for(sp_sel in names(plot_t)){
+  sp_aou <- bbsBayes2::search_species(sp_sel)$aou[1]
+  sp_ebird <- ebirdst::get_species(sp_sel)
+
+plot_t[[sp_sel]] <- readRDS(paste0("figures/saved_ggplots/trad_vs_new_alt_",vers,sp_aou,"_",sp_ebird,".rds"))+
+  theme(text = element_text(size = 6))
+
+}
+
+
+pl2 <- plot_t[[1]]+plot_t[[2]]+plot_layout(ncol = 2, guides = "collect")
+
+pdf("Final_figures/sstrata_comparison.pdf",
+    width = 7, height = 4)
+print(pl2)
+dev.off()
 
 
 

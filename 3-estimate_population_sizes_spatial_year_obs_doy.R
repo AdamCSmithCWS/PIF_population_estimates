@@ -90,7 +90,7 @@ Inputfiles.dir <- "Stanton_2019_code/input_files/" #paste(Inputfiles.dir, '/', s
 napops_species <- napops::list_species() |>
   dplyr::select(Species,Common_Name)
 
-re_napops <- TRUE # set to True to re-run the napops extraction
+re_napops <- FALSE # set to True to re-run the napops extraction
 
 if(re_napops){
 # Species specific adjustment factors (Time of Day, Detection Distance, Pair)
@@ -471,7 +471,7 @@ today <- as_date(Sys.Date())
 # species loop -----------------------------------------------------
 estimate_rho <- FALSE # set to true to allow the model to estimate a non-unit log-log slope
 
-use_traditional <- TRUE # if TRUE uses the traditional adjustments for TOD and distance
+use_traditional <- FALSE # if TRUE uses the traditional adjustments for TOD and distance
 
 
 
@@ -543,7 +543,7 @@ for(sp_sel in c("Western Meadowlark","Baird's Sparrow","Brown Creeper",
                 "Scarlet Tanager",
                 "Say's Phoebe",
                 "Black-chinned Hummingbird"
-                )[c(9:16)]){ # rev(sps_list$english[1:348])){#sp_example[-wh_drop]){#list$english){
+                )[c(1:8)]){ # rev(sps_list$english[1:348])){#sp_example[-wh_drop]){#list$english){
 #sp_sel = "Bank Swallow"
 #for(sp_sel in rev(sps_list$english)[29]){
  sp_aou <- bbsBayes2::search_species(sp_sel)$aou[1]
@@ -734,6 +734,10 @@ if(nrow(adjs) == 0){
 }
 adjs$n_routes <- stan_data$n_routes
 
+saveRDS(stan_data,paste0(output_dir,"/stan_data_",vers,sp_aou,"_",sp_ebird,".rds"))
+
+
+
 
 if(re_run_model){
 
@@ -807,7 +811,6 @@ fit$save_object(paste0(output_dir,"/calibration_fit_alt_",vers,sp_aou,"_",sp_ebi
 
 #fit <- readRDS(paste0(output_dir,"/calibration_fit_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
 saveRDS(summ,paste0("convergence/parameter_summary_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
-
 
 # test for zero inflation -------------------------------------------------
 
@@ -1154,7 +1157,7 @@ cali_alt_post <- fit$draws(variables = "calibration_mean",
 cali_post <- fit$draws(variables = "calibration_median",
                               format = "df")
 
-trm_mean <- function(x,p = 0.1){
+trm_mean <- function(x,p = 0.025){
   q1 <- quantile(x,p)
   q2 <- quantile(x,1-p)
   xtrim <- x[which(x > q1 & x < q2)]
@@ -1288,16 +1291,17 @@ beta_hist <- ggplot()+
   scale_colour_viridis_d()
 
 
-flags <- data.frame(name = c("Mean across routes",
+flags <- data.frame(name = c("Calibration using posterior mean across routes",
                              "Trimmed mean across routes",
-                              "Median across routes",
+                              "mean of posterior medians across routes",
                               "Calibration assuming lognormal and t-dist",
                               "Calibration assuming lognormal",
                               "Calibration using only hyperparameter (median of lognormal)",
                               "Calibration using posterior median across routes"),
-                    value = c(mean(betas_by_route$median_calibration),
+                    value = c(cali_alt$mean,
+                              #mean(betas_by_route$median_calibration),
                               mean(as.numeric(cali_trim_post$calibration_mean)),
-                              median(betas_by_route$median_calibration),
+                              mean(betas_by_route$median_calibration),
                               cali_lognormal$mean,
                               cali_lognormal_alt1$mean,
                               cali_lognormal_alt2$mean,
