@@ -872,7 +872,8 @@ write_excel_csv(table_2_full,
 
 
 
-
+tmp <- table_2_full %>%
+  filter(species %in% sp_label)
 
 
 
@@ -1122,15 +1123,29 @@ for(sp_sel in c("Western Meadowlark","Baird's Sparrow","Brown Creeper",
 
 }
 
+sampl_bias <- sampl_bias %>%
+  mutate(ratio_new_old = 1/exp(log_ratio))
+
 saveRDS(sampl_bias,"final_figures/example_species_strata_sampling_bias.rds")
 
 
 canw <- sampl_bias %>%
-  filter(species == "Canyon Wren")
+  filter(species == "Canyon Wren",
+         !is.na(mean_ebird_abundance),
+         mean_ebird_abundance > 0)
+
+
+USA_CAN_sample_bias <- sampl_bias %>%
+  filter(strata_name == "USA_CAN")
+
+
+
+
 
 # calculate the ratio of existing and ebird estiates with edr -------------
 
 
+output_dir <- "G:/PIF_population_estimates/output"
 
 
 all_pop_ests <- NULL
@@ -1169,7 +1184,7 @@ us_can <- all_pop_ests %>%
   select(species,pop_median,pop_lci_80:pop_uci_95,
          version)
 
-usa_can_exist <- read_csv("Stanton_2019_code/output_EDR/PSest_Global_WH_NA__100iter.csv") %>%
+usa_can_exist <- read_csv("Stanton_2019_code/output_alldata/PSest_Global_WH_NA__100iter.csv") %>%
   filter(cn %in% us_can$species) %>%
   select(cn,USCAN.med.PopEst:USCAN.95UCI.PopEst) %>%
   mutate(version = "Existing")
@@ -1179,11 +1194,14 @@ names(usa_can_exist) <- names(us_can)
 us_can_long <- bind_rows(us_can,usa_can_exist)
 
 names(usa_can_exist) <- paste0(names(usa_can_exist),"_exist")
+
 us_can_wide <- us_can %>%
   left_join(usa_can_exist,
             by = c("species" = "species_exist")) %>%
   mutate(ratio = pop_median/pop_median_exist,
-         log_ratio = log(ratio))
+         log_ratio = log(ratio),
+         pop_new_millions = pop_median/1e6) %>%
+  relocate(species,ratio,log_ratio,pop_new_millions)
 
 
 write_csv(us_can_wide,"final_figures/usa_canada_comparison_eBird_existing_w_EDR.csv")
@@ -1374,6 +1392,43 @@ write_csv(trend_effects,"final_figures/trend_effect_summaries.csv")
 saveRDS(inds_out,"final_figures/species_population_trajectories.rds")
 
 
+bchu <- sampl_bias %>%
+  filter(species == "Black-chinned Hummingbird",
+         !is.na(mean_ebird_abundance),
+         mean_ebird_abundance > 0) %>%
+  select(strata_name,ratio_new_old)
+
+strata_trajs <- inds_out %>%
+  filter(species == "Black-chinned Hummingbird",
+         region_type == "strata")  %>%
+  full_join(bchu, by = c("region" = "strata_name")) %>%
+  mutate(ratio_log = log(ratio_new_old))
+
+
+
+
+
+  traj_p <- ggplot(data = strata_trajs,
+                 aes(x = year, y = med,
+                     group = region,
+                     colour = ratio_log))+
+  geom_line()+
+  scale_y_continuous(limits = c(0,NA),
+                     labels = scales::unit_format(unit = "M", scale = 1e-6))+
+  theme_bw()+
+    scale_colour_viridis_c(option = "turbo", direction = -1)
+
+traj_p
+
+
+
+
+
+
+
+
+
+
 
 # Figure example strata compare -------------------------------------------
 library(patchwork)
@@ -1386,12 +1441,20 @@ for(sp_sel in names(plot_t)){
   sp_ebird <- ebirdst::get_species(sp_sel)
 
 plot_t[[sp_sel]] <- readRDS(paste0("figures/saved_ggplots/trad_vs_new_alt_",vers,sp_aou,"_",sp_ebird,".rds"))+
-  theme(text = element_text(size = 6))
+  guides(colour = guide_legend(nrow = 1, ncol = 7))+
+  theme(text = element_text(size = 9))
+
+if(sp_sel == "Canyon Wren"){
+  plot_t[[sp_sel]] <- plot_t[[sp_sel]]+
+    ylab("")
+}
 
 }
 
 
-pl2 <- plot_t[[1]]+plot_t[[2]]+plot_layout(ncol = 2, guides = "collect")
+pl2 <- plot_t[[1]]+plot_t[[2]]+
+  plot_layout(ncol = 2, guides = "collect")&
+  theme(legend.position = "bottom")
 
 pdf("Final_figures/sstrata_comparison.pdf",
     width = 7, height = 4)

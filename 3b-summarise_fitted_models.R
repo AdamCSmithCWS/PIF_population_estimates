@@ -329,7 +329,14 @@ cali_alt_post <- fit$draws(variables = "calibration_mean",
                            format = "df")
 
 
-
+# trimmed mean function to exclude the outer 5% of routes with extreme
+# calibration values. These extreme values have a strong influence on the
+# mean of the retransformed values. particularly routes with very high calibration
+# values which greatly increase the overall mean calibration and the total
+# population estimate.
+# Ideally, we'll figure out what is missing from the model and why
+# we're getting these heavy tails, but until then this trimmed-mean generates
+# much more robust population estimates.
 trm_mean <- function(x,p = 0.025){
   q1 <- quantile(x,p)
   q2 <- quantile(x,1-p)
@@ -337,7 +344,7 @@ trm_mean <- function(x,p = 0.025){
   trim_m <- mean(xtrim)
   return(trim_m)
 }
-
+#posterior of the route-level calibration values
 cali_route_post <- fit$draws(variables = "calibration_r",
                            format = "df")
 
@@ -348,45 +355,8 @@ for(i in 1:nrow(cali_route_post)){
 }
 
 
-# saveRDS(betas_by_route,paste0(output_dir,"/betas_by_route_alt_",
-#                vers,sp_aou,"_",sp_ebird,".rds"))
-
-# saveRDS(param_infer,paste0(output_dir,"/parameter_inference_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
-
-
 
 # calculating population --------------------------------------------------
-
-
-
-
-# load relative abundance surface -----------------------------------------
-
-
-
-breed_abundance <- readRDS(paste0("data/species_relative_abundance/",
-                                  sp_ebird,
-                                  "_derived_breeding_relative_abundance.rds"))
-
-names(breed_abundance) <- "breeding_abundance"
-
-breed_abundance_full <- breed_abundance
-
-
-
-# BBS strata level estimates (to match PIF stratification) ----------------
-
-
-strata_proj <- st_transform(strata,
-                            crs = st_crs(breed_abundance))
-
-
-abundance_in_strata <- terra::extract(breed_abundance_full,
-                                      strata_proj,
-                                       fun = sum,
-                                       na.rm = TRUE,
-                                       ID = TRUE,
-                                       exact = FALSE)
 
 
 # function to calculate the highest posterior density interval for the quantiles
@@ -427,13 +397,13 @@ post_abund <- function(x, #data frame with summed relative abundance within a gi
     xl <- log(x)
   }
   if(fun == "mean"){
-  for(i in 1:length(x)){
-    if(use_log){
-      y[i] <- exp(mean(xl[i]+as.numeric(draws)))
-    }else{
-     y[i] <- mean(x[i]*as.numeric(draws))
+    for(i in 1:length(x)){
+      if(use_log){
+        y[i] <- exp(mean(xl[i]+as.numeric(draws)))
+      }else{
+        y[i] <- mean(x[i]*as.numeric(draws))
+      }
     }
-  }
   }
 
   if(fun == "median"){
@@ -464,15 +434,45 @@ post_abund <- function(x, #data frame with summed relative abundance within a gi
         y[i] <- exp(quantile(xl[i]+as.numeric(draws),p, names = FALSE))
 
       }else{
-      y[i] <- quantile(x[i]*as.numeric(draws),p, names = FALSE)
+        y[i] <- quantile(x[i]*as.numeric(draws),p, names = FALSE)
       }
     }
   }
 
   return(y)
 }
-### 3^2 scaling is to account for the area of each grid-cell
-###
+
+
+# load relative abundance surface -----------------------------------------
+
+
+# this is the range-wide (global) relative abundance surface for the
+# selected set of weeks that overlap the BBS field season
+breed_abundance <- readRDS(paste0("data/species_relative_abundance/",
+                                  sp_ebird,
+                                  "_derived_breeding_relative_abundance.rds"))
+
+names(breed_abundance) <- "breeding_abundance"
+
+breed_abundance_full <- breed_abundance
+
+
+
+# BBS strata level estimates (to match PIF stratification) ----------------
+
+
+strata_proj <- st_transform(strata,
+                            crs = st_crs(breed_abundance))
+
+## extract the sum of the relative abundance surface in the region
+abundance_in_strata <- terra::extract(breed_abundance_full,
+                                      strata_proj,
+                                       fun = sum,
+                                       na.rm = TRUE,
+                                       ID = TRUE,
+                                       exact = FALSE)
+
+
 ###
 use_trimmed_calibration <- TRUE
 # select calibration ------------------------------------------------------
@@ -485,6 +485,8 @@ if(use_trimmed_calibration){
 names(cali_use)[1] <- "calibration"
 
 
+### 3^2 scaling is to account for the area of each grid-cell 9-km^2
+###
 
 strata_abund <- data.frame(region = strata_proj$strata_name,
                            region_type = "strata",
@@ -525,15 +527,6 @@ strata_trad_j <- strata_trad %>%
          LCI80.PopEst,
          UCI80.PopEst)
 
-
-strata_compare <- strata_abund %>%
-  full_join(.,strata_trad_j,
-            by = c("prov_state" = "st_abrev",
-                   "bcr" = "BCR")) %>%
-  mutate(ratio_cat = cut(log_ratio,breaks = c(-Inf,-1,-0.5,-0.15,0.15,0.5,1,Inf)),
-         log_pop_ratio = log(pop_median/med.PopEst))
-
-div_pal <- viridisLite::viridis(n = 7,option = "turbo", direction = -1)
 pal_labs <- c("< -1",
               "-1, -0.5",
               "-0.5, -0.15",
@@ -541,10 +534,21 @@ pal_labs <- c("< -1",
               "0.15, 0.5",
               "0.5, 1",
               "> 1")
-names(div_pal) <- pal_labs#levels(strata_compare$ratio_cat)
-strata_compare$ratio_cat <- factor(strata_compare$ratio_cat,
-                                   labels = pal_labs)
 
+strata_compare <- strata_abund %>%
+  full_join(.,strata_trad_j,
+            by = c("prov_state" = "st_abrev",
+                   "bcr" = "BCR")) %>%
+  mutate(ratio_cat = cut(log_ratio,breaks = c(-Inf,-1,-0.5,-0.15,0.15,0.5,1,Inf),
+                         levels = c("(-Inf,-1]","(-1,-0.5]",
+                         "(-0.5,-0.15]","(-0.15,0.15]",
+                         "(0.15,0.5]","(0.5,1]","(1, Inf]"),
+                         labels = pal_labs),
+         log_pop_ratio = log(pop_median/med.PopEst))
+
+div_pal <- viridisLite::viridis(n = 7,option = "turbo", direction = -1)
+
+names(div_pal) <- pal_labs#levels(strata_compare$ratio_cat)
 
 
 comp_trad_new_plot <- ggplot(data = strata_compare,
@@ -586,8 +590,8 @@ pdf(paste0("Final_figures/comp_trad_new_alt_",vers,sp_aou,"_",sp_ebird,".pdf"),
 print(comp_trad_new_plot)
 dev.off()
 
-
-
+re_do_map <- FALSE #option to skip because they take a long time.
+if(re_do_map){
 # abund_mapable <- breed_abundance %>%
 #   terra::project(.,"EPSG:9822")
 strat_sel <- strata_compare %>%
@@ -635,7 +639,7 @@ abund_map <- ggplot()+
   xlab("")+
   ylab("")+
   theme_bw()+
-  labs(title = paste(sp_sel,"eBird relative abundance values by BBS strata"))
+  labs(title = paste(sp_sel))
 
 
 #
@@ -647,10 +651,11 @@ png(filename = paste0("Figures/abund_map_alt_",vers,sp_aou,"_",sp_ebird,".png"),
     units = "in")
 print(abund_map)
 dev.off()
+saveRDS(abund_map,paste0("figures/saved_ggplots/abund_map_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
 
+}
 
 saveRDS(comp_trad_new_plot,paste0("figures/saved_ggplots/trad_vs_new_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
-saveRDS(abund_map,paste0("figures/saved_ggplots/abund_map_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
 saveRDS(strata_compare,paste0("estimates/strata_comparison_",vers,sp_aou,"_",sp_ebird,".rds"))
 
 
