@@ -138,7 +138,11 @@ names(breed_abundance_plot) <- "breeding"
 
 # breed_abundance_plot <- breed_abundance_plot %>%
 #   sf::st_transform(crs = sf::st_transform(strata_sel))
-
+if(sp_sel == "Canyon Wren"){
+  coord_labs <- list(bottom = "E",right = "N")
+}else{
+  coord_labs <- list(bottom = "E",left = "N")
+}
 abund_map <- ggplot()+
   geom_sf(data = strata_sel)+
   geom_spatraster(data = breed_abundance_plot,maxcell = 16000000)+
@@ -149,7 +153,9 @@ abund_map <- ggplot()+
   geom_sf(data = routes_sel,fill = "black",colour = "black",
           linewidth = 0.9)+
   coord_sf(xlim = c(bb[c("xmin","xmax")]),
-           ylim = c(bb[c("ymin","ymax")]))+
+           ylim = c(bb[c("ymin","ymax")]),
+           #label_graticule = "SE",
+           label_axes = coord_labs)+
   #scale_fill_gradientn(12,colours = terrain.colors(12),na.value = NA)+
   scale_fill_viridis_c(direction = -1,
                        option = "G",
@@ -165,7 +171,9 @@ abund_map <- ggplot()+
   #                        name = "Mean count BBS")+
   theme_bw()+
   labs(title = paste(sp_sel))+
-  theme(legend.position = "bottom")
+  theme(legend.position = "bottom",
+        plot.margin = unit(c(1,1,1,1),
+                           units = "mm"))
 
 abund_map
 #
@@ -190,13 +198,18 @@ des <- "
 111222
 111333
 "
+
+des<- c(patchwork::area(t = 1,l = 1,b = 6,r = 3),
+        patchwork::area(t = 1,l = 3,b = 4.5,r = 5),
+        patchwork::area(t = 5,l = 4,b = 6,r = 5))
 # abund_maps_save[[1]] <- abund_maps_save[[3]]
 # abund_maps_save[[2]] <- abund_maps_save[[4]]
 
 # abund_maps_save[[2]] <- abund_maps_save[[2]]
 
 
-sampling_demo <- abund_maps_save[[1]] + abund_maps_save[[2]] +
+sampling_demo <- (abund_maps_save[[1]]) + (abund_maps_save[[2]] +
+                                                     theme(plot.title = element_text(hjust = 1))) +
   guide_area() + plot_layout(design = des,guides = "collect")
 
 sampling_demo
