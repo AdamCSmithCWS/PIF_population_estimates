@@ -304,11 +304,6 @@ if(trim_rel_abund){
 
 
 
-routes_buf <- routes_buf_all %>%
-  inner_join(mean_counts, by = "route_name")
-
-
-
 
 
 # load saved fitted model, summary, and data ------------------------------
@@ -320,6 +315,16 @@ routes_buf <- routes_buf_all %>%
   combined <- readRDS(paste0("data/main_data_df_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
   stan_data <- readRDS(paste0(output_dir,"/stan_data_",vers,sp_aou,"_",sp_ebird,".rds"))
 
+
+
+
+  mean_counts <- raw_counts %>%
+    group_by(route_name) %>%
+    summarise(mean_count = mean(count)) %>%
+    filter(route_name %in% combined$route_name)
+
+  routes_buf <- routes_buf_all %>%
+    inner_join(mean_counts, by = "route_name")
 
 
 # posterior of calibration ------------------------------------------------
@@ -337,13 +342,16 @@ cali_alt_post <- fit$draws(variables = "calibration_mean",
 # Ideally, we'll figure out what is missing from the model and why
 # we're getting these heavy tails, but until then this trimmed-mean generates
 # much more robust population estimates.
-trm_mean <- function(x,p = 0.025){
-  q1 <- quantile(x,p)
-  q2 <- quantile(x,1-p)
-  xtrim <- x[which(x > q1 & x < q2)]
-  trim_m <- mean(xtrim)
-  return(trim_m)
-}
+
+  # ID routes with extreme betas -----------------------------------------------
+
+  betas <- summ %>% filter(grepl("beta[",variable,fixed = TRUE))
+
+  w_excl <- c(which(betas$mean > quantile(betas$mean,0.975)),
+              which(betas$mean < quantile(betas$mean,0.025)))
+
+  betas_keep <- c(1:stan_data$n_routes)[-w_excl]
+
 #posterior of the route-level calibration values
 cali_route_post <- fit$draws(variables = "calibration_r",
                            format = "df")
@@ -351,8 +359,9 @@ cali_route_post <- fit$draws(variables = "calibration_r",
 cali_trim_post <- cali_alt_post
 
 for(i in 1:nrow(cali_route_post)){
-  cali_trim_post[i,1] <- trm_mean(as.numeric(cali_route_post[i,1:stan_data$n_routes]))
+  cali_trim_post[i,1] <- mean(as.numeric(cali_route_post[i,betas_keep]))
 }
+
 
 
 
@@ -590,7 +599,7 @@ pdf(paste0("Final_figures/comp_trad_new_alt_",vers,sp_aou,"_",sp_ebird,".pdf"),
 print(comp_trad_new_plot)
 dev.off()
 
-re_do_map <- FALSE #option to skip because they take a long time.
+re_do_map <- TRUE #option to skip because they take a long time.
 if(re_do_map){
 # abund_mapable <- breed_abundance %>%
 #   terra::project(.,"EPSG:9822")

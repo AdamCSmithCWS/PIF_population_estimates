@@ -61,29 +61,22 @@ strata_names <- strata %>%
 
 
 # Example figure for roadside bias ----------------------------------------------------------
+
 demo_sp <- data.frame(species = c("American Robin",
-                                  "American Robin",
-                                  "American Robin",
-                                  "American Robin",
-                                  "American Robin",
-                                  "American Robin"),
+                                 # "American Robin",
+                                  "Canyon Wren"),
                       region = c("CA-BC-5",
-                                 "US-NM-35",
-                                 "US-TX-21",
-                                 "US-SD-17",
-                                 "US-MS-27",
-                                 "US-MO-26"))
-
-
+                                 #"CA-YT-4",
+                                 "US-AZ-16"))
 
 
 
 
 abund_maps_save <- vector(mode = "list",length = nrow(demo_sp))
-names(abund_maps_save) <- demo_sp$species
+names(abund_maps_save) <- paste0(demo_sp$species,"_",demo_sp$region)
 
 
-for(i in 4:nrow(demo_sp)){
+for(i in 1:nrow(demo_sp)){
 sp_sel <- demo_sp[i,"species"]
 reg_sel <- demo_sp[i,"region"]
 
@@ -123,6 +116,8 @@ breed_abundance <- readRDS(paste0("data/species_relative_abundance/",
 strata_sel <- strata %>%
   filter(strata_name == reg_sel)
 
+strata_sel1 <- strata_sel %>% st_buffer(5e5) # 500km buffer
+
 routes_sel <- routes_buf %>%
   sf::st_transform(crs = st_crs(strata_sel)) %>%
   sf::st_join(y = strata_sel,left = FALSE)
@@ -130,8 +125,9 @@ routes_sel <- routes_buf %>%
 bb <- sf::st_bbox(strata_sel)
 
 
-strata_sel2 <- strata_sel %>%
+strata_sel2 <- strata_sel1 %>%
   sf::st_transform(crs = st_crs(breed_abundance))
+
 bb_crop <- terra::ext(strata_sel2)
 
 breed_abundance_plot <- terra::crop(breed_abundance,y = bb_crop) %>%
@@ -144,20 +140,23 @@ names(breed_abundance_plot) <- "breeding"
 #   sf::st_transform(crs = sf::st_transform(strata_sel))
 
 abund_map <- ggplot()+
-  geom_sf(data = strata_sel, fill = grey(0.95))+
+  geom_sf(data = strata_sel)+
   geom_spatraster(data = breed_abundance_plot,maxcell = 16000000)+
-  geom_sf(data = strata_sel, fill = NA)+
+  geom_sf(data = strata_sel, fill = NA, colour = grey(0.4),
+          linewidth = 0.8)+
   # geom_sf_text(data = strata,aes(label = strata_name),
   #              size = 1)+
-  geom_sf(data = routes_sel,fill = NA,colour = "white")+
+  geom_sf(data = routes_sel,fill = "black",colour = "black",
+          linewidth = 0.9)+
   coord_sf(xlim = c(bb[c("xmin","xmax")]),
            ylim = c(bb[c("ymin","ymax")]))+
   #scale_fill_gradientn(12,colours = terrain.colors(12),na.value = NA)+
   scale_fill_viridis_c(direction = -1,
                        option = "G",
                        na.value = NA,
-                       end = 0.9,
-                       name = "Relative Abundance")+
+                       begin = 0.2,
+                       end = 1,
+                       name = paste(sp_sel,"\nRelative Abundance"))+
   # scale_colour_viridis_c(direction = -1,
   #                        option = "rocket",
   #                        na.value = NA,
@@ -165,10 +164,12 @@ abund_map <- ggplot()+
   #                        begin = 0.1,
   #                        name = "Mean count BBS")+
   theme_bw()+
-  labs(title = paste(sp_sel))
+  labs(title = paste(sp_sel))+
+  theme(legend.position = "bottom")
 
-
+abund_map
 #
+saveRDS(abund_map,paste0("figures/saved_ggplots/sampling_map_",sp_aou,"_",reg_sel,".rds"))
 
 png(filename = paste0("final_figures/Figure_1_",sp_aou,"_",reg_sel,".png"),
     res = 400,
@@ -182,6 +183,29 @@ abund_maps_save[[paste0(sp_sel,"_",reg_sel)]] <- abund_map
 
 }
 
+des <- "
+111222
+111222
+111222
+111222
+111333
+"
+# abund_maps_save[[1]] <- abund_maps_save[[3]]
+# abund_maps_save[[2]] <- abund_maps_save[[4]]
+
+# abund_maps_save[[2]] <- abund_maps_save[[2]]
+
+
+sampling_demo <- abund_maps_save[[1]] + abund_maps_save[[2]] +
+  guide_area() + plot_layout(design = des,guides = "collect")
+
+sampling_demo
+
+pdf("final_figures/sampling_bias_maps.pdf",
+    width = 7,
+    height = 6)
+print(sampling_demo)
+dev.off()
 
 
 # continental estimate summaries ------------------------------------------
@@ -1421,6 +1445,8 @@ strata_trajs <- inds_out %>%
 traj_p
 
 
+tmp <- strata_trajs %>%
+  filter(year %in% c(2013,2023))
 
 
 

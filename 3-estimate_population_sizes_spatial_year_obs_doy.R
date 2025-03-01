@@ -1696,7 +1696,7 @@ post_abund <- function(x,draws = cali_post$calibration,
 ###
 ###
 log_normal_calibration <- FALSE
-use_trimmed_calibration <- FALSE
+use_trimmed_calibration <- TRUE
 # select calibration ------------------------------------------------------
 if(log_normal_calibration){
   cali_use <- cali_lognormal_alt1_post
