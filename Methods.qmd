@@ -11,6 +11,14 @@ Partners in Flight (PIF) estimate bird populations within geo-political regions 
 
 ## eBird relative abundance
 
+We calculated the area weighted mean of the eBird relative abundance cell values within the buffer zone of route-j ($I_{ebird_{r}}$) to use as a predictor on the observed BBS counts at that route.
+
+$$ I_{ebird_{r}} = \frac{\sum_{i=1}^{i=c_r}MeanWeeklyRelativeAbundance_{i}*a_i}{\sum_{i=1}^{i=c_r}a_{i}} $$
+
+We used the mean weekly relative abundance values for the weeks that overlap the BBS field season. We explored alternative summaries of the eBird relative abundance surfaces including the seasonal medians, and maximum relative abundance within the BBS field season [@stillman2023]. We chose to use means of weeks within the BBS field season because these showed the most consistent and linear relationships to the observed BBS counts when compared across many species.
+
+We included all routes on which the species was observed during BBS surveys in the last 10 years of observations (2013 - 2023, excluding 2020 when the BBS was cancelled) and that overlapped positive values of the eBird relative abundance surface. We also excluded the BBS routes where the mean relative abundance values fell in the lowest 10% of the relative abundance values because for some species and routes these very low value predictors generated some extreme predictions and convergence failures.
+
 The relationship between the counts on BBS routes and the eBird relative abundances within these route path buffers along with the PIF population estimates approach to scaling BBS counts to total population size, provide the logical stepping stones to calibrate the eBird relative abundance values to represent a density of birds.
 
 ## Proportional relative abundance
@@ -39,24 +47,13 @@ $$
 
 We fit a Bayesian hierarchical model that estimates the $B$ term in the above equation. We modeled the expected count during each BBS as a function of the log-transformed mean eBird relative abundance values within a 400 m buffer surrounding the BBS route-path. The model also accounts for: 1) the variation among BBS routes and observers, 2) the variation among years; 3) the seasonal variation during the period of acceptable BBS survey conditions and how that seasonal pattern varies among BBS strata.
 
-This model uses the area weighted mean of the eBird relative abundance cell values within the buffer zone of route-j ($I_{ebird_{r}}$) as a predictor on the observed BBS counts at that route.
-
-$$
-I_{ebird_{r}} = \frac{\sum_{i=1}^{i=c_r}MeanWeeklyRelativeAbundance_{i}*a_i}{\sum_{i=1}^{i=c_r}a_{i}}
-$$
-
-
-We included all routes on which the species was observed during BBS surveys in the last 10 years of observations (2013 - 2023) and that overlapped positive values of the eBird relative abundance surface. We also excluded the BBS routes where the mean relative abundance values fell in the lowest 10% of the relative abundance values because for some species and routes these very low value predictors generated some extreme predictions and convergence failures. 
-
-For the remaining 90% of the BBS routes that overlapped the relative abundance surface, we log transformed the area weighted mean relative abundance values and used them as an offset in a log-link model that predicts each observed BBS count ($C_{r,t}$) on route-j, in year-t. Treating these $log(I_{ebird_{r}})$ as an offset respects the multiplicative relationship derived above. 
+We log transformed the area weighted mean relative abundance values at each BBS route and used them as an offset in a log-link model that predicts each observed BBS count ($C_{r,t}$) on route-j, in year-t. Treating these $log(I_{ebird_{r}})$ as an offset respects the multiplicative relationship derived above.
 
 $$
 log(C_{bbs}) = log(I_{ebird}*B) = log(I_{ebird}) + log(B)
 $$
 
-
 This assumes a linear relationship with a slope of 1 between the log of the eBird relative abundance surface and the log of the observed BBS counts. This assumption is explicit if each relative abundance value is proportional to true abundance, but also necessary so that the final population estimates respect the spatial distribution in the eBird relative abundance surface. Of course, either or both set of estimates may include errors and therefore fail to meet the assumption of relative abundance in important ways beyond what we have accounted for here. Exploring those possible failures is beyond the scope of this work, but it will include assessing the slope for each species and for different summaries of the eBird relative abundance surface (e.g., the mean, median, or maximum seasonal abundance, and the weeks included in the season to match the BBS observations).
-
 
 We modeled the observed BBS counts in a similar way to many of the common status and trend models for the BBS [@smith2024] as realizations of a negative binomial distribution with mean $\lambda_{j,r,d,t,s}$ and inverse dispersion parameter $\phi$.
 
@@ -68,7 +65,7 @@ $$
 log(\lambda_{j,r,d,t,s}) = \beta_{r} + \delta_{d,s} + \gamma_{s,t} + \omega_j + log(I_{ebird_{r}})
 $$
 
-In this model formulation, the intercept ($\beta_{r}$) represents a scaling factor between the observed BBS counts on route-r, and the eBird relative abundance for route-r, after accounting for the variation due to the year-t ($\gamma_{s,t}$), and day of the BBS season-d in stratum-s ($\delta_{d,s}$). We used a hierarchical structure to model the variation in the scaling factor among routes $\beta_{r}\sim t(\nu,B,\sigma_{B})$, while accounting for the repeated observations on each route by a given observer $\omega_{j}\sim \operatorname{Normal}(0,\sigma_{\omega})$. The hyperparameter $B$ estimates the mean eBird-BBS scaling factor across all routes, and its posterior distribution represents the uncertainty in that scaling. We used a t-distribution to allow the variation among routes to have heavier tails than the normal and to provide a robust estimator that is less sensitive to extreme outliers (e.g., routes with unusually high or low counts). We treated the BBS routes as independent samples of the mean route-level relationship. That is, we do not attempt to predict calibrations for particular routes, because the goal is to derive a calibration factor that applies across the full relative abundance surface.
+In this model formulation, the intercept ($\beta_{r}$) represents a scaling factor between the observed BBS counts on route-r, and the eBird relative abundance for route-r, after accounting for the variation due to the year-t ($\gamma_{s,t}$), and day of the BBS season-d in stratum-s ($\delta_{d,s}$). We used a hierarchical structure to model the variation in the scaling factor among routes $\beta_{r}\sim t(\nu,\bar{B},\sigma_{B})$, while accounting for the repeated observations on each route by a given observer $\omega_{j}\sim \operatorname{Normal}(0,\sigma_{\omega})$. The hyperparameter $\bar{B}$ represents the mean log-scale eBird-BBS scaling factor across all routes. We used a t-distribution to allow the variation among routes to have heavier tails than the normal and to provide a robust estimator that is less sensitive to extreme outliers (e.g., routes with unusually high or low counts).
 
 The year-term was fit as a random-walk time-series, centered on the year of the relative abundance surface (i.e., $\Gamma_{2022} = 0$ for the eBird status and trends version 2023).
 
@@ -87,11 +84,13 @@ $$
 
 The seasonal variation was modeled as a hierarchical GAM smooth term that adjusts for the variation in the day each BBS survey was conducted. We used the hierarchical GAM to smooth the variation in counts across the BBS season while allowing the shape of that seasonal smooth to vary across the species' range and still shrink towards the mean seasonal pattern of neighbouring strata when data were relatively sparse ([@pedersen2019][@smith2021][@smith2024a]). To model that spatial variation in the seasonal component, the hierarchical GAM smooths were fit using the same iCAR parameterisation used to model annual smooth terms in spatial variants of the GAM and GAMYE models in the r-package *bbsBayes2* ([@edwards2023]), following Smith et al. (2024).
 
-We can then combine the posterior draws of the scaling factor $B$, with Monte Carlo processes similar to those used in @stanton2019 to propagate the uncertainty of the scaling factor with the estimates of adjustment factors that match BBS observation conditions. The re-scaling to represent density accounts for: 1) the estimated availability of birds for detection (and its uncertainty) during a 3-minute BBS point count conducted on an average BBS survey day; 2) the estimated detectability distance for roadside counts and the uncertainty in its estimate; and 3) a correction factor used in previous PIF population estimates to account for the bias in the detectability between male and female birds of each species [@stanton2019].
-
-To account for the asymmetries of the log-scale retransformation (i.e., $\mathrm{E}(exp(B)) \neq exp(\mathrm{E}(B))$) and some extreme tails in the distribution of the route-level $\beta_r$ terms, we used a retransformation approach that does not assume a log-normal distribution, following (Duan 1983). We calculated the retransformed calibration for every route, then averaged across the R-routes to estimate the mean calibration factor ($B$).
+To account for the asymmetries of the log-scale retransformation (i.e., $\mathrm{E}(exp(B)) \neq exp(\mathrm{E}(B))$) and some extreme tails in the distribution of the route-level $\beta_r$ terms, we used a retransformation approach that does not assume a log-normal distribution, following (Duan 1983). We calculated the retransformed calibration for each route, excluded the routes with extreme calibration values (middle 95% of the distribution of route-level values), then averaged across the remaining R-routes to estimate the calibration factor ($B$).
 
 $$Calibration = B = 1/R * \sum^{R}_{r = 1}{\frac{exp(\beta_r) * C_p * C_t}{area}}$$
+
+We chose to use a trimmed mean calculation across the collection fo routes included in the analysis so the mean value would be less sensitive to some extreme tails of these route-level distributions. These extreme values often reflected routes with relatively low estimated relative abundance but with a relatively high count of birds during at least one BBS.
+
+We can then combine the posterior draws of the scaling factor $B$, with Monte Carlo processes similar to those used in @stanton2019 to propagate the uncertainty of the scaling factor with the estimates of adjustment factors that match BBS observation conditions. The re-scaling to represent density accounts for: 1) the estimated availability of birds for detection (and its uncertainty) during a 3-minute BBS point count conducted on an average BBS survey day; 2) the estimated detectability distance for roadside counts and the uncertainty in its estimate; and 3) a correction factor used in previous PIF population estimates to account for the bias in the detectability between male and female birds of each species [@stanton2019].
 
 In this calibration, $area = \frac{(50 * \pi * \mathcal{N}(EDR,\sigma_{EDR})^2)}{10^6}$ the area in square kilometers surveyed by a 50-stop BBS route, based on the estimated Effective Detection Radius (EDR) for a roadside count from the NA-POPS project [@edwards2023]. We incorporated the uncertainty of the EDR estimate into each sample of the posterior distribution, by making a random draw from a normal distribution with the mean and standard deviation based on the estimated mean and standard error of the mean from the NA-POPS analyses. We selected the EDR estimates from the better supported of either the roadside model or the null model in the most recent estimates from NA-POPS.
 
@@ -101,70 +100,14 @@ Finally, the pair correction factor was incorporated based on the correction for
 
 This calibration factor mutliplied by an eBird relative abundance value in a given cell, represents an estimated number of birds per $km^2$.
 
-For each posterior draw of the calibration factor, we re-scale the full relative abundance surface, account for the area of each cell (e.g., for the 3km cells in the highest resolution seasonal abundance surfaces 9 $km^2$), and generate a posterior draw of the species total population within that given area. Variation across all posterior draws provides an estimate of the uncertainty of the population size estimate.
+For each regional estimated population, we calculated the summed relative abundance values within the region, then multiplied that summed relative abundance by each posterior draw of the calibration factor, and acountted for the area of each cell (e.g., for the 3km cells in the highest resolution seasonal abundance surfaces 9 $km^2$). Variation across all posterior draws provides an estimate of the uncertainty of the population size estimate.
 
-## The representative sampling assumptions of the regional approach to PIF Population Estimates
+## Comparisons with the existing estimation approach
 
-The PIF population estimates derive population sizes for a given region based on the correction factors for distance $C_d$, pairs $C_p$, time of day $C_t$, and the area of the region $a$. The fraction in the first term of this equation represents the mean across all $m$ routes, of the mean counts across the $n_j$ years that each route $j$ was surveyed.
+We compared the estimated populations from this model to those derived from the existing modeling process (following Stanton et al. 2019), for a selection of species to highlight some of the key benefits and challenges of this approach. We chose a selection of species classified as resident and migratory for the purposes of their estimated eBird relative abundance surfaces.
 
-$$
-Population Size = \frac{\sum_{j=1}^{j=m} \sum_{i=1}^{i=n_j} Y_{i j} / n_j}{m} * \frac{a}{25.1} *\left(\frac{400}{C_D}\right)^2 * C_P * C_T
-$$
+We compared the estimates on the finest spatial resolution available for the existing modeling process: the analytical strata represented by the intersection of political jurisdictions (provinces, states, and territories) with the Bird Conservation Regions (BCRs). At that fine scale, we predicted that the differences in population estimates would be largely based on two factors: the relative-abundance sampling bias of the BBS routes relative to the stratum, and the interaction between the relative abundance in each stratum and the temporal trend in abundance over the 10-year span of BBS observations included in the calculations.
 
-The region specific aspects of this equation require an assumption that the densities of birds detectable to BBS observers are representative of the densities of birds in the region. This assumption can be separated into two components: 1) the density of birds near roads in a given habitat/landcover type is the same as density of birds away from roads in that same landcover type; and 2) the proportion of each habitat/landcover type near the roads are representative of the proportions in the region as a whole.
+We estimated the sampling bias of the BBS by calculating a ratio of the mean relative abundance values that overlap the BBS route-paths over the mean relative abundance values across the entire stratum. Strata with positive bias by the BBS (where the BBS routes sample high abundance areas relative to the stratum), our model should generate lower estimates of population size than the existing analytical process. Strata with negative bias by the BBS (where the BBS routes sample relatively low abundance areas), we expect higher estimates of population size.
 
-## Alternative that removes/reduces the influence of these assumptions
-
-By integrating the spatial information on the paths followed by each BBS route with the relative abundance surface from eBird, we can use the PIF population estimates approach in a way that should adjust the estimates for both the non representative sampling of habitats by the BBS and roadside specific variations in the abundance of each species.
-
-With this alternative approach, we would modify the PIF population estimates equation to estimate the population density (population/unit area) of birds within the area adjacent to the $M$ BBS routes used in the calculation and within the detection radius of a given species $C_d$. The $M$ routes would be BBS routes surveyed at least once during years used in the calculation (usually the most recent 10 years) and that overlap the eBird breeding season, or resident, relative abundance surface.
-
-$$
-PopulationDensity_{BBSAdjacent} = \frac{\sum_{j=1}^{j=M}\frac{\sum_{i=1}^{i=n_j}Y_{i j}} {n_j} * C_P * C_T}{M*50\pi*{C_D}^2} 
-$$
-
-To complement this BBS-adjacent population density, we can estimate a relative density of the eBird abundance within a buffer surrounding the BBS route paths, as the area-weighted mean (i.e., weighted by the area of the cell that is overlapped by the buffer) of the predicted relative abundance values of $c_j$ cells overlapped by the buffer of route $j$ of each of the $M$ BBS routes.
-
-$$
-RelativeDensity_{BBSAdjacent} = \frac{\sum_{j=1}^{j=M} \frac{\sum_{i=1}^{i=c_j}RelativeAbundance_{i}*a_i}{\sum_{i=1}^{i=c_j}a_{i}}}{M}
-$$
-
-The area weighted mean relative abundance cell value is largely necessary because the highest spatial resolution of the eBird relative abundance surfaces has grid cells 3 km in width. So, the resolution of the eBird predicted abundance surface is coarse relative to the width of each BBS route buffer (depending on the chosen buffer width).
-
-The ratio of these two density measures represent an approximate calibration of the eBird relative abundance surface to an estimate of true abundance, similar to the calibration demonstrated in [@stillman2023].
-
-$$
-Calibration = \frac{PopulationDensity_{BBS Adjacent}}{RelativeDensity_{BBSAdjacent}}
-$$
-
-Then the population estimate for the species within any arbitrarily defined region can be calculated as the sum of the eBird relative abundance values within that region, scaled by the Calibration factor.
-
-$$
-PopulationEstimate = Calibration * \sum RelAbund
-$$
-
-Generating this calibration within relatively small areas surrounding the BBS routes adjusts the population estimates for the non-representative sampling of habitats by the BBS, to the extent that the species' relative abundance varies across those habitats. It does not explicitly adjust for variations in species density in a given habitat near or further from a road, however some of the variation in density in relation to roads is included in the eBird relative abundance surface modeling because road density is one of the predictors. So, this approach may also correct for variations in density between roadside and offroad habitats, to the extent that a species' density varies based on distance to roads and the eBird relative abundance surface is able to reflect that road-specific variation in density. However, a simple ratio such as this would not account for the variation among BBS routes, BBS observers, and years, as well as seasonal patterns in observations during BBS and the uncertainty in the observed counts during each survey.
-
-In addition to the spatial sampling biases of the BBS, we also improved the population estimates by replacing the distance categories and time-of-day corrections with formal estimates of detection distances and availability of birds for detection[@sólymos2020][@edwards2023].
-
-## Example: American Robin
-
-This species eBird breeding season relative abundance surface suggests that BBS routes sample a relatively biased component of the species' distribution, at least in Northern Canada (Figure 1).
-
-![The location of BBS routes (black squiggles representing a 1 km buffer around each BBS route with observations of American Robin) over the estimated breeding season relative abundance surface for American Robin in Yukon Territory, Canada.](figures/AMRO_YT_example.png){fig.alt="Map of the BBS route buffers over the American Robin relative abundance surface. The route buffers overlap the regions of the map with the highest predicted abundance."}
-
-The biased sampling of American Robin abundance by BBS routes in Yukon territory (almost entirely within BCR 4) suggests that the standard PIF population estimate for American Robins in Yukon will be biased high.
-
-As expected ([@sólymos2020]), both the absolute and the relative population sizes across the species' range change when we estimate PIF population sizes using the calibration model described above, and we re-scale the estimates using distance and availability corrections based on data-informed estimates from the NA-POPS project (i.e., estimates of effective detection radii and the availability of birds during 3 minute surveys at the mean survey time for BBS. For example, all estimates increase with the new methods, but the relative increase is much less for many of the large northern strata such as CA-YT-4 and other regions where sampling is likely biased in a similar to to Yukon (US-AK-4, CA-QC-7, CA-NT-6) than for most regions. The same is true for some of the relatively large and mountainous strata (CA-BC-10 and CA-BC-5) where there are again likely similar biases in the BBS sampling (confined to valleys where there are roads and higher abundance of American Robin relative to unsampled higher elevations).
-
-![Comparison of strata-level population estimates for American Robin from the traditional PIF approach and the calibration model described here. Some strata are labelled where space is sufficient.](figures/comp_trad_new_7610_amerob.png)
-
-The map in Figure 3 shows the full breeding season relative abundance surface for American Robin and the location of the route paths used in the fitting of this model (i.e., the red squiggles).
-
-![Breeding season, relative abundance surface from eBird for American Robin, with the route paths for Canadian BBS routes used in the calibration model.](figures/abund_map_7610_amerob.png)
-
-compared two approaches to retransforming from teh log-scale to the original count scale. One approach requires the assumption that the distribution of route-level $\beta_r$ values is a symetric normal or t distribution. By assuming a symmetric distribution on the log-scale, we can add the $0.5*(\sigma^2_{B}/a)$ component to approximate the mean of the exponentiated heavy-tailed log-t distribution [@link2017], where $a = \frac{(1.422*(\nu^{0.906}))}{(1+(1.422*(\nu^{0.906})))}$. If the distribution of route-level variation is skewed, this ajusted half-variance retransformation factor will result in positively biased estimates of population sizes (Duan 1983). The second approach does not require any assumptions about the distribution of the $\beta_r$ terms, and calculates the mean of the exponentiated route-level values (Duan 1983). 
-
-
-
-
+We also estimated the ratio of the mean predicted abundance in each stratum and each year, with the predicted abundance in the year of the eBird relative abundance surface. The existing esimation process estimates a ten-year average population (e.g., the average over the 2013-2021 period). This ratio of the predicted counts in 2022 over the mean of the predicted counts in all years, reflects the average expected change in the population estimates due to the local population trend. For example, in a stratum where the time-series of observations from the BBS suggest a decline over the period 2013-2023, estimated populations from the new model will be lower to adjust for that ongoing trend.
