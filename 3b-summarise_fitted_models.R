@@ -239,9 +239,9 @@ trim_rel_abund <- TRUE
 # species loop ------------------------------------------------------------
 
 
-for(sp_sel in c("Western Meadowlark","Baird's Sparrow","Brown Creeper",
-                "Canyon Wren",
-                "Black-capped Chickadee","American Robin",
+for(sp_sel in c("American Robin","Canyon Wren",
+                "Western Meadowlark","Baird's Sparrow","Brown Creeper",
+                "Black-capped Chickadee",
                 "Barn Swallow",
                 "Blackpoll Warbler",
                 "Mountain Bluebird",
@@ -415,6 +415,7 @@ if(use_trimmed_calibration){
 }
 names(cali_use)[1] <- "calibration"
 
+saveRDS(cali_use,paste0("output/calibration_",vers,sp_aou,"_",sp_ebird,".rds"))
 
 ### 3^2 scaling is to account for the area of each grid-cell 9-km^2
 ###
@@ -528,8 +529,6 @@ cali_use_y <- expand_grid(cali_use,yrs) %>%
   traj_plot
 
   saveRDS(traj_plot,paste0("figures/saved_ggplots/abund_trajectory_strata_",vers,sp_aou,"_",sp_ebird,".rds"))
-  # compare to traditional estimates ----------------------------------------
-
 
   USA_CAN_trajectories <- strata_population_posterior %>%
     group_by(country, country_code, year, .draw) %>%
@@ -763,10 +762,11 @@ bb <- sf::st_bbox(strata_bound)
 
   breed_abundance_plot <- breed_abundance
   names(breed_abundance_plot) <- "breeding"
+
   breed_abundance_plot <- breed_abundance_plot %>%
     #st_transform(crs = st_crs(strata)) %>%
     mutate(.,breeding = ifelse(breeding == 0,NA,breeding),
-           breeding = (breeding*mean(cali_use$calibration))/900) # per hectare mean density
+           breeding = (breeding*mean(cali_use$calibration))/9) # per km2 mean density
 
 
   # Mapping -----------------------------------------------------------------
@@ -779,7 +779,7 @@ bb <- sf::st_bbox(strata_bound)
     geom_sf(data = bcrs_plot, fill = NA)+
     # geom_sf_text(data = bcrs_plot,aes(label = BCR),
     #              size = 3)+
-    geom_sf(data = routes_buf,aes(colour = mean_count),fill = NA)+
+    #geom_sf(data = routes_buf,aes(colour = mean_count),fill = NA)+
     coord_sf(xlim = c(bb[c("xmin","xmax")]),
              ylim = c(bb[c("ymin","ymax")]))+
     #scale_fill_gradientn(12,colours = terrain.colors(12),na.value = NA)+
@@ -787,16 +787,11 @@ bb <- sf::st_bbox(strata_bound)
                          option = "G",
                          na.value = NA,
                          end = 0.9,
-                         name = "Birds/hectare")+
-    scale_colour_viridis_c(direction = -1,
-                           option = "rocket",
-                           na.value = NA,
-                           end = 0.9,
-                           begin = 0.1,
-                           name = "Mean count BBS")+
+                         name = paste0(sp_sel,"\n","Birds/km<sup>2</sup>"))+
     xlab("")+
     ylab("")+
     theme_bw()+
+    theme(legend.title = element_markdown())+
     labs(title = paste(sp_sel))
 
 
@@ -809,7 +804,11 @@ bb <- sf::st_bbox(strata_bound)
       units = "in")
   print(abund_map)
   dev.off()
-  saveRDS(abund_map,paste0("figures/saved_ggplots/abund_map_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
+  save(list = c("bb",
+                "breed_abundance_plot",
+                "countries_plot",
+                "bcrs_plot"),
+       file = paste0("figures/saved_ggplots/abund_map_alt_",vers,sp_aou,"_",sp_ebird,".rdata"))
 
 }
 
@@ -988,91 +987,85 @@ side_plot <- ggplot(data = pop_compare_stack_sel,
 saveRDS(side_plot,paste0("figures/saved_ggplots/side_plot_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
 
 
+# Seasonal patterns by strata ------------------------------------------
+strat_names <- combined %>%
+  select(strata,strata_name,day_of_year) %>%
+  distinct()
+
+seasonal_strat <- summ %>% filter(grepl("doy_pred[",variable,fixed = TRUE)) %>%
+  mutate(doy = rep(c(1:stan_data$n_doy),times = stan_data$n_strata) + (min(combined$day_of_year)-1),
+         strata = rep(c(1:stan_data$n_strata),each = stan_data$n_doy)) %>%
+  inner_join(strat_names,by = c("strata",
+                                "doy" = "day_of_year"))
+
+seasonal <- summ %>% filter(grepl("DOY_pred[",variable,fixed = TRUE)) %>%
+  mutate(doy = c(1:stan_data$n_doy)+ (min(combined$day_of_year)-1),
+         strata_name = "USA_CAN") %>%
+  filter(doy %in% strat_names$day_of_year)
+
+strat_labs1 <- seasonal_strat %>%
+  group_by(strata_name) %>%
+  summarise(doy = max(doy))
+
+strat_labs <- strat_labs1 %>%
+  inner_join(seasonal_strat,
+             by = c("strata_name",
+                    "doy"))
+
+xlbl <- data.frame(dtes = c("2025/05/01",
+                            "2025/05/15",
+                             "2025/06/01",
+                             "2025/06/15",
+                             "2025/07/01"),
+                   days = c("May-01",
+                            "May-15",
+                            "June-01",
+                            "June-15",
+                            "July-01")) %>%
+  mutate(doy = yday(dtes))
+
+
+vis_season <- ggplot(data = seasonal_strat,
+                     aes(x = doy,y = mean,
+                         group = strata_name,
+                         colour = strata_name))+
+  geom_ribbon(data = seasonal,aes(x = doy,y = mean,
+                                  ymin = q5, ymax = q95),
+              alpha = 0.1,
+              inherit.aes = FALSE)+
+  geom_line(data = seasonal,aes(x = doy,y = mean),
+            inherit.aes = FALSE)+
+  geom_line(alpha = 0.5)+
+  coord_cartesian(xlim = c(100,240))+
+  ggrepel::geom_text_repel(data = strat_labs, aes(label = strata_name),
+                           size = 1.5,
+                           min.segment.length = 0,
+                           xlim = c(200,240),
+                           nudge_x = 20)+
+  scale_colour_viridis_d()+
+  scale_x_continuous(breaks = xlbl$doy, labels = xlbl$days)+
+  xlab("")+
+  ylab("Seasonal effect (log-scale)")+
+  scale_y_continuous(transform = "exp")+
+  theme_bw()+
+  theme(legend.position = "none")
+
+
+saveRDS(seasonal_strat,paste0("output/seasonal_strat_",vers,sp_aou,"_",sp_ebird,".rds"))
+
+saveRDS(vis_season,paste0("figures/saved_ggplots/season_",vers,sp_aou,"_",sp_ebird,".rds"))
+png(filename = paste0("Figures/seasonal_effect_",vers,sp_aou,"_",sp_ebird,".png"),
+    res = 300,
+    height = 6,
+    width = 6,
+    units = "in")
+print(vis_season)
+dev.off()
 
 
 }
 
 
-
-# strata population trajectories ------------------------------------------
-
-
-trend_effect_out <- NULL
-inds_out <- NULL
-vers <- ""
-for(sp_sel in c("Western Meadowlark","Baird's Sparrow","Brown Creeper",
-                "Canyon Wren",
-                "Black-capped Chickadee","American Robin",
-                "Barn Swallow",
-                "Blackpoll Warbler",
-                "Mountain Bluebird",
-                "Eastern Phoebe",
-                "Rose-breasted Grosbeak",
-                "Downy Woodpecker",
-                "Red-winged Blackbird",
-                "Scarlet Tanager",
-                "Say's Phoebe",
-                "Black-chinned Hummingbird"
-)){
-
-  sp_aou <- bbsBayes2::search_species(sp_sel)$aou[1]
-  sp_ebird <- ebirdst::get_species(sp_sel)
-
-  if(file.exists(paste0(output_dir,"/calibration_fit_alt_",
-                        vers,sp_aou,"_",sp_ebird,".rds"))){
-
-    fit <- readRDS(paste0(output_dir,"/calibration_fit_alt_",
-                          vers,sp_aou,"_",sp_ebird,".rds"))
-
-    raw_dat <- readRDS(paste0("data/main_data_df_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
-    strats <- raw_dat %>%
-      select(strata_name,strata) %>%
-      distinct() %>%
-      arrange(strata)
-
-n_yr <- max(raw_dat$yr)
-n_strat <- max(raw_dat$strata)
-fyr <- min(raw_dat$year)
-
-
-yrs <- data.frame(year = fyr:(fyr+n_yr-1),
-                  yr = 1:n_yr)
-
-yr22 <- yrs %>%
-  filter(year == yr_ebird) %>%
-  select(yr) %>%
-  unlist() %>%
-  unname()
-
-
-
-
-
-
-
-pop_ests <- read_csv(paste0("estimates/pop_ests_alt_",vers,sp_aou,sp_ebird,".csv")) %>%
-  filter(region_type == "strata")
-
-pop_ests <- pop_ests %>%
-  left_join(strats,by = c("strata_name"))%>%
-  mutate(w_bbs = ifelse(is.na(strata),FALSE,TRUE))
-
-p_2022_w_bbs <- pop_ests %>%
-  group_by(w_bbs) %>%
-  summarise(pop = sum(pop_median)) %>%
-  mutate(p_pop = pop/sum(pop))
-
-time_series <- pop_ests %>%
-  filter(!is.na(strata)) %>%
-  expand_grid(yrs)
-
-
-}
-
- } #end of species loop
-#
-
-#parallel::stopCluster(cluster)
 
 
 

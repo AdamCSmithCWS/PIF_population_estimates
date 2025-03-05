@@ -1253,7 +1253,6 @@ write_csv(us_can_wide,"final_figures/usa_canada_comparison_eBird_existing_w_EDR.
 
 
 trend_effect_out <- NULL
-inds_out <- NULL
 vers <- ""
 for(sp_sel in c("Western Meadowlark","Baird's Sparrow","Brown Creeper",
                 "Canyon Wren",
@@ -1284,140 +1283,29 @@ for(sp_sel in c("Western Meadowlark","Baird's Sparrow","Brown Creeper",
 
 strata_population_posterior <- readRDS(paste0("output/strata_population_posterior_",vers,sp_aou,"_",sp_ebird,".rds"))
 
+    mean_pops <- strata_population_posterior %>%
+      group_by(year,.draw) %>%
+      summarise(pop = sum(population),.groups = "drop") %>%
+      group_by(.draw) %>%
+      summarise(mean_pop = mean(pop), .groups = "drop") #%>%
 
-
-
-
-
-    strats <- raw_dat %>%
-      select(strata_name,strata) %>%
-      distinct() %>%
-      arrange(strata)
-
-    n_yr <- max(raw_dat$yr)
-    n_strat <- max(raw_dat$strata)
-    fyr <- min(raw_dat$year)
-
-
-    yrs <- data.frame(year = fyr:(fyr+n_yr-1),
-                      yr = 1:n_yr)
-
-    yr22 <- yrs %>%
+    mean_pops22 <- strata_population_posterior %>%
       filter(year == yr_ebird) %>%
-      select(yr) %>%
-      unlist() %>%
-      unname()
+      group_by(.draw) %>%
+      summarise(pop = sum(population),.groups = "drop")
 
-    pop_ests <- read_csv(paste0("estimates/pop_ests_alt_",vers,sp_aou,sp_ebird,".csv")) %>%
-      filter(region_type == "strata")
-
-    pop_ests <- pop_ests %>%
-      left_join(strats,by = c("strata_name"))%>%
-      mutate(w_bbs = ifelse(is.na(strata),FALSE,TRUE))
-
-    p_2022_w_bbs <- pop_ests %>%
-      group_by(w_bbs) %>%
-      summarise(pop = sum(pop_median)) %>%
-      mutate(p_pop = pop/sum(pop))
-
-    time_series <- pop_ests %>%
-      filter(!is.na(strata)) %>%
-      expand_grid(yrs)
-
-
-    year_draws <- gather_draws(fit, yeareffect[strata,yr]) %>%
-      mutate(.draw = factor(.draw))
-
-
-    time_series <- time_series %>%
-      inner_join(year_draws, by = c("strata","yr")) %>%
-      mutate(pop_time = pop_median*exp(.value)) %>%
-      ungroup()
-
-    inds_strat <- time_series %>%
-      group_by(species,species_ebird,
-               region,region_type,strata_name,country,country_code,prov_state,bcr,
-               year,yr) %>%
-      summarise(med = median(pop_time),
-                lci = quantile(pop_time,0.05),
-                uci = quantile(pop_time,0.95),
-                .groups = "drop")
-
-    inds_all <- time_series %>%
-      group_by(species,species_ebird,
-               year,yr,
-               .draw) %>%
-      summarise(pop_time = sum(pop_time),
-                .groups = "drop") %>%
-      group_by(species,species_ebird,
-               year,yr) %>%
-      summarise(med = median(pop_time),
-                lci = quantile(pop_time,0.05),
-                uci = quantile(pop_time,0.95),
-                .groups = "drop") %>%
-      mutate(region = "Survey wide")
-
-
-    yr_rest <- time_series %>%
-      group_by(species,species_ebird,
-               year,
-               .draw) %>%
-      summarise(pop_time_s = sum(pop_time),
-                .groups = "drop") %>%
-      group_by(species,species_ebird,
-               .draw) %>%
-      summarise(pop_time_s = mean(pop_time_s),
-                .groups = "drop") %>%
-      group_by(species,species_ebird) %>%
-      summarise(med = median(pop_time_s),
-                lci = quantile(pop_time_s,0.05),
-                uci = quantile(pop_time_s,0.95),
-                .groups = "drop")%>%
-      mutate(yr_eBird = FALSE)
-
-    yr_22 <- time_series %>%
-      filter(year == yr_ebird) %>%
-      group_by(species,species_ebird,
-               .draw) %>%
-      summarise(pop_time_s = sum(pop_time),
-                .groups = "drop") %>%
-      group_by(species,species_ebird) %>%
-      summarise(med = median(pop_time_s),
-                lci = quantile(pop_time_s,0.05),
-                uci = quantile(pop_time_s,0.95),.groups = "drop") %>%
-      mutate(yr_eBird = TRUE)
-
-
-
-    yr_22[1,"med"]/yr_rest[1,"med"]
-
-    trend_effect <- bind_rows(yr_rest,yr_22) %>%
+    trend_effect <- inner_join(mean_pops22,mean_pops,
+                               by = ".draw") %>%
+      mutate(p_22 = pop/mean_pop) %>%
+      summarise(median_proportion = median(p_22),
+                mean_proportion = mean(p_22),
+                lci_proportion = quantile(p_22,0.025),
+                uci_proportion = quantile(p_22,0.975)) %>%
       mutate(species = sp_sel,
              sp_eBird = sp_ebird)
 
-    tmp <- ggplot(data = inds_all, aes(x = year, y = med))+
-      geom_ribbon(aes(ymin = lci,ymax = uci),
-                  alpha = 0.2)+
-      geom_line()+
-      scale_y_continuous(limits = c(0,NA),
-                         labels = scales::unit_format(unit = "M", scale = 1e-6))+
-      theme_bw()+
-      labs(title = paste(sp_sel, "\n excluding",round(unlist(unname(p_2022_w_bbs[p_2022_w_bbs$w_bbs == FALSE,"p_pop"])),3)*100,
-                         "Percent of USA+Canada population outside BBS monitored strata"),
-           subtitle = paste(round(as.numeric(yr_22[1,"med"]/yr_rest[1,"med"]),2),
-                            "expected difference in 2022 population from average 2013-2023"))+
-      xlab("")+
-      ylab("Annual population size \n in BBS surveyed range")
 
-    print(tmp)
-
-    pdf(paste0("figures/pop_trajectory_",sp_ebird,".pdf"))
-    print(tmp)
-    dev.off()
-
-
-    trend_effect_out <- bind_rows(trend_effect_out,trend_effect)
-    inds_out <- bind_rows(inds_out,inds_strat,inds_all)
+       trend_effect_out <- bind_rows(trend_effect_out,trend_effect)
 
 
   }
@@ -1425,75 +1313,99 @@ strata_population_posterior <- readRDS(paste0("output/strata_population_posterio
 }
 
 trend_effects <- trend_effect_out %>%
-  select(-c(lci,uci)) %>%
-  pivot_wider(values_from = c(med),
-              names_from = yr_eBird,
-              names_prefix = "y") %>%
-  rename(yr_2022 = yTRUE,
-         yr_others = yFALSE) %>%
-  mutate(ratio = yr_2022/yr_others,
-         log_ratio = log(ratio))
+  mutate(log_ratio = log(mean_proportion))
 
 
 write_csv(trend_effects,"final_figures/trend_effect_summaries.csv")
-saveRDS(inds_out,"final_figures/species_population_trajectories.rds")
 
-sampl_bias <- readRDS("final_figures/example_species_strata_sampling_bias.rds")
+
+
+
+
+
+
+# USA-Canada population trajectories --------------------------------------
+source("functions/hpdi.R")
+
+
+inds_out <- NULL
+vers <- ""
+for(sp_sel in c("Western Meadowlark","Baird's Sparrow","Brown Creeper",
+                "Canyon Wren",
+                "Black-capped Chickadee","American Robin",
+                "Barn Swallow",
+                "Blackpoll Warbler",
+                "Mountain Bluebird",
+                "Eastern Phoebe",
+                "Rose-breasted Grosbeak",
+                "Downy Woodpecker",
+                "Red-winged Blackbird",
+                "Scarlet Tanager",
+                "Say's Phoebe",
+                "Black-chinned Hummingbird"
+)){
+
+  sp_aou <- bbsBayes2::search_species(sp_sel)$aou[1]
+  sp_ebird <- ebirdst::get_species(sp_sel)
+
+strata_population_posterior <- readRDS(paste0("output/strata_population_posterior_",vers,sp_aou,"_",sp_ebird,".rds"))
+
+
+USA_CAN_trajectories <- strata_population_posterior %>%
+  group_by( year, .draw) %>%
+  summarise(population = sum(population)) %>%
+  group_by(year) %>%
+  summarise(pop_mean = mean(population),
+            pop_median = median(population),
+            pop_lci_80 = interval_function_hpdi(population,probs = 0.1),
+            pop_uci_80 = interval_function_hpdi(population,probs = 0.9),
+            pop_lci_95 = interval_function_hpdi(population,probs = 0.025),
+            pop_uci_95 = interval_function_hpdi(population,probs = 0.975)) %>%
+  mutate(species = sp_sel,
+         species_ebird = sp_ebird,
+         region = "USA-Canada")
+
+inds_out <- bind_rows(inds_out,
+                      USA_CAN_trajectories)
+
+}
+
+
+saveRDS(inds_out,"final_figures/species_population_trajectories.rds")
 
 
 inds_out <- readRDS("final_figures/species_population_trajectories.rds")
 
-# bias_sel <- sampl_bias %>%
-#   filter(species == "Canyon Wren",
-#          !is.na(mean_ebird_abundance),
-#          mean_ebird_abundance > 0) %>%
-#   select(strata_name,log_ratio)
-#
-# strata_trajs <- inds_out %>%
-#   filter(species == "Canyon Wren",
-#          region_type == "strata")  %>%
-#   full_join(bias_sel, by = c("region" = "strata_name")) %>%
-#   mutate(ratio_log = log_ratio)
-#
-#
-#
-#
-#
-#   traj_p <- ggplot(data = strata_trajs,
-#                  aes(x = year, y = med,
-#                      group = region,
-#                      colour = ratio_log))+
-#   geom_line()+
-#   scale_y_continuous(limits = c(100,NA),
-#                      transform = "log10",
-#                      labels = scales::unit_format(unit = "M", scale = 1e-6))+
-#   theme_bw()+
-#     scale_colour_viridis_c(option = "turbo", direction = -1)
-#
-# traj_p
+inds_plot <- inds_out %>%
+  filter(species %in% c("American Robin","Canyon Wren"))
 
-ind_sel <- inds_out %>%
-  filter(species == "Canyon Wren",
-         region == "Survey wide")
+inds_22 <- inds_plot %>%
+  filter(year == yr_ebird)
 
-tmp <- ggplot(data = ind_sel, aes(x = year, y = med))+
-  geom_ribbon(aes(ymin = lci,ymax = uci),
-              alpha = 0.2)+
+
+trajs <- ggplot(data = inds_plot,
+                aes(x = year,y=pop_median))+
+  geom_ribbon(aes(ymin = pop_lci_80,ymax = pop_uci_80),
+              alpha = 0.5)+
   geom_line()+
+  geom_pointrange(data = inds_22,aes(ymin = pop_lci_80,ymax = pop_uci_80),
+                  size = 0.4)+
   scale_y_continuous(limits = c(0,NA),
-                     labels = scales::unit_format(unit = "M", scale = 1e-6))+
-  theme_bw()+
-  xlab("")+
-  ylab("Annual population size \n in BBS surveyed range")
+                     labels = scales::unit_format(unit = "M", scale = 1e-6),
+                     name = "Population size USA and Canada",
+                     expand = expansion(mult = c(0,0.05)))+
+  scale_x_continuous(breaks = seq(2013,2023,2), name = "")+
+  facet_wrap(nrow = 2,vars(species),
+             scales = "free")+
+
+  theme_bw()
 
 
-tmp
-
-
-
-
-
-
+pdf("Final_figures/times_series_example.pdf",
+    width = 3.5,
+    height = 5)
+print(trajs)
+dev.off()
 
 
 # Figure example strata compare -------------------------------------------
@@ -1528,5 +1440,124 @@ print(pl2)
 dev.off()
 
 
+
+
+
+# abundance maps ----------------------------------------------------------
+
+
+library(patchwork)
+library(ggtext)
+library(tidyverse)
+library(terra)
+library(sf)
+library(tidyterra)
+
+vers <- ""
+for(sp_sel in c("American Robin","Canyon Wren")){
+  sp_aou <- bbsBayes2::search_species(sp_sel)$aou[1]
+  sp_ebird <- ebirdst::get_species(sp_sel)
+
+  load(paste0("figures/saved_ggplots/abund_map_alt_",vers,sp_aou,"_",sp_ebird,".rdata"))
+  cali_use <- readRDS(paste0("output/calibration_",vers,sp_aou,"_",sp_ebird,".rds"))
+
+
+  breed_abundance <- readRDS(paste0("data/species_relative_abundance/",
+                                    sp_ebird,
+                                    "_derived_breeding_relative_abundance.rds"))
+
+  names(breed_abundance) <- "breeding_abundance"
+  breed_abundance_plot <- breed_abundance
+  names(breed_abundance_plot) <- "breeding"
+
+  breed_abundance_plot <- breed_abundance_plot %>%
+    #st_transform(crs = st_crs(strata)) %>%
+    mutate(.,breeding = ifelse(breeding == 0,NA,breeding),
+           breeding = (breeding*mean(cali_use$calibration))/9) # per km2 mean density
+
+
+
+
+if(sp_sel == "American Robin"){
+countries_plot_amro <- countries_plot
+breed_abundance_plot_amro <- breed_abundance_plot
+bcrs_plot_amro <- bcrs_plot
+bb_amro <- bb
+bb_amro["ymin"] <- bb_amro["ymin"]-800000
+bb_amro["ymax"] <- bb_amro["ymax"]-400000
+
+
+abund_map_amro <- ggplot()+
+  geom_sf(data = countries_plot_amro, fill = NA)+
+  geom_spatraster(data = breed_abundance_plot_amro,
+                  maxcell = 16000000)+
+  geom_sf(data = bcrs_plot_amro, fill = NA)+
+  # geom_sf_text(data = bcrs_plot,aes(label = BCR),
+  #              size = 3)+
+  #geom_sf(data = routes_buf,aes(colour = mean_count),fill = NA)+
+  coord_sf(xlim = c(bb_amro[c("xmin","xmax")]),
+           ylim = c(bb_amro[c("ymin","ymax")]))+
+  #scale_fill_gradientn(12,colours = terrain.colors(12),na.value = NA)+
+  scale_fill_viridis_c(direction = -1,
+                       option = "G",
+                       na.value = NA,
+                       end = 0.9,
+                       name = paste0(sp_sel,"<br>Birds km<sup>-2</sup>"))+
+  xlab("")+
+  ylab("")+
+  theme_bw()+
+  theme(legend.title = element_markdown(),
+        legend.position = "bottom")+
+  labs(title = paste(sp_sel))
+
+
+}else{
+  countries_plot_cawr <- countries_plot
+  breed_abundance_plot_cawr <- breed_abundance_plot
+  bcrs_plot_cawr <- bcrs_plot
+  bb_cawr <- bb
+  bb_cawr["ymin"] <- bb_cawr["ymin"]-1000000
+  bb_cawr["ymax"] <- bb_cawr["ymax"]-800000
+
+  abund_map_cawr <- ggplot()+
+    geom_sf(data = countries_plot_cawr, fill = NA)+
+    geom_spatraster(data = breed_abundance_plot_cawr,
+                    maxcell = 16000000)+
+    geom_sf(data = bcrs_plot_cawr, fill = NA)+
+    # geom_sf_text(data = bcrs_plot,aes(label = BCR),
+    #              size = 3)+
+    #geom_sf(data = routes_buf,aes(colour = mean_count),fill = NA)+
+    coord_sf(xlim = c(bb_cawr[c("xmin","xmax")]),
+             ylim = c(bb_cawr[c("ymin","ymax")]))+
+    #scale_fill_gradientn(12,colours = terrain.colors(12),na.value = NA)+
+    scale_fill_viridis_c(direction = -1,
+                         option = "G",
+                         na.value = NA,
+                         end = 0.9,
+                         name = paste0(sp_sel,"<br>Birds km<sup>-2</sup>"))+
+    xlab("")+
+    ylab("")+
+    theme_bw()+
+    theme(legend.title = element_markdown(),
+          legend.position = "bottom")+
+    labs(title = paste(sp_sel))
+
+
+}
+
+
+#
+
+
+}
+
+
+pl2 <- abund_map_amro+abund_map_cawr+
+  plot_layout(ncol = 2)
+
+pdf("Final_figures/abundance_maps_demo.pdf",
+    width = 7, height = 5)
+print(pl2)
+dev.off()
 
 
