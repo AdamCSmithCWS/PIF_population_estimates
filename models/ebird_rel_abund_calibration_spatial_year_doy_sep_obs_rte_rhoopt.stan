@@ -13,8 +13,8 @@
 
 
 // data here are the raw BBS counts
-// density factors from PIF population estimates
-// mean eBird relative abundance values from within BBS route-path buffers
+// adjustmen factors from PIF population estimates
+// log mean eBird relative abundance values from within BBS route-path buffers
 data {
   int<lower=1> n_routes; // number of BBS routes in species seasonal range
   int<lower=1> n_obs; // number of BBS observers in species seasonal range
@@ -22,31 +22,29 @@ data {
   int<lower=1> n_counts; // number of counts from those routes over last 10-years
   int<lower=1> n_years;
   int<lower=1> ebird_year; // index of year for the eBird relative abundance surface
-  array[ebird_year-1] int<lower=1> yrev; // reverse year vector (ebird_year-1):1
+  array[ebird_year-1] int<lower=1> yrev; // reverse year vector (ebird_year-1):1 (necessary for Stan indexing)
   int<lower=1> n_doy; // number of unique values of doy (max(doy))
   int<lower=1> n_strata; // number of unique values of doy (max(doy))
-  int<lower=1> mean_doy;
+  int<lower=1> mean_doy; // mean day of year across all BBS surveys
 
   array[n_counts] int<lower=0> count; // Raw BBS counts
   array[n_counts] int<lower=1> route; // route indicators for counts
   array[n_counts] int<lower=1> observer; // observer indicators for counts
   array[n_counts] int<lower=1> year; // year indicators for counts
   array[n_counts] int<lower=1> doy; // doy indicators for counts
-  array[n_counts] int<lower=1> strata; // strata indicators for route (to support varying doy effect)
+  array[n_counts] int<lower=1> strata; // strata indicators for route (to support varying doy effect and trend)
+  // predictor
   vector[n_routes] log_mean_rel_abund; // log-transformed mean relative abund within BBS route buffers
 
 
 
 // spatial varying time series components
   array[n_years] int<lower=0> y_2020; //indicators for 2020 = 0 if 2020 and missing if fixed_year
-  // a vector of zeros to fill fixed beta values for fixed_year
-  vector[n_strata] zero_gammas;
+  vector[n_strata] zero_gammas;   // a vector of zeros to fill fixed beta values for fixed_year
   //data for spatial iCAR among strata
   int<lower=1> n_edges;
   array [n_edges] int<lower=1, upper=n_strata> node1;  // node1[i] adjacent to node2[i]
   array [n_edges] int<lower=1, upper=n_strata> node2;  // and node1[i] < node2[i]
-
-
 
 
 // spline components for doy
@@ -54,7 +52,7 @@ data {
   matrix[n_doy, n_knots_doy] doy_basis; // basis function matrix
 
 
-// PIF population correction factors
+// PIF adjustment factors
   real c_p; // mean of pair correction values
   real sd_c_p; // sd of pair correction values
 
@@ -77,6 +75,7 @@ data {
   int<lower=0,upper=1> use_pair; //indicator if pair-correction should be used
   int<lower=0,upper=1> use_t; //indicator if route variation should be based on heavy tailed t-distribution instead of a normal
   int<lower=0,upper=1> est_rho; //indicator if model should estimate slope of log-log relationship or leave it fixed at 1.0
+  int<lower=0,upper=1> use_ppc; //indicator if model should generate posterior predictions
 
 }
 
@@ -113,18 +112,18 @@ parameters {
 
 transformed parameters{
 
-  vector[n_routes] beta; //
-  vector[n_obs] obs; //
-  vector[n_counts] E;
+  vector[n_routes] beta; // route-level intercepts (on linear scale these are multiplicative scaling factors for the predictor)
+  vector[n_obs] obs; // observer effects
+  vector[n_counts] E; // log-scale expected counts
   real<lower=0> phi; //transformed sdnoise if use_pois == 0 (and therefore Negative Binomial)
-  matrix[n_doy,n_strata] doy_pred;
-  vector[n_doy] DOY_pred;
-  vector[n_knots_doy] DOY_b;         // GAM coefficients
+  matrix[n_doy,n_strata] doy_pred; // predictions for day of year effect in each stratum
+  vector[n_doy] DOY_pred; // global mean for day of year effect
+  vector[n_knots_doy] DOY_b;         // GAM coefficients hyperparameter on day of year effect
   matrix[n_strata,n_knots_doy] doy_b;         // GAM strata level parameters
-  vector[n_years] GAMMA;
-  matrix[n_strata,n_years] gamma;         // strata-level mean differences (0-centered deviation from continental mean BETA)
+  vector[n_years] GAMMA;  // hyperparameter of annual differences
+  matrix[n_strata,n_years] gamma;         // strata-level mean differences (0-centered deviation from continental mean GAMMA)
   matrix[n_strata,n_years] yeareffect;  // matrix of estimated annual values of trajectory
-  vector[n_years] YearEffect;
+  vector[n_years] YearEffect; // hyperparameter for population-wide annual trajectory
   real RHO; // slope of the log-log relationship - used as a check, not for inference
 
 
@@ -264,7 +263,6 @@ if(use_pois){
   count ~ poisson_log(E); //vectorized count likelihood with log-transformation
 }else{
    count ~ neg_binomial_2_log(E,phi); //vectorized count likelihood with log-transformation
-
 }
 
 
@@ -305,10 +303,11 @@ if(use_t){
 }
 
 // posterior predictive check
+if(use_ppc){
 for(i in 1:n_counts){
 y_rep[i] = neg_binomial_2_log_rng(beta[route[i]] + obs[observer[i]] + doy_pred[doy[i],strata[i]] + yeareffect[strata[i],year[i]] + RHO*log_mean_rel_abund[route[i]],phi);
 }
-
+}
 // ridiculous work around to allow for the limits on pair correction
 
   if(use_pair){
@@ -382,5 +381,6 @@ for(y in 1:n_years){
   raw_prediction[y,1] = exp(RHO*min(log_mean_rel_abund) + BETA + 0.5*(sd_beta)^2 + YearEffect[y] );
   raw_prediction[y,2] = exp(RHO*max(log_mean_rel_abund) + BETA + 0.5*(sd_beta)^2 + YearEffect[y] );
 }
+
 
 }

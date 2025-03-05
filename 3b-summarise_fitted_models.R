@@ -14,6 +14,10 @@ library(doParallel)
 library(foreach)
 library(HDInterval)
 
+source("functions/hpdi.R")
+source("functions/posterior_abundance.R")
+
+
 if(Sys.info()[["nodename"]] == "WNCRLABN72960"){
 setwd("c:/Users/SmithAC/Documents/GitHub/PIF_population_estimates")
 }
@@ -363,93 +367,11 @@ for(i in 1:nrow(cali_route_post)){
 }
 
 
+saveRDS(cali_trim_post,paste0("estimates/calibration_posterior_",vers,sp_aou,"_",sp_ebird,".rds"))
+
 
 
 # calculating population --------------------------------------------------
-
-
-# function to calculate the highest posterior density interval for the quantiles
-# these intervals are often a better descriptor of skewed posterior distributions
-interval_function_hpdi <- function(x,probs, names = FALSE){
-  y <- vector("numeric",length = length(probs))
-  if(names){
-    names(y) <- paste0(probs*100,"%")
-  }
-  for(j in 1:length(probs)){
-    prob <- probs[j]
-    if(prob > 0.67 | prob < 0.33){
-      if(prob < 0.33){
-        q2 <- 1-(prob*2)
-        i <- 1
-      }else{
-        q2 <- 1-((1-prob)*2)
-        i <- 2
-      }
-      y[j] <- HDInterval::hdi(x,q2)[i]
-    }else{
-      y[j] <- stats::quantile(x,prob)
-    }
-  }
-  return(y)
-}
-## function to estimate full posterior of abundance
-
-post_abund <- function(x, #data frame with summed relative abundance within a given region.
-                       draws = cali_use$calibration, # posterior draws of caslibration
-                       fun = "mean", # summary statistic to return alternates are "median", "quantile" or "hpdi"
-                       p = 0.025,
-                       use_log = FALSE){
-
-  y <- vector("numeric",length(x))
-
-  if(use_log){
-    xl <- log(x)
-  }
-  if(fun == "mean"){
-    for(i in 1:length(x)){
-      if(use_log){
-        y[i] <- exp(mean(xl[i]+as.numeric(draws)))
-      }else{
-        y[i] <- mean(x[i]*as.numeric(draws))
-      }
-    }
-  }
-
-  if(fun == "median"){
-    for(i in 1:length(x)){
-      if(use_log){
-        y[i] <- exp(median(xl[i]+as.numeric(draws)))
-      }else{
-        y[i] <- median(x[i]*as.numeric(draws))
-      }
-    }
-  }
-
-  if(fun == "hpdi"){
-    for(i in 1:length(x)){
-      if(use_log){
-        y[i] <- exp(interval_function_hpdi(xl[i]+as.numeric(draws),p, names = FALSE))
-
-      }else{
-        y[i] <- interval_function_hpdi(x[i]*as.numeric(draws),p, names = FALSE)
-      }
-    }
-  }
-
-
-  if(fun == "quantile"){
-    for(i in 1:length(x)){
-      if(use_log){
-        y[i] <- exp(quantile(xl[i]+as.numeric(draws),p, names = FALSE))
-
-      }else{
-        y[i] <- quantile(x[i]*as.numeric(draws),p, names = FALSE)
-      }
-    }
-  }
-
-  return(y)
-}
 
 
 # load relative abundance surface -----------------------------------------
@@ -473,7 +395,7 @@ breed_abundance_full <- breed_abundance
 strata_proj <- st_transform(strata,
                             crs = st_crs(breed_abundance))
 
-## extract the sum of the relative abundance surface in the region
+## extract the sum of the relative abundance surface in each region
 abundance_in_strata <- terra::extract(breed_abundance_full,
                                       strata_proj,
                                        fun = sum,
@@ -527,7 +449,119 @@ strata_abund <- strata_abund %>%
             by = "strata_name")
 
 
-# compare to traditional estimates ----------------------------------------
+
+
+# Annual strata-level abundances ------------------------------------------
+strats <- combined %>%
+  select(strata_name,strata) %>%
+  distinct() %>%
+  arrange(strata)
+
+n_yr <- max(combined$yr)
+n_strat <- max(combined$strata)
+fyr <- min(combined$year)
+
+
+yrs <- data.frame(year = fyr:(fyr+n_yr-1),
+                  yr = 1:n_yr)
+
+time_series <- expand_grid(yrs,strats)
+
+
+year_draws <- gather_draws(fit, yeareffect[strata,yr]) %>%
+  inner_join(strats)
+
+cali_use_y <- expand_grid(cali_use,yrs) %>%
+    inner_join(year_draws,
+               by = c("yr",".draw",".iteration",".chain"))
+
+
+
+
+
+
+  strata_population_posterior <- data.frame(region = strata_proj$strata_name,
+                             region_type = "strata",
+                             sum_abund = 3^2 * unlist(abundance_in_strata[[2]])) %>%
+    filter(!is.na(sum_abund)) %>%
+    expand_grid(yrs) %>%
+    inner_join(cali_use_y,
+               by = c("region" = "strata_name",
+                      "yr","year")) %>%
+    mutate(population = sum_abund*calibration*exp(.value),
+           species = sp_sel,
+           species_ebird = sp_ebird,
+           strata_name = region) %>%
+    left_join(.,strata_names,
+              by = "strata_name")
+
+
+
+
+  saveRDS(strata_population_posterior,
+          paste0("output/strata_population_posterior_",vers,sp_aou,"_",sp_ebird,".rds"))
+
+
+
+  ### 3^2 scaling is to account for the area of each grid-cell 9-km^2
+  ###
+
+  strata_trajectories <- strata_population_posterior %>%
+    group_by(region, region_type, year) %>%
+  summarise(pop_mean = mean(population),
+            pop_median = median(population),
+            pop_lci_80 = interval_function_hpdi(population,probs = 0.1),
+            pop_uci_80 = interval_function_hpdi(population,probs = 0.9),
+            pop_lci_95 = interval_function_hpdi(population,probs = 0.025),
+            pop_uci_95 = interval_function_hpdi(population,probs = 0.975))
+
+
+
+  traj_plot <- ggplot(data = strata_trajectories,
+                 aes(x = year,y = pop_median))+
+    geom_ribbon(aes(ymin = pop_lci_80,ymax = pop_uci_80),
+                alpha = 0.3)+
+    geom_line()+
+    facet_wrap(vars(region),
+               scales = "free")
+
+  traj_plot
+
+  saveRDS(traj_plot,paste0("figures/saved_ggplots/abund_trajectory_strata_",vers,sp_aou,"_",sp_ebird,".rds"))
+  # compare to traditional estimates ----------------------------------------
+
+
+  USA_CAN_trajectories <- strata_population_posterior %>%
+    group_by(country, country_code, year, .draw) %>%
+    summarise(population = sum(population)) %>%
+    group_by(country,country_code,year) %>%
+    summarise(pop_mean = mean(population),
+              pop_median = median(population),
+              pop_lci_80 = interval_function_hpdi(population,probs = 0.1),
+              pop_uci_80 = interval_function_hpdi(population,probs = 0.9),
+              pop_lci_95 = interval_function_hpdi(population,probs = 0.025),
+              pop_uci_95 = interval_function_hpdi(population,probs = 0.975))
+
+
+
+  traj_plot <- ggplot(data = USA_CAN_trajectories,
+                      aes(x = year,y = pop_median))+
+    geom_ribbon(aes(ymin = pop_lci_80,ymax = pop_uci_80),
+                alpha = 0.3)+
+    geom_line()+
+    scale_y_continuous(limits = c(0,NA),
+                       labels = scales::unit_format(unit = "M", scale = 1e-6))+
+    scale_x_continuous(breaks = seq(2013,2023,2))+
+    xlab("")+
+    ylab("Annual population size\nUnited States of America and Canada")+
+    labs(title = sp_sel)+
+    theme_bw()
+
+
+  traj_plot
+
+saveRDS(traj_plot,paste0("figures/saved_ggplots/abund_trajectory_",vers,sp_aou,"_",sp_ebird,".rds"))
+  # compare to traditional estimates ----------------------------------------
 
 strata_trad_j <- strata_trad %>%
   select(st_abrev,
@@ -598,75 +632,6 @@ pdf(paste0("Final_figures/comp_trad_new_alt_",vers,sp_aou,"_",sp_ebird,".pdf"),
     width = 7)
 print(comp_trad_new_plot)
 dev.off()
-
-re_do_map <- TRUE #option to skip because they take a long time.
-if(re_do_map){
-# abund_mapable <- breed_abundance %>%
-#   terra::project(.,"EPSG:9822")
-strat_sel <- strata_compare %>%
-  filter((pop_median > 0 |
-           med.PopEst > 0) &
-  !is.na(strata_name)) %>%
-  select(strata_name)
-
-strata_w_data <- strata %>%
-  filter(strata_name %in% strat_sel$strata_name)
-
-bb <- sf::st_bbox(strata_w_data)
-
-breed_abundance_plot <- breed_abundance
-names(breed_abundance_plot) <- "breeding"
-breed_abundance_plot <- breed_abundance_plot %>%
-  mutate(.,breeding = ifelse(breeding == 0,NA,breeding),
-         breeding = (breeding*mean(cali_use$calibration))/900) # per hectare mean density
-
-# Mapping -----------------------------------------------------------------
-
-
-abund_map <- ggplot()+
-  geom_sf(data = strata, fill = grey(0.95))+
-  geom_spatraster(data = breed_abundance_plot,
-                  maxcell = 16000000)+
-  geom_sf(data = strata, fill = NA)+
-  geom_sf_text(data = strata,aes(label = strata_name),
-               size = 1)+
-  geom_sf(data = routes_buf,aes(colour = mean_count),fill = NA)+
-  coord_sf(xlim = c(bb[c("xmin","xmax")]),
-           ylim = c(bb[c("ymin","ymax")]))+
-  #scale_fill_gradientn(12,colours = terrain.colors(12),na.value = NA)+
-  scale_fill_viridis_c(direction = -1,
-                       option = "G",
-                       na.value = NA,
-                       end = 0.9,
-                       name = "Birds/hectare")+
-  scale_colour_viridis_c(direction = -1,
-                       option = "rocket",
-                       na.value = NA,
-                       end = 0.9,
-                       begin = 0.1,
-                       name = "Mean count BBS")+
-  xlab("")+
-  ylab("")+
-  theme_bw()+
-  labs(title = paste(sp_sel))
-
-
-#
-
-png(filename = paste0("Figures/abund_map_alt_",vers,sp_aou,"_",sp_ebird,".png"),
-    res = 400,
-    height = 7,
-    width = 6.5,
-    units = "in")
-print(abund_map)
-dev.off()
-saveRDS(abund_map,paste0("figures/saved_ggplots/abund_map_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
-
-}
-
-saveRDS(comp_trad_new_plot,paste0("figures/saved_ggplots/trad_vs_new_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
-saveRDS(strata_compare,paste0("estimates/strata_comparison_",vers,sp_aou,"_",sp_ebird,".rds"))
-
 
 
 
@@ -764,7 +729,93 @@ bcr_abund <- data.frame(region = as.character(bcr_proj$BCR[abundance_in_bcr$ID])
          species = sp_sel,
          species_ebird = sp_ebird)
 
-bcr_abund
+#bcr_abund
+
+
+
+# mapping with BCR extent -------------------------------------------------
+
+
+
+re_do_map <- TRUE #option to skip because they take a long time.
+if(re_do_map){
+  # abund_mapable <- breed_abundance %>%
+  #   terra::project(.,"EPSG:9822")
+
+  bcrs_w_pop <- bcr_abund %>%
+    filter(pop_median > 0)
+
+  bcrs_plot <- bcrs %>%
+    st_transform(crs = st_crs(strata)) %>%
+    filter(BCR %in% bcrs_w_pop$region)
+
+countries_plot <- countries %>%
+  st_transform(crs = st_crs(strata)) %>%
+  filter(CC == "NA")
+
+strata_w_pop <- strata_abund %>%
+  filter(sum_abund > 0)
+
+strata_bound <- strata %>%
+  filter(strata_name %in% strata_w_pop$region)
+
+bb <- sf::st_bbox(strata_bound)
+
+  breed_abundance_plot <- breed_abundance
+  names(breed_abundance_plot) <- "breeding"
+  breed_abundance_plot <- breed_abundance_plot %>%
+    #st_transform(crs = st_crs(strata)) %>%
+    mutate(.,breeding = ifelse(breeding == 0,NA,breeding),
+           breeding = (breeding*mean(cali_use$calibration))/900) # per hectare mean density
+
+
+  # Mapping -----------------------------------------------------------------
+
+
+  abund_map <- ggplot()+
+    geom_sf(data = countries_plot, fill = NA)+
+    geom_spatraster(data = breed_abundance_plot,
+                    maxcell = 16000000)+
+    geom_sf(data = bcrs_plot, fill = NA)+
+    # geom_sf_text(data = bcrs_plot,aes(label = BCR),
+    #              size = 3)+
+    geom_sf(data = routes_buf,aes(colour = mean_count),fill = NA)+
+    coord_sf(xlim = c(bb[c("xmin","xmax")]),
+             ylim = c(bb[c("ymin","ymax")]))+
+    #scale_fill_gradientn(12,colours = terrain.colors(12),na.value = NA)+
+    scale_fill_viridis_c(direction = -1,
+                         option = "G",
+                         na.value = NA,
+                         end = 0.9,
+                         name = "Birds/hectare")+
+    scale_colour_viridis_c(direction = -1,
+                           option = "rocket",
+                           na.value = NA,
+                           end = 0.9,
+                           begin = 0.1,
+                           name = "Mean count BBS")+
+    xlab("")+
+    ylab("")+
+    theme_bw()+
+    labs(title = paste(sp_sel))
+
+
+  #
+
+  png(filename = paste0("Figures/abund_map_alt_",vers,sp_aou,"_",sp_ebird,".png"),
+      res = 400,
+      height = 7,
+      width = 6.5,
+      units = "in")
+  print(abund_map)
+  dev.off()
+  saveRDS(abund_map,paste0("figures/saved_ggplots/abund_map_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
+
+}
+
+saveRDS(comp_trad_new_plot,paste0("figures/saved_ggplots/trad_vs_new_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
+saveRDS(strata_compare,paste0("estimates/strata_comparison_",vers,sp_aou,"_",sp_ebird,".rds"))
+
 
 
 
@@ -936,6 +987,87 @@ side_plot <- ggplot(data = pop_compare_stack_sel,
 
 saveRDS(side_plot,paste0("figures/saved_ggplots/side_plot_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
 
+
+
+
+}
+
+
+
+# strata population trajectories ------------------------------------------
+
+
+trend_effect_out <- NULL
+inds_out <- NULL
+vers <- ""
+for(sp_sel in c("Western Meadowlark","Baird's Sparrow","Brown Creeper",
+                "Canyon Wren",
+                "Black-capped Chickadee","American Robin",
+                "Barn Swallow",
+                "Blackpoll Warbler",
+                "Mountain Bluebird",
+                "Eastern Phoebe",
+                "Rose-breasted Grosbeak",
+                "Downy Woodpecker",
+                "Red-winged Blackbird",
+                "Scarlet Tanager",
+                "Say's Phoebe",
+                "Black-chinned Hummingbird"
+)){
+
+  sp_aou <- bbsBayes2::search_species(sp_sel)$aou[1]
+  sp_ebird <- ebirdst::get_species(sp_sel)
+
+  if(file.exists(paste0(output_dir,"/calibration_fit_alt_",
+                        vers,sp_aou,"_",sp_ebird,".rds"))){
+
+    fit <- readRDS(paste0(output_dir,"/calibration_fit_alt_",
+                          vers,sp_aou,"_",sp_ebird,".rds"))
+
+    raw_dat <- readRDS(paste0("data/main_data_df_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
+    strats <- raw_dat %>%
+      select(strata_name,strata) %>%
+      distinct() %>%
+      arrange(strata)
+
+n_yr <- max(raw_dat$yr)
+n_strat <- max(raw_dat$strata)
+fyr <- min(raw_dat$year)
+
+
+yrs <- data.frame(year = fyr:(fyr+n_yr-1),
+                  yr = 1:n_yr)
+
+yr22 <- yrs %>%
+  filter(year == yr_ebird) %>%
+  select(yr) %>%
+  unlist() %>%
+  unname()
+
+
+
+
+
+
+
+pop_ests <- read_csv(paste0("estimates/pop_ests_alt_",vers,sp_aou,sp_ebird,".csv")) %>%
+  filter(region_type == "strata")
+
+pop_ests <- pop_ests %>%
+  left_join(strats,by = c("strata_name"))%>%
+  mutate(w_bbs = ifelse(is.na(strata),FALSE,TRUE))
+
+p_2022_w_bbs <- pop_ests %>%
+  group_by(w_bbs) %>%
+  summarise(pop = sum(pop_median)) %>%
+  mutate(p_pop = pop/sum(pop))
+
+time_series <- pop_ests %>%
+  filter(!is.na(strata)) %>%
+  expand_grid(yrs)
+
+
+}
 
  } #end of species loop
 #

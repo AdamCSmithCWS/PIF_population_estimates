@@ -1216,6 +1216,7 @@ for(sp_sel in c("Western Meadowlark","Baird's Sparrow","Brown Creeper",
 }
 
 
+
 us_can <- all_pop_ests %>%
   filter(region == "USACAN") %>%
   select(species,pop_median,pop_lci_80:pop_uci_95,
@@ -1279,6 +1280,15 @@ for(sp_sel in c("Western Meadowlark","Baird's Sparrow","Brown Creeper",
                           vers,sp_aou,"_",sp_ebird,".rds"))
 
     raw_dat <- readRDS(paste0("data/main_data_df_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
+
+
+strata_population_posterior <- readRDS(paste0("output/strata_population_posterior_",vers,sp_aou,"_",sp_ebird,".rds"))
+
+
+
+
+
+
     strats <- raw_dat %>%
       select(strata_name,strata) %>%
       distinct() %>%
@@ -1428,39 +1438,56 @@ trend_effects <- trend_effect_out %>%
 write_csv(trend_effects,"final_figures/trend_effect_summaries.csv")
 saveRDS(inds_out,"final_figures/species_population_trajectories.rds")
 
-
-bchu <- sampl_bias %>%
-  filter(species == "Black-chinned Hummingbird",
-         !is.na(mean_ebird_abundance),
-         mean_ebird_abundance > 0) %>%
-  select(strata_name,ratio_new_old)
-
-strata_trajs <- inds_out %>%
-  filter(species == "Black-chinned Hummingbird",
-         region_type == "strata")  %>%
-  full_join(bchu, by = c("region" = "strata_name")) %>%
-  mutate(ratio_log = log(ratio_new_old))
+sampl_bias <- readRDS("final_figures/example_species_strata_sampling_bias.rds")
 
 
+inds_out <- readRDS("final_figures/species_population_trajectories.rds")
 
+# bias_sel <- sampl_bias %>%
+#   filter(species == "Canyon Wren",
+#          !is.na(mean_ebird_abundance),
+#          mean_ebird_abundance > 0) %>%
+#   select(strata_name,log_ratio)
+#
+# strata_trajs <- inds_out %>%
+#   filter(species == "Canyon Wren",
+#          region_type == "strata")  %>%
+#   full_join(bias_sel, by = c("region" = "strata_name")) %>%
+#   mutate(ratio_log = log_ratio)
+#
+#
+#
+#
+#
+#   traj_p <- ggplot(data = strata_trajs,
+#                  aes(x = year, y = med,
+#                      group = region,
+#                      colour = ratio_log))+
+#   geom_line()+
+#   scale_y_continuous(limits = c(100,NA),
+#                      transform = "log10",
+#                      labels = scales::unit_format(unit = "M", scale = 1e-6))+
+#   theme_bw()+
+#     scale_colour_viridis_c(option = "turbo", direction = -1)
+#
+# traj_p
 
+ind_sel <- inds_out %>%
+  filter(species == "Canyon Wren",
+         region == "Survey wide")
 
-  traj_p <- ggplot(data = strata_trajs,
-                 aes(x = year, y = med,
-                     group = region,
-                     colour = ratio_log))+
+tmp <- ggplot(data = ind_sel, aes(x = year, y = med))+
+  geom_ribbon(aes(ymin = lci,ymax = uci),
+              alpha = 0.2)+
   geom_line()+
   scale_y_continuous(limits = c(0,NA),
                      labels = scales::unit_format(unit = "M", scale = 1e-6))+
   theme_bw()+
-    scale_colour_viridis_c(option = "turbo", direction = -1)
+  xlab("")+
+  ylab("Annual population size \n in BBS surveyed range")
 
-traj_p
 
-
-tmp <- strata_trajs %>%
-  filter(year %in% c(2013,2023))
-
+tmp
 
 
 
