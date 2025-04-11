@@ -793,12 +793,39 @@ Trats <- ExpAdjs %>%
   pivot_longer(cols = c(Tlr,Alr,clr),
                names_to = "adjustment",
                values_to = "LogRatio") %>%
-  mutate(factor = ifelse(adjustment == "Tlr",
+  mutate(adjfactor = ifelse(adjustment == "Tlr",
                          "Availability",
                          "Distance"),
-         factor = ifelse(adjustment == "clr",
+         adjfactor = ifelse(adjustment == "clr",
                          "Combined",
-                         factor))
+                         adjfactor),
+         adjfactor = factor(adjfactor,
+                            levels = c("Availability","Distance","Combined"),
+                         ordered = TRUE)) %>%
+  select(-adjustment)
+
+
+
+Trats2 <- ExpAdjs %>%
+  select(Species,cn,Tr,Ar,comb_r) %>%
+  pivot_longer(cols = c(Tr,Ar,comb_r),
+               names_to = "adjustment",
+               values_to = "Ratio") %>%
+  mutate(adjfactor = ifelse(adjustment == "Tr",
+                         "Availability",
+                         "Distance"),
+         adjfactor = ifelse(adjustment == "comb_r",
+                         "Combined",
+                         adjfactor),
+         adjfactor = factor(adjfactor,
+                            levels = c("Availability","Distance","Combined"),
+                         ordered = TRUE)) %>%
+  select(-adjustment)
+
+Trats <- inner_join(Trats,Trats2,
+                    by = c("Species","cn","adjfactor"))
+
+
 
 sp_label <- c("American Robin",
               "Mountain Bluebird",
@@ -817,20 +844,27 @@ sp_label <- c("American Robin",
 splabs <- Trats %>%
   filter(cn %in% sp_label)
 splab <- splabs %>%
-  filter(factor == "Distance")
+  filter(adjfactor == "Combined")
 
 adj_plot <- ggplot(data = Trats,
-                      aes(x = factor,
-                          y = LogRatio))+
-  geom_hline(yintercept = c(log(10),
-                            log(0.1)),
-             alpha = 0.6)+
-  geom_hline(yintercept = c(log(5),
-                            log(0.2)),
-             alpha = 0.6,
-             linetype = 2)+
-  geom_hline(yintercept = c(0),
-             alpha = 0.3)+
+                      aes(x = adjfactor,
+                          y = Ratio))+
+  # geom_hline(yintercept = c((10),
+  #                           (0.1)),
+  #            alpha = 0.8,
+  #            linetype = 3)+
+  # geom_hline(yintercept = c((5),
+  #                           (0.2)),
+  #            alpha = 0.6,
+  #            linetype = 2)+
+  # geom_hline(yintercept = c((2),
+  #                           (0.5)),
+  #            alpha = 0.6,
+  #            linetype = 2)+
+  geom_hline(yintercept = c(0.1,0.2,0.5,1,2,5,10),
+             alpha = 0.15)+
+  geom_hline(yintercept = c(1),
+             alpha = 0.8)+
   geom_violin(fill = NA)+
   geom_point(aes(group = Species),position = position_dodge(width = 0.05),
              alpha = 0.1)+
@@ -842,7 +876,8 @@ adj_plot <- ggplot(data = Trats,
              aes(group = Species,
                  colour = Species),#position = position_dodge(width = 0.05),
              alpha = 1)+
-  ylab("Log Ratio log(new/existing)\n positive values = increased population estimate")+
+  ylab("Multiplicative change in\npopulation estimate")+
+#  ylab("Ratio new/existing\n values > 1 = increased population estimate")+
   xlab("Adjustment factor")+
   geom_label_repel(data = splab,
                   aes(label = Species,group = Species,
@@ -853,10 +888,12 @@ adj_plot <- ggplot(data = Trats,
             nudge_x = 0.6)+
   scale_colour_brewer(type = "qual",palette = "Dark2")+
   scale_x_discrete(expand = expansion(c(0.2,0.5)))+
+  scale_y_continuous(transform = "log",
+                     breaks = c(0.1,0.2,0.5,1,2,5,10))+
   theme_classic()+
   theme(legend.position = "none")
 
-pdf("final_figures/Log-Ratios.pdf",
+pdf("final_figures/Multiplicative_change_factors.pdf",
     width = 6.5,
     height = 4.5)
 print(adj_plot)
