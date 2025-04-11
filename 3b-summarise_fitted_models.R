@@ -13,6 +13,7 @@ library(tidybayes)
 library(doParallel)
 library(foreach)
 library(HDInterval)
+library(ggtext)
 
 source("functions/hpdi.R")
 source("functions/posterior_abundance.R")
@@ -239,19 +240,33 @@ trim_rel_abund <- TRUE
 # species loop ------------------------------------------------------------
 
 
-for(sp_sel in c("American Robin","Canyon Wren",
-                "Western Meadowlark","Baird's Sparrow","Brown Creeper",
-                "Black-capped Chickadee",
+for(sp_sel in c(
+  # "American Robin","Canyon Wren",
+  #               "Western Meadowlark","Baird's Sparrow","Brown Creeper",
+  #               "Black-capped Chickadee",
+  #               "Barn Swallow",
+  #               "Blackpoll Warbler",
+  #               "Mountain Bluebird",
+  #               "Eastern Phoebe",
+  #               "Rose-breasted Grosbeak",
+  #               "Downy Woodpecker",
+  #               "Red-winged Blackbird",
+  #               "Scarlet Tanager",
+  #               "Say's Phoebe",
+  #               "Black-chinned Hummingbird",
+                "Wilson's Snipe","Long-billed Curlew","Killdeer","Tennessee Warbler","Bay-breasted Warbler",
+                "Swainson's Thrush","Blue Jay",
+                "Blue-headed Vireo","Bicknell's Thrush",
+                "American Kestrel",
+                "Steller's Jay","Clay-colored Sparrow",
+                "Yellow-rumped Warbler","Olive-sided Flycatcher",
+                "Purple Martin",
                 "Barn Swallow",
-                "Blackpoll Warbler",
-                "Mountain Bluebird",
-                "Eastern Phoebe",
-                "Rose-breasted Grosbeak",
-                "Downy Woodpecker",
-                "Red-winged Blackbird",
-                "Scarlet Tanager",
-                "Say's Phoebe",
-                "Black-chinned Hummingbird"
+                "Verdin","Ash-throated Flycatcher","Black-throated Sparrow",
+                "Blue Jay","Varied Thrush","Veery","Wood Thrush","Chestnut-collared Longspur",
+                "Bobolink","Savannah Sparrow","Grasshopper Sparrow",
+                "Horned Lark",
+                "Eastern Whip-poor-will", "Common Nighthawk", "Scissor-tailed Flycatcher"
                 )){ # rev(sps_list$english[1:348])){#sp_example[-wh_drop]){#list$english){
 #sp_sel = "Bank Swallow"
 #for(sp_sel in rev(sps_list$english)[29]){
@@ -736,7 +751,7 @@ bcr_abund <- data.frame(region = as.character(bcr_proj$BCR[abundance_in_bcr$ID])
 
 
 
-re_do_map <- TRUE #option to skip because they take a long time.
+re_do_map <- FALSE #option to skip because they take a long time.
 if(re_do_map){
   # abund_mapable <- breed_abundance %>%
   #   terra::project(.,"EPSG:9822")
@@ -797,13 +812,13 @@ bb <- sf::st_bbox(strata_bound)
 
   #
 
-  png(filename = paste0("Figures/abund_map_alt_",vers,sp_aou,"_",sp_ebird,".png"),
-      res = 400,
-      height = 7,
-      width = 6.5,
-      units = "in")
-  print(abund_map)
-  dev.off()
+  # png(filename = paste0("Figures/abund_map_alt_",vers,sp_aou,"_",sp_ebird,".png"),
+  #     res = 400,
+  #     height = 7,
+  #     width = 6.5,
+  #     units = "in")
+  # print(abund_map)
+  # dev.off()
   save(list = c("bb",
                 "breed_abundance_plot",
                 "countries_plot",

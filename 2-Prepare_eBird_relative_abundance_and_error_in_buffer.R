@@ -9,6 +9,10 @@ library(bbsBayes2)
 # download and extract eBird seasonal relative abundance within
 # BBS route path buffers
 
+if(Sys.info()[["nodename"]] == "WNCRLABN72960"){
+  setwd("c:/Users/SmithAC/Documents/GitHub/PIF_population_estimates")
+}
+
 routes_buf <- readRDS("data/all_routes_buffered.rds")
 #routes_buf <- readRDS("all_routes_buffered_1km.rds")
 
@@ -38,11 +42,14 @@ sps_list <- readRDS("data/all_bbs_data_species_list.rds")
 
 qual_ebird <- ebirdst_runs
 
-re_calc <- TRUE # TRUE if want to re-calcluate the eBird-BBS overlap
+re_calc <- FALSE # TRUE if want to re-calcluate the eBird-BBS overlap
       # e.g., when new route spatial data
 
 use_weekly <- TRUE # only use TRUE if goal is to model all species
       # as weekly abundance, including breeding distributions
+
+
+use_uncertainty <- FALSE # TRUE if teh uncertainty values of the relative abundance are desired
 
 bbs_start <- as_date("2022-06-01") # Latest date for start of BBS-relevant breeding season
 bbs_end <- as_date("2022-07-07") # Latest data for end of BBS-relevant breeding season
@@ -65,7 +72,23 @@ ii <- which(sps_list$english %in% c("Brown Creeper","Canyon Wren",
                                                   "Say's Phoebe",
                                                   "Black-chinned Hummingbird")[9:16])
 
-for(i in ii){#rev(1:nrow(sps_list))){
+
+ii <- which(sps_list$english %in% c("Tennessee Warbler","Bay-breasted Warbler")),
+"Swainson's Thrush","Blue Jay",
+"Blue-headed Vireo","Bicknell's Thrush",
+"Wilson's Snipe","American Kestrel",
+"Steller's Jay","Clay-colored Sparrow",
+"Killdeer","Long-billed Curlew",
+"Yellow-rumped Warbler","Olive-sided Flycatcher",
+"Purple Martin",
+"Barn Swallow",
+"Verdin","Ash-throated Flycatcher","Black-throated Sparrow",
+"Blue Jay","Varied Thrush","Veery","Wood Thrush","Chestnut-collared Longspur",
+"Bobolink","Savannah Sparrow","Grasshopper Sparrow",
+"Horned Lark",
+"Eastern Whip-poor-will", "Common Nighthawk"))
+
+for(i in ii){ #rev(1:nrow(sps_list))){ ##
 
   sp_sel <- unname(unlist(sps_list[i,"english"]))
 species_ebird <- ebirdst::get_species(sp_sel)
@@ -151,6 +174,7 @@ down <- try(ebirdst::ebirdst_download_status(species_ebird,
             silent = TRUE)
 }
 
+if(use_uncertainty){
 down_lower <- try(ebirdst::ebirdst_download_status(species_ebird,
                                              download_ranges = FALSE,
                                              download_abundance = TRUE,
@@ -169,7 +193,7 @@ down_upper <- try(ebirdst::ebirdst_download_status(species_ebird,
                   silent = TRUE)
 
 
-
+}
 if(class(down) == "try-error"){
 
   sps_list[i,"available_ebird_data"] <- "Download fail"
@@ -218,6 +242,7 @@ if(resident | use_weekly){
 
 
 # SD of abundance ---------------------------------------------------------
+  if(use_uncertainty){
 
   abd_weekly_abundance_lower <- ebirdst::load_raster(species = species_ebird,
                                                resolution = "3km",
@@ -257,6 +282,7 @@ if(resident | use_weekly){
 
   breed_abundance_ci <- terra::mean(abd_weekly_abundance_ci, na.rm = TRUE)
 
+  }
 
 }else{ # if breeding not resident
 
@@ -274,6 +300,7 @@ if(resident | use_weekly){
 
 
   # SD of abundance ---------------------------------------------------------
+  if(use_uncertainty){
 
   abd_weekly_abundance_lower <- ebirdst::load_raster(species = species_ebird,
                                                      resolution = "3km",
@@ -315,15 +342,17 @@ if(resident | use_weekly){
   breed_abundance_sd <- terra::mean(abd_weekly_abundance_logsd, na.rm = TRUE)
 
   breed_abundance_ci <- terra::mean(abd_weekly_abundance_ci, na.rm = TRUE)
-
+}
  #}
 
 
 }
 
 saveRDS(breed_abundance,paste0("data/species_relative_abundance/",species_ebird,"_derived_breeding_relative_abundance.rds"))
-saveRDS(breed_abundance_sd,paste0("data/species_relative_abundance/",species_ebird,"_derived_breeding_relative_abundance_logsd.rds"))
 
+if(use_uncertainty){
+  saveRDS(breed_abundance_sd,paste0("data/species_relative_abundance/",species_ebird,"_derived_breeding_relative_abundance_logsd.rds"))
+}
 
 
 
@@ -353,13 +382,14 @@ routes_nm <- routes_buf %>%
 # crop and mask to boundary of BBS
 breed_abundance <- crop(breed_abundance, region_boundary_proj) |>
   mask(region_boundary_proj)
+if(use_uncertainty){
 
 breed_abundance_sd <- crop(breed_abundance_sd, region_boundary_proj) |>
   mask(region_boundary_proj)
 
 breed_abundance_ci <- crop(breed_abundance_ci, region_boundary_proj) |>
   mask(region_boundary_proj)
-
+}
 # project buffers to match raster data
 routes_buf_proj <- st_transform(routes_buf, st_crs(breed_abundance))
 
@@ -387,6 +417,7 @@ total_abundance_in_strata <- terra::extract(breed_abundance,
                                       na.rm = TRUE,
                                       ID = FALSE,
                                       exact = TRUE)
+if(use_uncertainty){
 
 abundance_sd_in_buffers <- terra::extract(breed_abundance_sd,
                                        routes_buf_proj,
@@ -401,7 +432,7 @@ abundance_ci_in_buffers <- terra::extract(breed_abundance_ci,
                                           na.rm = TRUE,
                                           ID = FALSE,
                                           exact = TRUE)
-
+}
 abundance_sampled <- terra::extract(breed_abundance,
                                        routes_nm,
                                        fun = mean,
@@ -422,6 +453,7 @@ abundance_sampled <- terra::extract(breed_abundance,
 
 # may as well drop routes with no estimated abundance as they are outside
 # of the range of the modeled seasonal distribution
+if(use_uncertainty){
 
 abundance_df <- data.frame(route_name = routes_buf_proj$route_name,
                              ebird_abund = abundance_in_buffers[[1]],
@@ -433,7 +465,16 @@ abundance_df <- data.frame(route_name = routes_buf_proj$route_name,
     ) %>%
   distinct()
 
+}else{
+  abundance_df <- data.frame(route_name = routes_buf_proj$route_name,
+                             ebird_abund = abundance_in_buffers[[1]]) %>%
+    filter(
+      ebird_abund > 0,
+      !is.na(ebird_abund)
+    ) %>%
+    distinct()
 
+}
 
 # ## displaying routes with no abundance data
 # tstrt <- routes_buf %>%
