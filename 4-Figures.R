@@ -1549,11 +1549,22 @@ USA_CAN_sample_bias <- sampl_bias %>%
          cn = species)%>%
   mutate(adjfactor = "Habitat")
 
+
 trend_effects <- read_csv("final_figures/trend_effect_summaries.csv") %>%
   select(species,ratio) %>%
   rename(Ratio = ratio,
          cn = species) %>%
   mutate(adjfactor = "Trend")
+
+hab_tmp <- sampl_bias %>%
+  filter(strata_name == "USA_CAN") %>%
+  select(species,ratio_new_old) %>%
+  rename(habitat_ratio = ratio_new_old,
+         cn = species)
+trend_tmp <- read_csv("final_figures/trend_effect_summaries.csv") %>%
+  select(species,ratio) %>%
+  rename(trend_ratio = ratio,
+         cn = species)
 
 
 
@@ -1568,6 +1579,32 @@ ExpAdjs <- read_csv("Species_correction_factors_w_edr_availability.csv") %>%
          Tlr = log(Tr),
          Alr = log(Ar),
          clr = log(comb_r))
+
+adj_tmp <- ExpAdjs %>%
+  select(cn,Tr,Ar,comb_r) %>%
+  rename(availability_ratio = Tr,
+         area_ratio = Ar,
+         combined = comb_r)
+
+tabl2_paper <- pop_compare_realised_wide %>%
+  left_join(hab_tmp) %>%
+  left_join(trend_tmp) %>%
+  left_join(adj_tmp) %>%
+  select(cn,area_ratio,availability_ratio,habitat_ratio,trend_ratio,
+           Ratio,pop_median_PIF_eBird_with_EDR_Avail,pop_median_PIF_traditional) %>%
+  arrange(-Ratio) %>%
+  mutate(Species = cn,
+         `Effective Survey Area` = signif(area_ratio,3),
+         Availability = signif(availability_ratio,3),
+         `Geographic Bias` = signif(habitat_ratio,3),
+         `Temporal Trend` = signif(trend_ratio,3),
+         `Realised Overall Ratio` = signif(Ratio,3),
+         New = signif(pop_median_PIF_eBird_with_EDR_Avail/1e6,3),
+         Existing = signif(pop_median_PIF_traditional/1e6,3)) %>%
+  select(-c(cn,area_ratio,availability_ratio,habitat_ratio,trend_ratio,
+            Ratio,pop_median_PIF_eBird_with_EDR_Avail,pop_median_PIF_traditional))
+
+write_csv(tabl2_paper,"Table_2_paper.csv")
 
 Trats <- ExpAdjs %>%
   select(Species,cn,Tlr,Alr,clr) %>%
