@@ -34,19 +34,19 @@ yr_ebird <- 2022 # prediction year for eBird relative abundance
 #	Barn Swallow (or other largely visually-detected species)
 #	Verdin or Ash-throated Flycatcher or Black-throated Sparrow (to represent species with substantial breeding populations in both US and Mexico, to explore potential to extend estimates into Mexico)
 #
-sp_example <- c("American Robin",
-                "Western Meadowlark","Clay-colored Sparrow",
-                "Sharp-tailed Grouse",
-                "Sora",
-                "Killdeer","Long-billed Curlew",
-                "Yellow-rumped Warbler","Olive-sided Flycatcher",
-                "Purple Martin",
-                "Barn Swallow",
-                "Verdin","Ash-throated Flycatcher","Black-throated Sparrow",
-                "Blue Jay","Varied Thrush","Veery","Wood Thrush","Chestnut-collared Longspur",
-                "Bobolink","Savannah Sparrow","Grasshopper Sparrow",
-                "Horned Lark","Baird's Sparrow",
-                "Eastern Whip-poor-will", "Common Nighthawk")
+# sp_example <- c("American Robin",
+#                 "Western Meadowlark","Clay-colored Sparrow",
+#                 "Sharp-tailed Grouse",
+#                 "Sora",
+#                 "Killdeer","Long-billed Curlew",
+#                 "Yellow-rumped Warbler","Olive-sided Flycatcher",
+#                 "Purple Martin",
+#                 "Barn Swallow",
+#                 "Verdin","Ash-throated Flycatcher","Black-throated Sparrow",
+#                 "Blue Jay","Varied Thrush","Veery","Wood Thrush","Chestnut-collared Longspur",
+#                 "Bobolink","Savannah Sparrow","Grasshopper Sparrow",
+#                 "Horned Lark","Baird's Sparrow",
+#                 "Eastern Whip-poor-will", "Common Nighthawk")
 
 # Load BBS data -----------------------------------------------------------
 
@@ -301,7 +301,7 @@ strata_join <- strata_names %>%
   st_drop_geometry() %>%
   distinct()
 
-strata_trad_all <- read_csv("Stanton_2019_code/output/PSest_Prov_by_BCR__100iter.csv") %>%
+strata_trad_all <- read_csv("Stanton_2019_code/output_EDR/PSest_Prov_by_BCR__100iter.csv") %>%
   left_join(.,strata_join,
             by = c("st_abrev" = "prov_state",
                    "BCR" = "bcr")) %>%
@@ -316,7 +316,7 @@ strata_trad_all <- read_csv("Stanton_2019_code/output/PSest_Prov_by_BCR__100iter
          pop_lci_95 = LCI95.PopEst,
          pop_uci_95 = UCI95.PopEst)
 
-USACAN_trad_all <- read_csv("Stanton_2019_code/output/PSest_Global_WH_NA__100iter.csv") %>%
+USACAN_trad_all <- read_csv("Stanton_2019_code/output_EDR/PSest_Global_WH_NA__100iter.csv") %>%
   mutate(region = "USACAN",
          region_type = "USACAN",
          version = "traditional",
@@ -330,7 +330,7 @@ USACAN_trad_all <- read_csv("Stanton_2019_code/output/PSest_Global_WH_NA__100ite
 
 
 
-global_trad_all <- read_csv("Stanton_2019_code/output/PSest_Global_WH_NA__100iter.csv") %>%
+global_trad_all <- read_csv("Stanton_2019_code/output_EDR/PSest_Global_WH_NA__100iter.csv") %>%
   mutate(region = "global",
          region_type = "global",
          version = "traditional",
@@ -344,7 +344,7 @@ global_trad_all <- read_csv("Stanton_2019_code/output/PSest_Global_WH_NA__100ite
 
 
 
-prov_trad_all <- read_csv("Stanton_2019_code/output/PSest_by_Prov__100iter.csv") %>%
+prov_trad_all <- read_csv("Stanton_2019_code/output_EDR/PSest_by_Prov__100iter.csv") %>%
   mutate(region = st_abrev,
          region_type = "prov_state",
          version = "traditional",
@@ -356,7 +356,7 @@ prov_trad_all <- read_csv("Stanton_2019_code/output/PSest_by_Prov__100iter.csv")
          pop_lci_95 = LCI95.PopEst,
          pop_uci_95 = UCI95.PopEst)
 
-bcr_trad_all <- read_csv("Stanton_2019_code/output/PSest_by_BCR__100iter.csv")%>%
+bcr_trad_all <- read_csv("Stanton_2019_code/output_EDR/PSest_by_BCR__100iter.csv")%>%
   mutate(region = as.character(BCR),
          region_type = "bcr",
          version = "traditional",
@@ -395,11 +395,11 @@ saveRDS(pop_ests_out_trad,"all_traditional_pop_estimates.rds")
 #
 sps_list <- readRDS("data/all_bbs_data_species_list.rds") #
 
-sps_sel <- c("Tennessee Warbler","Bay-breasted Warbler",
-             "Swainson's Thrush","Blue Jay",
-             "Blue-headed Vireo","Bicknell's Thrush",
-             "Wilson's Snipe","American Kestrel",
-             "Steller's Jay")
+# sps_sel <- c("Tennessee Warbler","Bay-breasted Warbler",
+#              "Swainson's Thrush","Blue Jay",
+#              "Blue-headed Vireo","Bicknell's Thrush",
+#              "Wilson's Snipe","American Kestrel",
+#              "Steller's Jay")
 # simple quantile wrapper that removes names and supplies 3 signif figures
 quant <- function(x,q){
   y <- quantile(x,q,names = FALSE,digits = 3)
@@ -492,7 +492,7 @@ re_run_model <- TRUE # set to true to rerun the stan model fit
 output_dir <- "G:/PIF_population_estimates/output"
 #output_dir <- "output"
 trim_rel_abund <- TRUE
-
+trim_bbs_routes <- TRUE
 # Parallel species loop ---------------------------------------------------
 #n_cores <- 2
 
@@ -530,34 +530,35 @@ trim_rel_abund <- TRUE
 #   {
 
 
-for(sp_sel in c(
+for(sp_sel in unique(c(
   # "Western Meadowlark","Baird's Sparrow","Brown Creeper",
-  #               "Canyon Wren",
-  #               "Black-capped Chickadee","American Robin",
+  #               #"Canyon Wren",
+  #               "Black-capped Chickadee",#"American Robin",
   #               "Barn Swallow",
-  #               "Blackpoll Warbler",
-  #               "Mountain Bluebird",
-  #               "Eastern Phoebe",
-  #               "Rose-breasted Grosbeak",
-  #               "Downy Woodpecker",
-  #               "Red-winged Blackbird",
-  #               "Scarlet Tanager",
-  #               "Say's Phoebe",
-  #               "Black-chinned Hummingbird",
-  "Wilson's Snipe","Long-billed Curlew","Killdeer","Tennessee Warbler","Bay-breasted Warbler",
-                "Swainson's Thrush","Blue Jay",
-                "Blue-headed Vireo","Bicknell's Thrush",
-                "American Kestrel",
-                "Steller's Jay","Clay-colored Sparrow",
-                "Yellow-rumped Warbler","Olive-sided Flycatcher",
-                "Purple Martin",
-                "Barn Swallow",
-                "Verdin","Ash-throated Flycatcher","Black-throated Sparrow",
-                "Blue Jay","Varied Thrush","Veery","Wood Thrush","Chestnut-collared Longspur",
-                "Bobolink","Savannah Sparrow","Grasshopper Sparrow",
-                "Horned Lark",
-                "Eastern Whip-poor-will", "Common Nighthawk", "Scissor-tailed Flycatcher"
-)){ # rev(sps_list$english[1:348])){#sp_example[-wh_drop]){#list$english){
+                # "Blackpoll Warbler",
+                # "Mountain Bluebird",
+                # "Eastern Phoebe",
+                # "Rose-breasted Grosbeak",
+                # "Downy Woodpecker",
+                "Red-winged Blackbird",
+                "Scarlet Tanager",
+                "Say's Phoebe",
+                "Black-chinned Hummingbird"#,
+  # "Wilson's Snipe","Long-billed Curlew","Killdeer","Tennessee Warbler","Bay-breasted Warbler",
+  #               "Swainson's Thrush","Blue Jay",
+  #               "Blue-headed Vireo","Bicknell's Thrush",
+  #               "American Kestrel",
+  # #               "Steller's Jay",
+  #               "Clay-colored Sparrow",
+  #               "Yellow-rumped Warbler","Olive-sided Flycatcher",
+  #               "Purple Martin",
+  #               "Barn Swallow",
+  #               "Verdin","Ash-throated Flycatcher","Black-throated Sparrow",
+  #               "Blue Jay","Varied Thrush","Veery","Wood Thrush","Chestnut-collared Longspur",
+  #               "Bobolink","Savannah Sparrow","Grasshopper Sparrow",
+  #               "Horned Lark", "Scissor-tailed Flycatcher", #"Common Nighthawk",
+  #               "Eastern Whip-poor-will"
+))){ # rev(sps_list$english[1:348])){#sp_example[-wh_drop]){#list$english){
 #sp_sel = "Bank Swallow"
 #for(sp_sel in rev(sps_list$english)[29]){
 #
@@ -576,6 +577,8 @@ for(sp_sel in c(
 
   raw_counts <- raw_counts_all %>%
     filter(grepl(paste0("^",sp_sel),english))
+
+
 
   nsp_names <- length(unique(raw_counts$english))
 
@@ -609,11 +612,28 @@ rel_abund <- readRDS(paste0("data/species_relative_abundance/",
                             sp_ebird,"_relative_abundance.rds"))
 
 
-if(trim_rel_abund){
+if(trim_rel_abund){ # if TRUE drops routes with < 10th %ile relative abundance
   tenth_percentile <- unname(quantile(rel_abund$ebird_abund,0.1))
   rel_abund <- rel_abund %>%
     filter(ebird_abund >= tenth_percentile)
 }
+
+if(trim_bbs_routes){ # if TRUE drops routes with < 10th %ile observed mean counts
+  temp_means <- raw_counts %>%
+    group_by(route_name) %>%
+    summarise(mean_obs = mean(count)) %>%
+    filter(route_name %in% rel_abund$route_name)
+
+
+  tenth_percentile_bbs <- unname(quantile(temp_means$mean_obs,0.1))
+  temp_means <- temp_means %>%
+    filter(mean_obs > tenth_percentile_bbs)
+
+  raw_counts <- raw_counts %>%
+    filter(route_name %in% temp_means$route_name)
+}
+
+
 
 combined <- rel_abund %>%
 inner_join(.,raw_counts,
@@ -671,6 +691,7 @@ mean_abund <- combined %>%
   select(route,logm) %>%
   distinct() %>%
   arrange(.,route)
+
 
 
 #adjustment scores
@@ -743,14 +764,14 @@ stan_data <- list(n_routes = max(combined$route),
                   )
 
 
-if(nrow(adjs) == 0){
-  # stan_data$c_p = mean(ExpAdjs$Pair2,na.rm = T)
-  # stan_data$c_t = exp(mean(ExpAdjs$TimeAdj.meanlog,na.rm = T) + 0.5*(mean(ExpAdjs$TimeAdj.sdlog,na.rm = T)^2))
-  # stan_data$sd_c_t = exp(2*mean(ExpAdjs$TimeAdj.meanlog,na.rm = T) + mean(ExpAdjs$TimeAdj.sdlog,na.rm = T)^2)*(exp(mean(ExpAdjs$TimeAdj.sdlog,na.rm = T)^2)-1)
-  # stan_data$c_d_lower = mean(ExpAdjs$Dist.Lower,na.rm = T)
-  # stan_data$c_d_upper = mean(ExpAdjs$Dist.Upper,na.rm = T)
-
-}
+# if(nrow(adjs) == 0){
+#   # stan_data$c_p = mean(ExpAdjs$Pair2,na.rm = T)
+#   # stan_data$c_t = exp(mean(ExpAdjs$TimeAdj.meanlog,na.rm = T) + 0.5*(mean(ExpAdjs$TimeAdj.sdlog,na.rm = T)^2))
+#   # stan_data$sd_c_t = exp(2*mean(ExpAdjs$TimeAdj.meanlog,na.rm = T) + mean(ExpAdjs$TimeAdj.sdlog,na.rm = T)^2)*(exp(mean(ExpAdjs$TimeAdj.sdlog,na.rm = T)^2)-1)
+#   # stan_data$c_d_lower = mean(ExpAdjs$Dist.Lower,na.rm = T)
+#   # stan_data$c_d_upper = mean(ExpAdjs$Dist.Upper,na.rm = T)
+#
+# }
 adjs$n_routes <- stan_data$n_routes
 
 saveRDS(stan_data,paste0(output_dir,"/stan_data_",vers,sp_aou,"_",sp_ebird,".rds"))

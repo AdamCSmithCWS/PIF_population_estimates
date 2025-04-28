@@ -147,6 +147,8 @@ pop_ests_out_trad <- bind_rows(USACAN_trad_all,
          pop_median, pop_lci_80, pop_uci_80,
          pop_lci_95, pop_uci_95)
 
+saveRDS(pop_ests_out_trad,"all_traditional_pop_estimates_with_edr.rds")
+
 
 
 sps_list <- readRDS("data/all_bbs_data_species_list.rds") #
@@ -240,20 +242,20 @@ trim_rel_abund <- TRUE
 # species loop ------------------------------------------------------------
 
 
-for(sp_sel in c(
-  # "American Robin","Canyon Wren",
-  #               "Western Meadowlark","Baird's Sparrow","Brown Creeper",
-  #               "Black-capped Chickadee",
-  #               "Barn Swallow",
-  #               "Blackpoll Warbler",
-  #               "Mountain Bluebird",
-  #               "Eastern Phoebe",
-  #               "Rose-breasted Grosbeak",
-  #               "Downy Woodpecker",
-  #               "Red-winged Blackbird",
-  #               "Scarlet Tanager",
-  #               "Say's Phoebe",
-  #               "Black-chinned Hummingbird",
+for(sp_sel in unique(c(
+  "American Robin","Canyon Wren",
+                "Western Meadowlark","Baird's Sparrow","Brown Creeper",
+                "Black-capped Chickadee",
+                "Barn Swallow",
+                "Blackpoll Warbler",
+                "Mountain Bluebird",
+                "Eastern Phoebe",
+                "Rose-breasted Grosbeak",
+                "Downy Woodpecker",
+                "Red-winged Blackbird",
+                "Scarlet Tanager",
+                "Say's Phoebe",
+                "Black-chinned Hummingbird",
                 "Wilson's Snipe","Long-billed Curlew","Killdeer","Tennessee Warbler","Bay-breasted Warbler",
                 "Swainson's Thrush","Blue Jay",
                 "Blue-headed Vireo","Bicknell's Thrush",
@@ -267,7 +269,7 @@ for(sp_sel in c(
                 "Bobolink","Savannah Sparrow","Grasshopper Sparrow",
                 "Horned Lark",
                 "Eastern Whip-poor-will", "Common Nighthawk", "Scissor-tailed Flycatcher"
-                )){ # rev(sps_list$english[1:348])){#sp_example[-wh_drop]){#list$english){
+                ))){ # rev(sps_list$english[1:348])){#sp_example[-wh_drop]){#list$english){
 #sp_sel = "Bank Swallow"
 #for(sp_sel in rev(sps_list$english)[29]){
  sp_aou <- bbsBayes2::search_species(sp_sel)$aou[1]
@@ -614,6 +616,8 @@ comp_trad_new_plot <- ggplot(data = strata_compare,
   geom_abline(slope = 1, intercept = 0)+
   geom_abline(slope = 2, intercept = 0,linetype = 2)+
   geom_abline(slope = 5, intercept = 0,linetype = 3)+
+  geom_abline(slope = 0.5, intercept = 0,linetype = 2)+
+  geom_abline(slope = 0.2, intercept = 0,linetype = 3)+
   geom_errorbar(aes(ymin = pop_lci_80,ymax = pop_uci_80),
                 alpha = 0.3, width = 0)+
   geom_errorbarh(aes(xmin = LCI80.PopEst,xmax = UCI80.PopEst),
