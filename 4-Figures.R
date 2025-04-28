@@ -1623,16 +1623,18 @@ Trats_plot <- Trats %>%
 
 sp_label <- c("American Robin",
               "Mountain Bluebird",
-              #"Eastern Phoebe",
+              "Eastern Phoebe",
               #"Rose-breasted Grosbeak",
               "Canyon Wren",
               "Downy Woodpecker",
-              #"Red-winged Blackbird",
-              #"Western Meadowlark",
-              #"Black-capped Chickadee",
+              "Blackpoll Warbler",
+              "Western Meadowlark",
+              "Black-capped Chickadee",
               "Scarlet Tanager",
               "Say's Phoebe",
               #"Brown Creeper",
+              "Veery",
+              "Purple Martin",
               "Black-chinned Hummingbird")
 
 splabs <- Trats_plot %>%
@@ -1680,8 +1682,9 @@ adj_plot <- ggplot(data = Trats_plot,
                    min.segment.length = 0,
                    size = 3,alpha = 0.9,point.padding = 0.3,label.size = 0.5,
                    nudge_x = 1)+
-  scale_colour_brewer(type = "qual",palette = "Dark2")+
-  scale_x_discrete(expand = expansion(c(0.2,0.6)))+
+  #scale_colour_brewer(type = "qual",palette = "Dark2")+
+  scale_colour_viridis_d(option = "turbo")+
+  scale_x_discrete(expand = expansion(c(0.01,0.5)))+
   scale_y_continuous(transform = "log",
                      breaks = c(0.1,0.2,0.5,1,2,5,10))+
   theme_classic()+
@@ -1699,14 +1702,14 @@ dev.off()
 trat_sel <- Trats_plot %>%
   filter(!(adjfactor == "Combined" & cn %in% sp_label)) %>%
   mutate(adjfactor = factor(adjfactor,
-                            levels = c("Trend",
-                                       "Habitat",
+                            levels = c("Habitat",
+                                       "Trend",
                                        "Availability",
                                        "Area",
                                        "Combined",
                                        "Overall"),
-                            labels = c("Trend",
-                              "Habitat",
+                            labels = c("Habitat",
+                                       "Trend",
                               "Availability",
                               "Area",
                               "Avail+Area",
@@ -1760,8 +1763,9 @@ adj_plot2 <- ggplot(data = trat_sel,
                    min.segment.length = 0,
                    size = 3,alpha = 0.9,point.padding = 0.3,label.size = 0.5,
                    nudge_x = 1)+
-  scale_colour_brewer(type = "qual",palette = "Dark2")+
-  scale_x_discrete(expand = expansion(c(0.05,0.4)))+
+  #scale_colour_brewer(type = "qual",palette = "Dark2")+
+  scale_colour_viridis_d(option = "turbo")+
+  scale_x_discrete(expand = expansion(c(0.01,0.5)))+
   scale_y_continuous(transform = "log",
                      breaks = c(0.1,0.2,0.5,1,2,5,10))+
   theme_classic()+
@@ -1785,14 +1789,14 @@ trat_sel <- Trats_plot %>%
                             levels = c("Availability",
                                        "Area",
                                        "Combined",
-                                       "Trend",
                                        "Habitat",
+                                       "Trend",
                                        "Overall"),
                             labels = c("Availability",
                                        "Area",
                                        "Avail+Area",
-                                       "Trend",
                                        "Habitat",
+                                       "Trend",
                                        "Overall"),
                             ordered = TRUE))
 
@@ -1843,8 +1847,9 @@ adj_plot2 <- ggplot(data = trat_sel,
                    min.segment.length = 0,
                    size = 3,alpha = 0.9,point.padding = 0.3,label.size = 0.5,
                    nudge_x = 1)+
-  scale_colour_brewer(type = "qual",palette = "Dark2")+
-  scale_x_discrete(expand = expansion(c(0.05,0.4)))+
+  #scale_colour_brewer(type = "qual",palette = "Dark2")+
+  scale_colour_viridis_d(option = "turbo")+
+  scale_x_discrete(expand = expansion(c(0.01,0.5)))+
   scale_y_continuous(transform = "log",
                      breaks = c(0.1,0.2,0.5,1,2,5,10))+
   theme_classic()+
