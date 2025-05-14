@@ -950,7 +950,7 @@ side_plot1
 # compare adjustment factors ----------------------------------------------
 
 saveRDS(sampl_bias,"final_figures/example_species_strata_sampling_bias.rds")
-trend_effects,"final_figures/trend_effect_summaries.csv"
+trend_effects <- read_csv("final_figures/trend_effect_summaries.csv")
 
 canw <- sampl_bias %>%
   filter(species == "Canyon Wren",
@@ -1369,7 +1369,7 @@ sampl_bias <- sampl_bias %>%
   mutate(ratio_new_old = 1/exp(log_ratio))
 
 saveRDS(sampl_bias,"final_figures/example_species_strata_sampling_bias.rds")
-trend_effects,"final_figures/trend_effect_summaries.csv"
+trend_effects <- read_csv("final_figures/trend_effect_summaries.csv")
 
 canw <- sampl_bias %>%
   filter(species == "Canyon Wren",
@@ -1547,7 +1547,7 @@ USA_CAN_sample_bias <- sampl_bias %>%
   select(species,ratio_new_old) %>%
   rename(Ratio = ratio_new_old,
          cn = species)%>%
-  mutate(adjfactor = "Habitat")
+  mutate(adjfactor = "Geographic Bias")
 
 
 trend_effects <- read_csv("final_figures/trend_effect_summaries.csv") %>%
@@ -1654,7 +1654,7 @@ Trats_plot <- Trats %>%
   bind_rows(over_bias) %>%
   mutate(adjfactor = factor(adjfactor,
                             levels = c("Availability","Area","Combined",
-                                       "Habitat","Trend","Overall"),
+                                       "Geographic Bias","Trend","Overall"),
                             ordered = TRUE))
 
 
@@ -1739,13 +1739,13 @@ dev.off()
 trat_sel <- Trats_plot %>%
   filter(!(adjfactor == "Combined" & cn %in% sp_label)) %>%
   mutate(adjfactor = factor(adjfactor,
-                            levels = c("Habitat",
+                            levels = c("Geographic Bias",
                                        "Trend",
                                        "Availability",
                                        "Area",
                                        "Combined",
                                        "Overall"),
-                            labels = c("Habitat",
+                            labels = c("Geographic Bias",
                                        "Trend",
                               "Availability",
                               "Area",
@@ -1826,13 +1826,13 @@ trat_sel <- Trats_plot %>%
                             levels = c("Availability",
                                        "Area",
                                        "Combined",
-                                       "Habitat",
+                                       "Geographic Bias",
                                        "Trend",
                                        "Overall"),
                             labels = c("Availability",
                                        "Area",
                                        "Avail+Area",
-                                       "Habitat",
+                                       "Geographic Bias",
                                        "Trend",
                                        "Overall"),
                             ordered = TRUE))
