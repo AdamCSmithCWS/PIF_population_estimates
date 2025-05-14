@@ -950,7 +950,7 @@ side_plot1
 # compare adjustment factors ----------------------------------------------
 
 saveRDS(sampl_bias,"final_figures/example_species_strata_sampling_bias.rds")
-trend_effects <- read_csv("final_figures/trend_effect_summaries.csv")
+#trend_effects <- read_csv("final_figures/trend_effect_summaries.csv")
 
 canw <- sampl_bias %>%
   filter(species == "Canyon Wren",
