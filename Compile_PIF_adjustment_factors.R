@@ -52,9 +52,7 @@ Rosen_pif <- read_csv("data/Rosenberg_appendix_2_aaw1313_data_s2.csv") %>%
                                             cn),
                                 cn = ifelse(grepl("Le Conte's",cn), # alternate spelling of LeConte
                                             gsub("Le Conte's","LeConte's",cn),
-                                            cn)) %>%
-  #filter(!cn %in% ExpAdjs$cn) %>%
-  select(-sci_name)
+                                            cn))
 
 ExpAdjs <- ExpAdjs %>%
   filter(!cn %in% Rosen_pif$cn)
@@ -80,6 +78,23 @@ ExpAdjs <- ExpAdjs %>%
 
 
 
+# species still missing ---------------------------------------------------
+
+
+
+missing_species <- read_csv("data/Filtered_Spp_List_new_tod.csv") %>%
+  filter(is.na(PIF_adj_birds_km2)) %>%
+  filter(!aou %in% ExpAdjs$aou)
+
+missing_species_bbs <- bbs_sci_names %>%
+  filter(aou %in% missing_species$aou) %>%
+  mutate(cn = english)
+
+ExpAdjs <- ExpAdjs %>%
+  bind_rows(missing_species_bbs)
+
+
+
 # generate combined adjustment scores for each species --------------------
 
 
@@ -100,17 +115,20 @@ family_scores <- new_adjs %>%
   group_by(family) %>%
   summarise(family_TimeAdj.meanlog = mean(TimeAdj.meanlog, na.rm = TRUE),
             family_Dist2 = mean(Dist2, na.rm = TRUE),
-            family_Pair2 = mean(Pair2, na.rm = TRUE))
+            family_Pair2 = mean(Pair2, na.rm = TRUE))%>%
+  filter(!is.na(family))
 genus_scores <- new_adjs %>%
   group_by(genus) %>%
   summarise(genus_TimeAdj.meanlog = mean(TimeAdj.meanlog, na.rm = TRUE),
             genus_Dist2 = mean(Dist2, na.rm = TRUE),
-            genus_Pair2 = mean(Pair2, na.rm = TRUE))
+            genus_Pair2 = mean(Pair2, na.rm = TRUE))%>%
+  filter(!is.na(genus))
 order_scores <- new_adjs %>%
   group_by(order) %>%
   summarise(order_TimeAdj.meanlog = mean(TimeAdj.meanlog, na.rm = TRUE),
             order_Dist2 = mean(Dist2, na.rm = TRUE),
-            order_Pair2 = mean(Pair2, na.rm = TRUE))
+            order_Pair2 = mean(Pair2, na.rm = TRUE)) %>%
+  filter(!is.na(order))
 
 
 # append the group means --------------------------------------------------
@@ -125,14 +143,16 @@ new_adjs <- new_adjs %>%
             by = "order")
 
 missing_dist <- new_adjs %>%
-  filter(is.na(order_Dist2))
-
+  filter(is.na(Dist2),
+         is.na(order_Dist2))
 
 missing_pair <- new_adjs %>%
-  filter(is.na(order_Pair2))
+  filter(is.na(Pair2),
+         is.na(order_Pair2))
 
 missing_tod <- new_adjs %>%
-  filter(is.na(order_TimeAdj.meanlog))
+  filter(is.na(TimeAdj.meanlog),
+         is.na(order_TimeAdj.meanlog))
 
 ## only Wood Stork is missing an order-based mean
 
@@ -147,7 +167,10 @@ new_adjs_fixed <- new_adjs %>%
                         Pair2),
          Dist2_final = ifelse(is.na(Dist2),
                         genus_Dist2,
-                        Dist2))
+                        Dist2),
+         TimeAdj.meanlog_final = ifelse(is.na(TimeAdj.meanlog),
+                              genus_TimeAdj.meanlog,
+                              TimeAdj.meanlog))
 
 new_adjs_fixed <- new_adjs_fixed %>%
   mutate(Pair2_final = ifelse(is.na(Pair2_final),
@@ -155,7 +178,10 @@ new_adjs_fixed <- new_adjs_fixed %>%
                         Pair2_final),
          Dist2_final = ifelse(is.na(Dist2_final),
                         family_Dist2,
-                        Dist2_final))
+                        Dist2_final),
+         TimeAdj.meanlog_final = ifelse(is.na(TimeAdj.meanlog),
+                                        family_TimeAdj.meanlog,
+                                        TimeAdj.meanlog))
 
 new_adjs_fixed <- new_adjs_fixed %>%
   mutate(Pair2_final = ifelse(is.na(Pair2_final),
@@ -163,7 +189,10 @@ new_adjs_fixed <- new_adjs_fixed %>%
                         Pair2_final),
          Dist2_final = ifelse(is.na(Dist2_final),
                         order_Dist2,
-                        Dist2_final))
+                        Dist2_final),
+         TimeAdj.meanlog_final = ifelse(is.na(TimeAdj.meanlog),
+                                        order_TimeAdj.meanlog,
+                                        TimeAdj.meanlog))
 
 
 # Add values for Wood Stork -----------------------------------------------
@@ -173,8 +202,7 @@ new_adjs_fixed <- new_adjs_fixed %>%
                               Pair2_final),
          Dist2_final = ifelse(cn == "Wood Stork",
                               400, # likely highly detectable given large size and soaring behaviour
-                              Dist2_final),
-         TimeAdj.meanlog_final = TimeAdj.meanlog)
+                              Dist2_final))
 
 
 # Calculate the species-level pif adjustments -----------------------------
@@ -188,5 +216,6 @@ PIF_adjs <- new_adjs_fixed %>%
 
 
 write_csv(PIF_adjs,"PIF_adjustments_and_napops_edr_avail.csv")
+
 
 
