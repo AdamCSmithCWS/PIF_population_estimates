@@ -256,21 +256,4 @@ tod_adj_out <- pk_sp %>%
 write_csv(tod_adj_out,
           "Additional_time_of_day_adjustments.csv")
 
-# load existing adjustments -----------------------------------------------
-
-
-
-PIF_adjs <- read_csv("PIF_adjustments_and_napops_edr_avail.csv")
-
-new_adjs <- PIF_adjs %>%
-  select(cn, TimeAdj.meanlog,
-         Dist2,
-         Pair2,
-         C_t,
-         C_d,
-         C_p,
-         PIF_adj_birds_km2) %>%
-  bind_rows(tod_adj_out)
-
-
 
