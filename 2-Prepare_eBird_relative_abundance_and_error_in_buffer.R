@@ -73,7 +73,7 @@ ii <- which(sps_list$english %in% c("Brown Creeper","Canyon Wren",
                                                   "Black-chinned Hummingbird")[9:16])
 
 
-ii <- which(sps_list$english %in% c("Tennessee Warbler","Bay-breasted Warbler")),
+ii <- which(sps_list$english %in% c("Tennessee Warbler","Bay-breasted Warbler",
 "Swainson's Thrush","Blue Jay",
 "Blue-headed Vireo","Bicknell's Thrush",
 "Wilson's Snipe","American Kestrel",
