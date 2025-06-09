@@ -1,7 +1,7 @@
 library(sf)
 library(tidyverse)
 library(ebirdst)
-#ebirdst::set_ebirdst_access_key("t9el4omae1c3",overwrite = TRUE) #expire April 28 2025
+#ebirdst::set_ebirdst_access_key("vhhebtg39lu",overwrite = TRUE) #expire November 29 2025
 #library(patchwork)
 library(terra)
 library(bbsBayes2)
@@ -51,42 +51,50 @@ use_weekly <- TRUE # only use TRUE if goal is to model all species
 
 use_uncertainty <- FALSE # TRUE if teh uncertainty values of the relative abundance are desired
 
-bbs_start <- as_date("2022-06-01") # Latest date for start of BBS-relevant breeding season
-bbs_end <- as_date("2022-07-07") # Latest data for end of BBS-relevant breeding season
+bbs_start <- as_date("2023-06-01") # Latest date for start of BBS-relevant breeding season
+bbs_end <- as_date("2023-07-07") # Latest data for end of BBS-relevant breeding season
 
 
 
 metric_used <- "mean" #options are "max", mean" or "median" (although "median" won't work for seasonal)
 
-ii <- which(sps_list$english %in% c("Brown Creeper","Canyon Wren",
-                                    "Black-capped Chickadee","American Robin",
-                                    "Barn Swallow",
-                                    "Blackpoll Warbler","Baird's Sparrow",
-                                    "Western Meadowlark",
-                                                  "Mountain Bluebird",
-                                                  "Eastern Phoebe",
-                                                  "Rose-breasted Grosbeak",
-                                                  "Downy Woodpecker",
-                                                  "Red-winged Blackbird",
-                                                  "Scarlet Tanager",
-                                                  "Say's Phoebe",
-                                                  "Black-chinned Hummingbird")[9:16])
-
-
-ii <- which(sps_list$english %in% c("Tennessee Warbler","Bay-breasted Warbler",
-"Swainson's Thrush","Blue Jay",
-"Blue-headed Vireo","Bicknell's Thrush",
-"Wilson's Snipe","American Kestrel",
-"Steller's Jay","Clay-colored Sparrow",
-"Killdeer","Long-billed Curlew",
-"Yellow-rumped Warbler","Olive-sided Flycatcher",
-"Purple Martin",
-"Barn Swallow",
-"Verdin","Ash-throated Flycatcher","Black-throated Sparrow",
-"Blue Jay","Varied Thrush","Veery","Wood Thrush","Chestnut-collared Longspur",
-"Bobolink","Savannah Sparrow","Grasshopper Sparrow",
-"Horned Lark",
-"Eastern Whip-poor-will", "Common Nighthawk"))
+selected_species <- unique(c("Brown Creeper","Canyon Wren",
+                             "Black-capped Chickadee","American Robin",
+                             "Barn Swallow",
+                             "Blackpoll Warbler","Baird's Sparrow",
+                             "Western Meadowlark",
+                             "Mountain Bluebird",
+                             "Eastern Phoebe",
+                             "Rose-breasted Grosbeak",
+                             "Downy Woodpecker",
+                             "Red-winged Blackbird",
+                             "Scarlet Tanager",
+                             "Say's Phoebe",
+                             "Black-chinned Hummingbird","Tennessee Warbler","Bay-breasted Warbler",
+                             "Swainson's Thrush","Blue Jay",
+                             "Blue-headed Vireo","Bicknell's Thrush",
+                             "Wilson's Snipe","American Kestrel",
+                             "Steller's Jay","Clay-colored Sparrow",
+                             "Killdeer","Long-billed Curlew",
+                             "Yellow-rumped Warbler","Olive-sided Flycatcher",
+                             "Purple Martin",
+                             "Barn Swallow",
+                             "Verdin","Ash-throated Flycatcher","Black-throated Sparrow",
+                             "Blue Jay","Varied Thrush","Veery","Wood Thrush","Chestnut-collared Longspur",
+                             "Bobolink","Savannah Sparrow","Grasshopper Sparrow",
+                             "Horned Lark",
+                             "Eastern Whip-poor-will", "Common Nighthawk",
+                             "Ruby-throated Hummingbird",
+                             "Mountain Chickadee",
+                             "Northern Bobwhite",
+                             "Northern Flicker",
+                             "Golden-winged Warbler",
+                             "Red-eyed Vireo",
+                             "Palm Warbler",
+                             "Clark's Nutcracker",
+                             "White-throated Sparrow",
+                             "Song Sparrow"))
+ii <- which(sps_list$english %in% selected_species)
 
 for(i in ii){ #rev(1:nrow(sps_list))){ ##
 
@@ -125,7 +133,7 @@ breeding_end <- unname(unlist(qual_sel[,"breeding_end"]))
 if(!resident){
 sel_start <- ifelse(as_date(breeding_start)>bbs_start, # if stable breeding season is later than the 1st of June (mostly only northern species)
                     bbs_start,# then use the first of June
-                    as_date("2022-05-20")) # otherwise use May 20th to match the earliest BBS observation dates
+                    as_date("2023-05-20")) # otherwise use May 20th to match the earliest BBS observation dates
 
 
 sel_end <- ifelse(as_date(breeding_end)>bbs_end, # if stable breeding season ending is later than the 2nd week of July
@@ -134,8 +142,8 @@ sel_end <- ifelse(as_date(breeding_end)>bbs_end, # if stable breeding season end
 
 
 }else{
-  sel_start <- as_date("2022-05-20") # use May 20, as start of BBS observations season for resident species
-  sel_end <- as_date("2022-07-07")# use July 7, as end of BBS observations season for resident species
+  sel_start <- as_date("2023-05-20") # use May 20, as start of BBS observations season for resident species
+  sel_end <- as_date("2023-07-07")# use July 7, as end of BBS observations season for resident species
   }
 
 sps_list[i,"is_resident"] <- resident
