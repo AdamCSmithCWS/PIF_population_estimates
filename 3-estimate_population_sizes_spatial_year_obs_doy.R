@@ -19,7 +19,7 @@ setwd("c:/Users/SmithAC/Documents/GitHub/PIF_population_estimates")
 
 source("functions/GAM_basis_function_mgcv.R")
 source("functions/neighbours_define.R")
-yr_ebird <- 2022 # prediction year for eBird relative abundance
+yr_ebird <- 2023 # prediction year for eBird relative abundance
 
 
 ## Example species
@@ -87,12 +87,13 @@ mean_doy = round(surveys$mean_doy)
 
 
 Inputfiles.dir <- "Stanton_2019_code/input_files/" #paste(Inputfiles.dir, '/', sep="")
-napops_species <- napops::list_species() |>
-  dplyr::select(Species,Common_Name)
 
 re_napops <- FALSE # set to True to re-run the napops extraction
 
 if(re_napops){
+  napops_species <- napops::list_species() |>
+    dplyr::select(Species,Common_Name)
+
 # Species specific adjustment factors (Time of Day, Detection Distance, Pair)
 ExpAdjs <- read.csv(paste(Inputfiles.dir, 'Species_PSEst_Adjustments.csv', sep=''), stringsAsFactors=FALSE) %>%
   mutate(cn = ifelse(cn == "McCown's Longspur",
@@ -415,7 +416,7 @@ log_normal_calibration <- TRUE # conduct calibration assuming a lognormal
 # distribution of variation among routes
 
 # base map for countries and continents -----------------------------------
-country_codes <- readxl::read_xlsx("data/iso_codes.xlsx") %>%
+country_codes <- readxl::read_xlsx("iso_codes.xlsx") %>%
   rename(country_name = Name) #
 
 americas_codes <- country_codes %>%
@@ -489,8 +490,8 @@ if(use_traditional){
 re_fit <- TRUE # set to true to re-run plotting and summaries
 re_run_model <- TRUE # set to true to rerun the stan model fit
 
-output_dir <- "G:/PIF_population_estimates/output"
-#output_dir <- "output"
+#output_dir <- "G:/PIF_population_estimates/output"
+output_dir <- "output"
 trim_rel_abund <- TRUE
 trim_bbs_routes <- TRUE
 # Parallel species loop ---------------------------------------------------
@@ -563,7 +564,7 @@ for(sp_sel in unique(c(
 #for(sp_sel in rev(sps_list$english)[29]){
 #
 #
-
+sp_sel <- "Canyon Wren"
 
  sp_aou <- bbsBayes2::search_species(sp_sel)$aou[1]
   sp_ebird <- ebirdst::get_species(sp_sel)
@@ -605,10 +606,10 @@ bcr_trad <- bcr_trad_all %>%
 
 
 
-if(!file.exists(paste0("data/species_relative_abundance/",
+if(!file.exists(paste0("data/species_relative_abundance_2023/",
                        sp_ebird,"_relative_abundance.rds"))){next}
 
-rel_abund <- readRDS(paste0("data/species_relative_abundance/",
+rel_abund <- readRDS(paste0("data/species_relative_abundance_2023/",
                             sp_ebird,"_relative_abundance.rds"))
 
 
@@ -954,446 +955,418 @@ ppc <- bayesplot::ppc_bars_grouped(y = stan_data$count,
   fit <- readRDS(paste0(output_dir,"/calibration_fit_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
   summ <- readRDS(paste0("convergence/parameter_summary_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
 }
-
-
-avail_correction_realised <- fit$summary(variable = "ct",
-                                "mean",
-                                "median",
-                                "sd",
-                                "rhat",
-                                "ess_bulk",
-                                q2_5 = ~quant(.x,q = 0.025),
-                                q10 = ~quant(.x,q = 0.10),
-                                q90 = ~quant(.x,q = 0.90),
-                                q97_5 = ~quant(.x,q = 0.975)) %>%
-  mutate(inference = "realised correction for time or availability")
-
-p_avail_realised <- fit$summary(variable = "p_avail",
-                                "mean",
-                                "median",
-                                "sd",
-                                "rhat",
-                                "ess_bulk",
-                                q2_5 = ~quant(.x,q = 0.025),
-                                q10 = ~quant(.x,q = 0.10),
-                                q90 = ~quant(.x,q = 0.90),
-                                q97_5 = ~quant(.x,q = 0.975)) %>%
-  mutate(inference = "realised p availability 3-minutes")
+}
 
 
 
-edr_realised <- fit$summary(variable = "cd",
-                            "mean",
-                            "median",
-                            "sd",
-                            "rhat",
-                            "ess_bulk",
-                            q2_5 = ~quant(.x,q = 0.025),
-                            q10 = ~quant(.x,q = 0.10),
-                            q90 = ~quant(.x,q = 0.90),
-                            q97_5 = ~quant(.x,q = 0.975)) %>%
-  mutate(inference = "realised EDR")
-
-
-
-surveyed_area_realised <- fit$summary(variable = "c_area",
-                                      "mean",
-                                      "median",
-                                      "sd",
-                                      "rhat",
-                                      "ess_bulk",
-                                      q2_5 = ~quant(.x,q = 0.025),
-                                      q10 = ~quant(.x,q = 0.10),
-                                      q90 = ~quant(.x,q = 0.90),
-                                      q97_5 = ~quant(.x,q = 0.975)) %>%
-  mutate(inference = "realised surveyed area per BBS route")
-
-cali_lognormal <- fit$summary(variable = "calibration",
-                              "mean",
-                              "median",
-                              "sd",
-                              "rhat",
-                              "ess_bulk",
-                              q2_5 = ~quant(.x,q = 0.025),
-                              q10 = ~quant(.x,q = 0.10),
-                              q90 = ~quant(.x,q = 0.90),
-                              q97_5 = ~quant(.x,q = 0.975))%>%
-  mutate(inference = "calibration assuming log normal variation among routes",
-         variable = "calibration_lognormal")
-
-cali_lognormal_alt1 <- fit$summary(variable = "calibration_alt1",
-                              "mean",
-                              "median",
-                              "sd",
-                              "rhat",
-                              "ess_bulk",
-                              q2_5 = ~quant(.x,q = 0.025),
-                              q10 = ~quant(.x,q = 0.10),
-                              q90 = ~quant(.x,q = 0.90),
-                              q97_5 = ~quant(.x,q = 0.975))%>%
-  mutate(inference = "calibration assuming log normal variation among routes removing t-dist factor",
-         variable = "calibration_alt1")
-
-
-cali_lognormal_alt2 <- fit$summary(variable = "calibration_alt2",
-                                   "mean",
-                                   "median",
-                                   "sd",
-                                   "rhat",
-                                   "ess_bulk",
-                                   q2_5 = ~quant(.x,q = 0.025),
-                                   q10 = ~quant(.x,q = 0.10),
-                                   q90 = ~quant(.x,q = 0.90),
-                                   q97_5 = ~quant(.x,q = 0.975))%>%
-  mutate(inference = "calibration assuming log normal variation among routes removing variance",
-         variable = "calibration_alt2")
-
-
-
-cali_alt <- fit$summary(variable = "calibration_mean",
-                    "mean",
-                    "median",
-                    "sd",
-                    "rhat",
-                    "ess_bulk",
-                    q2_5 = ~quant(.x,q = 0.025),
-                    q10 = ~quant(.x,q = 0.10),
-                    q90 = ~quant(.x,q = 0.90),
-                    q97_5 = ~quant(.x,q = 0.975))%>%
-  mutate(inference = "calibration realised mean across route-observer")
-
-
-cali <- fit$summary(variable = "calibration_median",
-                    "mean",
-                    "median",
-                    "sd",
-                    "rhat",
-                    "ess_bulk",
-                    q2_5 = ~quant(.x,q = 0.025),
-                    q10 = ~quant(.x,q = 0.10),
-                    q90 = ~quant(.x,q = 0.90),
-                    q97_5 = ~quant(.x,q = 0.975))%>%
-  mutate(inference = "calibration realised median across route-observer")
-
-
-
-
-
-
-pred_count_lognormal <- fit$summary(variable = "pred_count",
-                              "mean",
-                              "median",
-                              "sd",
-                              "rhat",
-                              "ess_bulk",
-                              q2_5 = ~quant(.x,q = 0.025),
-                              q10 = ~quant(.x,q = 0.10),
-                              q90 = ~quant(.x,q = 0.90),
-                              q97_5 = ~quant(.x,q = 0.975))%>%
-  mutate(inference = "pred_count assuming log normal variation among routes",
-         variable = "pred_count_lognormal")
-
-pred_count_lognormal_alt1 <- fit$summary(variable = "pred_count_alt1",
-                                   "mean",
-                                   "median",
-                                   "sd",
-                                   "rhat",
-                                   "ess_bulk",
-                                   q2_5 = ~quant(.x,q = 0.025),
-                                   q10 = ~quant(.x,q = 0.10),
-                                   q90 = ~quant(.x,q = 0.90),
-                                   q97_5 = ~quant(.x,q = 0.975))%>%
-  mutate(inference = "pred_count assuming log normal variation among routes removing t-dist factor",
-         variable = "pred_count_alt1")
-
-
-pred_count_lognormal_alt2 <- fit$summary(variable = "pred_count_alt2",
-                                   "mean",
-                                   "median",
-                                   "sd",
-                                   "rhat",
-                                   "ess_bulk",
-                                   q2_5 = ~quant(.x,q = 0.025),
-                                   q10 = ~quant(.x,q = 0.10),
-                                   q90 = ~quant(.x,q = 0.90),
-                                   q97_5 = ~quant(.x,q = 0.975))%>%
-  mutate(inference = "pred_count assuming log normal variation among routes removing variance",
-         variable = "pred_count_alt2")
-
-
-
-pred_count_alt <- fit$summary(variable = "pred_count_mean",
-                        "mean",
-                        "median",
-                        "sd",
-                        "rhat",
-                        "ess_bulk",
-                        q2_5 = ~quant(.x,q = 0.025),
-                        q10 = ~quant(.x,q = 0.10),
-                        q90 = ~quant(.x,q = 0.90),
-                        q97_5 = ~quant(.x,q = 0.975))%>%
-  mutate(inference = "pred_count realised mean across route-observer")
-
-
-pred_count <- fit$summary(variable = "pred_count_median",
-                    "mean",
-                    "median",
-                    "sd",
-                    "rhat",
-                    "ess_bulk",
-                    q2_5 = ~quant(.x,q = 0.025),
-                    q10 = ~quant(.x,q = 0.10),
-                    q90 = ~quant(.x,q = 0.90),
-                    q97_5 = ~quant(.x,q = 0.975))%>%
-  mutate(inference = "pred_count realised median across route-observer")
-
-
-
-rho <- fit$summary(variable = "RHO",
-                          "mean",
-                          "median",
-                          "sd",
-                          "rhat",
-                          "ess_bulk",
-                          q2_5 = ~quant(.x,q = 0.025),
-                          q10 = ~quant(.x,q = 0.10),
-                          q90 = ~quant(.x,q = 0.90),
-                          q97_5 = ~quant(.x,q = 0.975))%>%
-  mutate(inference = "slope of log-log relationship")
-
-
-
-adjs[1,"calibration"] <- as.numeric(cali$mean)
-adjs[1,"calibration_sd"] <- as.numeric(cali$sd)
-
-adjs[1,"calibration_mean"] <- as.numeric(cali_alt$mean)
-adjs[1,"calibration_mean_sd"] <- as.numeric(cali_alt$sd)
-
-adjs[1,"calibration_lognormal"] <- as.numeric(cali_lognormal$mean)
-adjs[1,"calibration_lognormal_sd"] <- as.numeric(cali_lognormal$sd)
-
-adjs[1,"calibration_lognormal_alt1"] <- as.numeric(cali_lognormal_alt1$mean)
-adjs[1,"calibration_lognormal_alt1_sd"] <- as.numeric(cali_lognormal_alt1$sd)
-
-adjs[1,"calibration_lognormal_alt2"] <- as.numeric(cali_lognormal_alt2$mean)
-adjs[1,"calibration_lognormal_alt2_sd"] <- as.numeric(cali_lognormal_alt2$sd)
-
-# BETA_post <- fit$draws(variables = "BETA",
+#
+# avail_correction_realised <- fit$summary(variable = "ct",
+#                                 "mean",
+#                                 "median",
+#                                 "sd",
+#                                 "rhat",
+#                                 "ess_bulk",
+#                                 q2_5 = ~quant(.x,q = 0.025),
+#                                 q10 = ~quant(.x,q = 0.10),
+#                                 q90 = ~quant(.x,q = 0.90),
+#                                 q97_5 = ~quant(.x,q = 0.975)) %>%
+#   mutate(inference = "realised correction for time or availability")
+#
+# p_avail_realised <- fit$summary(variable = "p_avail",
+#                                 "mean",
+#                                 "median",
+#                                 "sd",
+#                                 "rhat",
+#                                 "ess_bulk",
+#                                 q2_5 = ~quant(.x,q = 0.025),
+#                                 q10 = ~quant(.x,q = 0.10),
+#                                 q90 = ~quant(.x,q = 0.90),
+#                                 q97_5 = ~quant(.x,q = 0.975)) %>%
+#   mutate(inference = "realised p availability 3-minutes")
+#
+#
+#
+# edr_realised <- fit$summary(variable = "cd",
+#                             "mean",
+#                             "median",
+#                             "sd",
+#                             "rhat",
+#                             "ess_bulk",
+#                             q2_5 = ~quant(.x,q = 0.025),
+#                             q10 = ~quant(.x,q = 0.10),
+#                             q90 = ~quant(.x,q = 0.90),
+#                             q97_5 = ~quant(.x,q = 0.975)) %>%
+#   mutate(inference = "realised EDR")
+#
+#
+#
+# surveyed_area_realised <- fit$summary(variable = "c_area",
+#                                       "mean",
+#                                       "median",
+#                                       "sd",
+#                                       "rhat",
+#                                       "ess_bulk",
+#                                       q2_5 = ~quant(.x,q = 0.025),
+#                                       q10 = ~quant(.x,q = 0.10),
+#                                       q90 = ~quant(.x,q = 0.90),
+#                                       q97_5 = ~quant(.x,q = 0.975)) %>%
+#   mutate(inference = "realised surveyed area per BBS route")
+#
+# cali_lognormal <- fit$summary(variable = "calibration",
+#                               "mean",
+#                               "median",
+#                               "sd",
+#                               "rhat",
+#                               "ess_bulk",
+#                               q2_5 = ~quant(.x,q = 0.025),
+#                               q10 = ~quant(.x,q = 0.10),
+#                               q90 = ~quant(.x,q = 0.90),
+#                               q97_5 = ~quant(.x,q = 0.975))%>%
+#   mutate(inference = "calibration assuming log normal variation among routes",
+#          variable = "calibration_lognormal")
+#
+# cali_lognormal_alt1 <- fit$summary(variable = "calibration_alt1",
+#                               "mean",
+#                               "median",
+#                               "sd",
+#                               "rhat",
+#                               "ess_bulk",
+#                               q2_5 = ~quant(.x,q = 0.025),
+#                               q10 = ~quant(.x,q = 0.10),
+#                               q90 = ~quant(.x,q = 0.90),
+#                               q97_5 = ~quant(.x,q = 0.975))%>%
+#   mutate(inference = "calibration assuming log normal variation among routes removing t-dist factor",
+#          variable = "calibration_alt1")
+#
+#
+# cali_lognormal_alt2 <- fit$summary(variable = "calibration_alt2",
+#                                    "mean",
+#                                    "median",
+#                                    "sd",
+#                                    "rhat",
+#                                    "ess_bulk",
+#                                    q2_5 = ~quant(.x,q = 0.025),
+#                                    q10 = ~quant(.x,q = 0.10),
+#                                    q90 = ~quant(.x,q = 0.90),
+#                                    q97_5 = ~quant(.x,q = 0.975))%>%
+#   mutate(inference = "calibration assuming log normal variation among routes removing variance",
+#          variable = "calibration_alt2")
+#
+#
+#
+# cali_alt <- fit$summary(variable = "calibration_mean",
+#                     "mean",
+#                     "median",
+#                     "sd",
+#                     "rhat",
+#                     "ess_bulk",
+#                     q2_5 = ~quant(.x,q = 0.025),
+#                     q10 = ~quant(.x,q = 0.10),
+#                     q90 = ~quant(.x,q = 0.90),
+#                     q97_5 = ~quant(.x,q = 0.975))%>%
+#   mutate(inference = "calibration realised mean across route-observer")
+#
+#
+# cali <- fit$summary(variable = "calibration_median",
+#                     "mean",
+#                     "median",
+#                     "sd",
+#                     "rhat",
+#                     "ess_bulk",
+#                     q2_5 = ~quant(.x,q = 0.025),
+#                     q10 = ~quant(.x,q = 0.10),
+#                     q90 = ~quant(.x,q = 0.90),
+#                     q97_5 = ~quant(.x,q = 0.975))%>%
+#   mutate(inference = "calibration realised median across route-observer")
+#
+#
+#
+#
+#
+#
+# pred_count_lognormal <- fit$summary(variable = "pred_count",
+#                               "mean",
+#                               "median",
+#                               "sd",
+#                               "rhat",
+#                               "ess_bulk",
+#                               q2_5 = ~quant(.x,q = 0.025),
+#                               q10 = ~quant(.x,q = 0.10),
+#                               q90 = ~quant(.x,q = 0.90),
+#                               q97_5 = ~quant(.x,q = 0.975))%>%
+#   mutate(inference = "pred_count assuming log normal variation among routes",
+#          variable = "pred_count_lognormal")
+#
+# pred_count_lognormal_alt1 <- fit$summary(variable = "pred_count_alt1",
+#                                    "mean",
+#                                    "median",
+#                                    "sd",
+#                                    "rhat",
+#                                    "ess_bulk",
+#                                    q2_5 = ~quant(.x,q = 0.025),
+#                                    q10 = ~quant(.x,q = 0.10),
+#                                    q90 = ~quant(.x,q = 0.90),
+#                                    q97_5 = ~quant(.x,q = 0.975))%>%
+#   mutate(inference = "pred_count assuming log normal variation among routes removing t-dist factor",
+#          variable = "pred_count_alt1")
+#
+#
+# pred_count_lognormal_alt2 <- fit$summary(variable = "pred_count_alt2",
+#                                    "mean",
+#                                    "median",
+#                                    "sd",
+#                                    "rhat",
+#                                    "ess_bulk",
+#                                    q2_5 = ~quant(.x,q = 0.025),
+#                                    q10 = ~quant(.x,q = 0.10),
+#                                    q90 = ~quant(.x,q = 0.90),
+#                                    q97_5 = ~quant(.x,q = 0.975))%>%
+#   mutate(inference = "pred_count assuming log normal variation among routes removing variance",
+#          variable = "pred_count_alt2")
+#
+#
+#
+# pred_count_alt <- fit$summary(variable = "pred_count_mean",
+#                         "mean",
+#                         "median",
+#                         "sd",
+#                         "rhat",
+#                         "ess_bulk",
+#                         q2_5 = ~quant(.x,q = 0.025),
+#                         q10 = ~quant(.x,q = 0.10),
+#                         q90 = ~quant(.x,q = 0.90),
+#                         q97_5 = ~quant(.x,q = 0.975))%>%
+#   mutate(inference = "pred_count realised mean across route-observer")
+#
+#
+# pred_count <- fit$summary(variable = "pred_count_median",
+#                     "mean",
+#                     "median",
+#                     "sd",
+#                     "rhat",
+#                     "ess_bulk",
+#                     q2_5 = ~quant(.x,q = 0.025),
+#                     q10 = ~quant(.x,q = 0.10),
+#                     q90 = ~quant(.x,q = 0.90),
+#                     q97_5 = ~quant(.x,q = 0.975))%>%
+#   mutate(inference = "pred_count realised median across route-observer")
+#
+#
+#
+# rho <- fit$summary(variable = "RHO",
+#                           "mean",
+#                           "median",
+#                           "sd",
+#                           "rhat",
+#                           "ess_bulk",
+#                           q2_5 = ~quant(.x,q = 0.025),
+#                           q10 = ~quant(.x,q = 0.10),
+#                           q90 = ~quant(.x,q = 0.90),
+#                           q97_5 = ~quant(.x,q = 0.975))%>%
+#   mutate(inference = "slope of log-log relationship")
+#
+#
+#
+# adjs[1,"calibration"] <- as.numeric(cali$mean)
+# adjs[1,"calibration_sd"] <- as.numeric(cali$sd)
+#
+# adjs[1,"calibration_mean"] <- as.numeric(cali_alt$mean)
+# adjs[1,"calibration_mean_sd"] <- as.numeric(cali_alt$sd)
+#
+# adjs[1,"calibration_lognormal"] <- as.numeric(cali_lognormal$mean)
+# adjs[1,"calibration_lognormal_sd"] <- as.numeric(cali_lognormal$sd)
+#
+# adjs[1,"calibration_lognormal_alt1"] <- as.numeric(cali_lognormal_alt1$mean)
+# adjs[1,"calibration_lognormal_alt1_sd"] <- as.numeric(cali_lognormal_alt1$sd)
+#
+# adjs[1,"calibration_lognormal_alt2"] <- as.numeric(cali_lognormal_alt2$mean)
+# adjs[1,"calibration_lognormal_alt2_sd"] <- as.numeric(cali_lognormal_alt2$sd)
+#
+# # BETA_post <- fit$draws(variables = "BETA",
+# #                        format = "df")
+#
+#
+# cali_lognormal_post <- fit$draws(variables = "calibration",
 #                        format = "df")
-
-
-cali_lognormal_post <- fit$draws(variables = "calibration",
-                       format = "df")
-
-cali_lognormal_alt1_post <- fit$draws(variables = "calibration_alt1",
-                                 format = "df")
-
-cali_lognormal_alt2_post <- fit$draws(variables = "calibration_alt2",
-                                 format = "df")
-
-cali_alt_post <- fit$draws(variables = "calibration_mean",
-                           format = "df")
-
-cali_post <- fit$draws(variables = "calibration_median",
-                              format = "df")
-
-trm_mean <- function(x,p = 0.025){
-  q1 <- quantile(x,p)
-  q2 <- quantile(x,1-p)
-  xtrim <- x[which(x > q1 & x < q2)]
-  trim_m <- mean(xtrim)
-  return(trim_m)
-}
-
-cali_route_post <- fit$draws(variables = "calibration_r",
-                           format = "df")
-
-cali_trim_post <- cali_alt_post
-
-for(i in 1:nrow(cali_route_post)){
-  cali_trim_post[i,1] <- trm_mean(as.numeric(cali_route_post[i,1:stan_data$n_routes]))
-}
-
-adjs[1,"calibration_trimmed"] <- mean(as.numeric(cali_trim_post$calibration_mean))
-adjs[1,"calibration_trimmed_sd"] <- sd(as.numeric(cali_trim_post$calibration_mean))
-
-# measure kurtosis and skew in betas -------------------------------------------------
-
-betas <- summ %>% filter(grepl("beta[",variable,fixed = TRUE))
-
-skew_flag <- e1071::skewness(betas$mean,type = 3)
-kurtosis_flag <- e1071::kurtosis(betas$mean,type = 3)
-
-sd_beta <- summ %>% filter(grepl("sd_beta",variable,fixed = TRUE))
-adj_post <- summ %>% filter(grepl("adj",variable,fixed = TRUE))
-
-
-adjs[1,"beta_skew"] <- as.numeric(skew_flag)
-adjs[1,"beta_kurtosis"] <- as.numeric(kurtosis_flag)
-
-
-route_link <- combined %>%
-  group_by(route,route_name,strata_name) %>%
-  summarise(mean_count = mean(count),
-            mean_ebird_abund = mean(ebird_abund),
-            n_counts = n(),
-            .groups = "drop") %>%
-  arrange(route)
-
-count_22 <- combined %>%
-  filter(year %in% c(2021:2023)) %>%
-  group_by(route) %>%
-  summarise(obs_count_mean_21_23 = mean(count,na.rm = TRUE))
-
-route_link <- route_link %>%
-  left_join(count_22, by = "route")
-routes_buf_extra <- routcountroutes_buf_extra <- routes_buf %>%
-  sf::st_buffer(10000)
-
-calibration_by_rts <- summ %>% filter(grepl("calibration_r[",variable,fixed = TRUE)) %>%
-  select(mean, median,sd,rhat,ess_bulk) %>%
-  rename_with(.fn = ~ paste0("calib_rt_",.x))
-
-
-pred_count_by_rts <- summ %>% filter(grepl("pred_count_r[",variable,fixed = TRUE)) %>%
-  select(mean, median,q5,q95,sd,rhat,ess_bulk) %>%
-  rename_with(.fn = ~ paste0("pred_count_rt_",.x))
-
-betas_by_route <- betas %>%
-  bind_cols(route_link) %>%
-  bind_cols(calibration_by_rts) %>%
-  bind_cols(pred_count_by_rts) %>%
-  mutate(mean_beta = (mean),
-            median_calibration = (calib_rt_median),
-            mean_pred_count = (pred_count_rt_median),
-            min_pred_count = (pred_count_rt_q5),
-            max_pred_count = (pred_count_rt_q95),
-         mean_residual = mean_count - mean_pred_count,
-         residual_2022 = obs_count_mean_21_23 - mean_pred_count)
-
-
-betas_plot <- routes_buf_extra %>%
-  left_join(betas_by_route, by = "route_name")
-
-beta_distr <- ggplot()+
-  geom_sf(data = strata)+
-  geom_sf(data = betas_plot,
-          aes(colour = mean_beta,
-              fill = mean_beta))+
-  scale_colour_viridis_b(aesthetics = c("colour","fill"),
-                         breaks = seq(-12,12,2),
-                         guide = guide_coloursteps(even.steps = FALSE,
-                                                   show.limits = TRUE),
-                         option = "H")
-
-
-resid_distr2 <- ggplot()+
-  geom_sf(data = strata)+
-  geom_sf(data = betas_plot,
-          aes(colour = residual_2022,
-              fill = residual_2022))+
-  scale_colour_viridis_b(aesthetics = c("colour","fill"),
-                         breaks = as.numeric(quantile(betas_plot$residual_2022,
-                                             seq(0,1,by = 0.1), na.rm = TRUE)),
-                         guide = guide_coloursteps(even.steps = FALSE,
-                                                   show.limits = TRUE),
-                         option = "H")
-
-resid_distr <- ggplot()+
-  geom_sf(data = strata)+
-  geom_sf(data = betas_plot,
-          aes(colour = mean_residual,
-              fill = mean_residual))+
-  scale_colour_viridis_b(aesthetics = c("colour","fill"),
-                         breaks = as.numeric(quantile(betas_plot$mean_residual,
-                                                      seq(0,1,by = 0.1))),
-                         guide = guide_coloursteps(even.steps = FALSE,
-                                                   show.limits = TRUE),
-                         option = "H")
-
-
-flags <- data.frame(name = c("Mean across routes",
-                             "Median across routes"),
-                    value = c(mean(betas_by_route$mean_beta),
-                              median(betas_by_route$mean_beta)))
-
-
-beta_hist <- ggplot()+
-  geom_histogram(data = betas_by_route,
-                 aes(x = mean_beta),
-                 bins = 100)+
-  geom_vline(data = flags,
-             aes(colour = name,
-                 xintercept = value))+
-  geom_point(data = flags,
-             aes(colour = name,y = 0,x = value))+
-  theme_bw()+
-  scale_colour_viridis_d()
-
-
-flags <- data.frame(name = c("Calibration using posterior mean across routes",
-                             "Trimmed mean across routes",
-                              "mean of posterior medians across routes",
-                              "Calibration assuming lognormal and t-dist",
-                              "Calibration assuming lognormal",
-                              "Calibration using only hyperparameter (median of lognormal)",
-                              "Calibration using posterior median across routes"),
-                    value = c(cali_alt$mean,
-                              #mean(betas_by_route$median_calibration),
-                              mean(as.numeric(cali_trim_post$calibration_mean)),
-                              mean(betas_by_route$median_calibration),
-                              cali_lognormal$mean,
-                              cali_lognormal_alt1$mean,
-                              cali_lognormal_alt2$mean,
-                              cali$mean))
-
-calib_hist <- ggplot()+
-  geom_histogram(data = betas_by_route,
-                 aes(x = median_calibration),
-                 bins = 100)+
-  geom_vline(data = flags,
-             aes(colour = name,
-                 xintercept = value))+
-  geom_point(data = flags,
-              aes(colour = name,y = 0,x = value))+
-  theme_bw()+
-  scale_colour_viridis_d()+
-  scale_x_continuous(transform = "log", labels = scales::label_comma())
-
-
-
-
-flags <- data.frame(name = c("Mean observed count across routes",
-                             "Mean predicted count across routes",
-                             "Expected count assuming lognormal and t-dist",
-                             "Expected count assuming lognormal",
-                             "Expected count using only hyperparameter (median of lognormal)",
-                             "Expected count using posterior median across routes"),
-                    value = c(mean(combined$count),
-                              mean(betas_by_route$mean_pred_count),
-                              pred_count_lognormal$mean,
-                              pred_count_lognormal_alt1$mean,
-                              pred_count_lognormal_alt2$mean,
-                              pred_count$mean))
-count_hist <- ggplot()+
-  geom_histogram(data = betas_by_route,
-                 aes(x = mean_count),
-                 bins = 100)+
-  geom_vline(data = flags,
-             aes(colour = name,
-                 xintercept = value))+
-  geom_point(data = flags,
-             aes(colour = name,y = 0,x = value))+
-  theme_bw()+
-  scale_colour_viridis_d()+
-  scale_x_continuous(labels = scales::label_comma())
-
-saveRDS(betas_by_route,paste0(output_dir,"/betas_by_route_alt_",
-               vers,sp_aou,"_",sp_ebird,".rds"))
-
-
-
-
+#
+# cali_lognormal_alt1_post <- fit$draws(variables = "calibration_alt1",
+#                                  format = "df")
+#
+# cali_lognormal_alt2_post <- fit$draws(variables = "calibration_alt2",
+#                                  format = "df")
+#
+# cali_alt_post <- fit$draws(variables = "calibration_mean",
+#                            format = "df")
+#
+# cali_post <- fit$draws(variables = "calibration_median",
+#                               format = "df")
+#
+# trm_mean <- function(x,p = 0.025){
+#   q1 <- quantile(x,p)
+#   q2 <- quantile(x,1-p)
+#   xtrim <- x[which(x > q1 & x < q2)]
+#   trim_m <- mean(xtrim)
+#   return(trim_m)
+# }
+#
+# cali_route_post <- fit$draws(variables = "calibration_r",
+#                            format = "df")
+#
+# cali_trim_post <- cali_alt_post
+#
+# for(i in 1:nrow(cali_route_post)){
+#   cali_trim_post[i,1] <- trm_mean(as.numeric(cali_route_post[i,1:stan_data$n_routes]))
+# }
+#
+# adjs[1,"calibration_trimmed"] <- mean(as.numeric(cali_trim_post$calibration_mean))
+# adjs[1,"calibration_trimmed_sd"] <- sd(as.numeric(cali_trim_post$calibration_mean))
+#
+# # measure kurtosis and skew in betas -------------------------------------------------
+#
+# betas <- summ %>% filter(grepl("beta[",variable,fixed = TRUE))
+#
+# skew_flag <- e1071::skewness(betas$mean,type = 3)
+# kurtosis_flag <- e1071::kurtosis(betas$mean,type = 3)
+#
+# sd_beta <- summ %>% filter(grepl("sd_beta",variable,fixed = TRUE))
+# adj_post <- summ %>% filter(grepl("adj",variable,fixed = TRUE))
+#
+#
+# adjs[1,"beta_skew"] <- as.numeric(skew_flag)
+# adjs[1,"beta_kurtosis"] <- as.numeric(kurtosis_flag)
+#
+#
+# route_link <- combined %>%
+#   group_by(route,route_name,strata_name) %>%
+#   summarise(mean_count = mean(count),
+#             mean_ebird_abund = mean(ebird_abund),
+#             n_counts = n(),
+#             .groups = "drop") %>%
+#   arrange(route)
+#
+# count_22 <- combined %>%
+#   filter(year %in% c(2021:2023)) %>%
+#   group_by(route) %>%
+#   summarise(obs_count_mean_21_23 = mean(count,na.rm = TRUE))
+#
+# route_link <- route_link %>%
+#   left_join(count_22, by = "route")
+# routes_buf_extra <- routcountroutes_buf_extra <- routes_buf %>%
+#   sf::st_buffer(10000)
+#
+# calibration_by_rts <- summ %>% filter(grepl("calibration_r[",variable,fixed = TRUE)) %>%
+#   select(mean, median,sd,rhat,ess_bulk) %>%
+#   rename_with(.fn = ~ paste0("calib_rt_",.x))
+#
+#
+# pred_count_by_rts <- summ %>% filter(grepl("pred_count_r[",variable,fixed = TRUE)) %>%
+#   select(mean, median,q5,q95,sd,rhat,ess_bulk) %>%
+#   rename_with(.fn = ~ paste0("pred_count_rt_",.x))
+#
+# betas_by_route <- betas %>%
+#   bind_cols(route_link) %>%
+#   bind_cols(calibration_by_rts) %>%
+#   bind_cols(pred_count_by_rts) %>%
+#   mutate(mean_beta = (mean),
+#             median_calibration = (calib_rt_median),
+#             mean_pred_count = (pred_count_rt_median),
+#             min_pred_count = (pred_count_rt_q5),
+#             max_pred_count = (pred_count_rt_q95),
+#          mean_residual = mean_count - mean_pred_count,
+#          residual_2022 = obs_count_mean_21_23 - mean_pred_count)
+#
+#
+# betas_plot <- routes_buf_extra %>%
+#   left_join(betas_by_route, by = "route_name")
+#
+# beta_distr <- ggplot()+
+#   geom_sf(data = strata)+
+#   geom_sf(data = betas_plot,
+#           aes(colour = mean_beta,
+#               fill = mean_beta))+
+#   scale_colour_viridis_b(aesthetics = c("colour","fill"),
+#                          breaks = seq(-12,12,2),
+#                          guide = guide_coloursteps(even.steps = FALSE,
+#                                                    show.limits = TRUE),
+#                          option = "H")
+#
+#
+# resid_distr2 <- ggplot()+
+#   geom_sf(data = strata)+
+#   geom_sf(data = betas_plot,
+#           aes(colour = residual_2022,
+#               fill = residual_2022))+
+#   scale_colour_viridis_b(aesthetics = c("colour","fill"),
+#                          breaks = as.numeric(quantile(betas_plot$residual_2022,
+#                                              seq(0,1,by = 0.1), na.rm = TRUE)),
+#                          guide = guide_coloursteps(even.steps = FALSE,
+#                                                    show.limits = TRUE),
+#                          option = "H")
+#
+# resid_distr <- ggplot()+
+#   geom_sf(data = strata)+
+#   geom_sf(data = betas_plot,
+#           aes(colour = mean_residual,
+#               fill = mean_residual))+
+#   scale_colour_viridis_b(aesthetics = c("colour","fill"),
+#                          breaks = as.numeric(quantile(betas_plot$mean_residual,
+#                                                       seq(0,1,by = 0.1))),
+#                          guide = guide_coloursteps(even.steps = FALSE,
+#                                                    show.limits = TRUE),
+#                          option = "H")
+#
+#
+# flags <- data.frame(name = c("Mean across routes",
+#                              "Median across routes"),
+#                     value = c(mean(betas_by_route$mean_beta),
+#                               median(betas_by_route$mean_beta)))
+#
+#
+# beta_hist <- ggplot()+
+#   geom_histogram(data = betas_by_route,
+#                  aes(x = mean_beta),
+#                  bins = 100)+
+#   geom_vline(data = flags,
+#              aes(colour = name,
+#                  xintercept = value))+
+#   geom_point(data = flags,
+#              aes(colour = name,y = 0,x = value))+
+#   theme_bw()+
+#   scale_colour_viridis_d()
+#
+#
+# flags <- data.frame(name = c("Calibration using posterior mean across routes",
+#                              "Trimmed mean across routes",
+#                               "mean of posterior medians across routes",
+#                               "Calibration assuming lognormal and t-dist",
+#                               "Calibration assuming lognormal",
+#                               "Calibration using only hyperparameter (median of lognormal)",
+#                               "Calibration using posterior median across routes"),
+#                     value = c(cali_alt$mean,
+#                               #mean(betas_by_route$median_calibration),
+#                               mean(as.numeric(cali_trim_post$calibration_mean)),
+#                               mean(betas_by_route$median_calibration),
+#                               cali_lognormal$mean,
+#                               cali_lognormal_alt1$mean,
+#                               cali_lognormal_alt2$mean,
+#                               cali$mean))
+#
+# calib_hist <- ggplot()+
+#   geom_histogram(data = betas_by_route,
+#                  aes(x = median_calibration),
+#                  bins = 100)+
+#   geom_vline(data = flags,
+#              aes(colour = name,
+#                  xintercept = value))+
+#   geom_point(data = flags,
+#               aes(colour = name,y = 0,x = value))+
+#   theme_bw()+
+#   scale_colour_viridis_d()+
+#   scale_x_continuous(transform = "log", labels = scales::label_comma())
+#
+#
+#
+#
 # flags <- data.frame(name = c("Mean observed count across routes",
 #                              "Mean predicted count across routes",
 #                              "Expected count assuming lognormal and t-dist",
@@ -1406,853 +1379,884 @@ saveRDS(betas_by_route,paste0(output_dir,"/betas_by_route_alt_",
 #                               pred_count_lognormal_alt1$mean,
 #                               pred_count_lognormal_alt2$mean,
 #                               pred_count$mean))
-y_pred_bind <- data.frame(year = rep(c(1:stan_data$n_years)+2012,2),
-                          ebird_abund = rep(c(min(combined$ebird_abund),max(combined$ebird_abund)),each = stan_data$n_years))
-
-predictions <- summ %>% filter(grepl("raw_prediction",variable)) %>%
-  cbind(y_pred_bind)
-
-
-predictions_sel <- predictions %>%
-  filter(year == 2022)
-
-obs_pred_count <- ggplot(data = betas_by_route,
-                         aes(y = mean_count,x = mean_ebird_abund ))+
-  geom_point(alpha = 0.3, aes(colour = pred_count_rt_median))+
-  theme_bw()+
-  scale_colour_viridis_c()+
-  scale_x_continuous(labels = scales::label_comma(),
-                     transform = "log10")+
-  scale_y_continuous(transform = "log10",labels = scales::label_comma())+
-  geom_line(data = predictions,aes(x = ebird_abund,y = mean, group = year),
-            alpha = 0.5)+
-  geom_line(data = predictions_sel,aes(x = ebird_abund,y = mean))
-
-
-
-
-# R-squared ---------------------------------------------------------------
-
-
-y_pred_w_route <- exp(posterior::as_draws_matrix(fit$draws("E",format = "df")))
-
-var_resid <- apply(y_pred_w_route-stan_data$count,MARGIN = 1,FUN = var)
-var_fit <- apply(y_pred_w_route,MARGIN = 1,FUN = var)
-R_squared_w_route <- (var_fit/(var_resid+var_fit))
-
-gamma_post <- posterior::as_draws_matrix(fit$draws("gamma",format = "df"))
-BETA_post <- posterior::as_draws_matrix(fit$draws("BETA",format = "df"))
-
-y_pred_not_route <- matrix(data = NA,nrow = nrow(gamma_post),
-                           ncol = stan_data$n_counts)
-for(i in 1:stan_data$n_counts){
-  y_pred_not_route[,i] <- exp(BETA_post + gamma_post[,stan_data$year[i]] + stan_data$log_mean_rel_abund[stan_data$route[i]])
-}
-
-var_resid <- apply(y_pred_not_route-stan_data$count,MARGIN = 1,FUN = var)
-var_fit <- apply(y_pred_not_route,MARGIN = 1,FUN = var)
-R_squared_not_route <- (var_fit/(var_resid+var_fit))
-
-
-#hist(R_squared_not_route)
-
-
-
-
-
-param_infer <- bind_rows(cali_alt,
-                         cali,
-                         cali_lognormal,
-                         cali_lognormal_alt1,
-                         cali_lognormal_alt2,
-                         pred_count_alt,
-                         pred_count,
-                         pred_count_lognormal,
-                         pred_count_lognormal_alt1,
-                         pred_count_lognormal_alt2,
-                         avail_correction_realised,
-                         p_avail_realised,
-                         edr_realised,
-                         surveyed_area_realised,
-                         rho)
-
-
-adjs[1,"calibration_trimmed"] <- mean(as.numeric(cali_trim_post$calibration_mean))
-adjs[1,"calibration_trimmed_sd"] <- sd(as.numeric(cali_trim_post$calibration_mean))
-
-rsq <- data.frame(mean = c(mean(R_squared_w_route),
-         mean(R_squared_not_route),
-         mean(as.numeric(cali_trim_post$calibration_mean)),
-         as.numeric(skew_flag),
-         as.numeric(kurtosis_flag)),
-q10 = c(quantile(R_squared_w_route,0.05),
-        quantile(R_squared_not_route,0.05),
-        quantile(as.numeric(cali_trim_post$calibration_mean),0.05),
-        NA,
-        NA),
-q90 = c(quantile(R_squared_w_route,0.95),
-        quantile(R_squared_not_route,0.95),
-        quantile(as.numeric(cali_trim_post$calibration_mean),0.95),
-        NA,
-        NA),
-inference = c("R-squared including route-level variation",
-              "R-squared excluding route-level variation",
-              "calibration based on post-hoc trimmed posterior mean",
-              "skewness of betas positive is heavy right-tail",
-              "kurtosis of betas excess-kurtosis positive is heavy-tailed"))
-
-adjs[1,"beta_skew"] <- as.numeric(skew_flag)
-adjs[1,"beta_kurtosis"] <- as.numeric(kurtosis_flag)
-
-
-param_infer <- param_infer %>%
-  bind_rows(rsq) %>%
-  mutate(english = sp_sel,
-         sp_eBird = sp_ebird,
-         aou = sp_aou)
-
-#param_infer2 <- readRDS(paste0(output_dir,"/parameter_inference_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
-
-saveRDS(param_infer,paste0(output_dir,"/parameter_inference_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
-
-
-
-adjs_out <- bind_rows(adjs_out,adjs)
-
-# Seasonal corrections on counts ------------------------------------------
-strat_names <- combined %>%
-  select(strata,strata_name) %>%
-  distinct()
-
-seasonal_strat <- summ %>% filter(grepl("doy_pred[",variable,fixed = TRUE)) %>%
-  mutate(doy = rep(c(1:stan_data$n_doy),times = stan_data$n_strata) + (min(combined$day_of_year)-1),
-         strata = rep(c(1:stan_data$n_strata),each = stan_data$n_doy)) %>%
-  inner_join(strat_names,by = "strata")
-
-seasonal <- summ %>% filter(grepl("DOY_pred[",variable,fixed = TRUE)) %>%
-  mutate(doy = c(1:stan_data$n_doy)+ (min(combined$day_of_year)-1))
-
-strat_labs <- seasonal_strat %>%
-  filter(doy == max(combined$day_of_year))
-
-vis_season <- ggplot(data = seasonal_strat,
-                     aes(x = doy,y = mean,
-                         group = strata_name,
-                         colour = strata_name))+
-  geom_ribbon(data = seasonal,aes(x = doy,y = mean,
-                                  ymin = q5, ymax = q95),
-              alpha = 0.2,
-              inherit.aes = FALSE)+
-  geom_line(data = seasonal,aes(x = doy,y = mean),
-            inherit.aes = FALSE)+
-  geom_line(alpha = 0.3)+
-  coord_cartesian(xlim = c(100,240))+
-  ggrepel::geom_text_repel(data = strat_labs, aes(label = strata_name),
-                           size = 1.5,
-                           min.segment.length = 0,
-                           xlim = c(200,240),
-                           nudge_x = 20)+
-  scale_colour_viridis_d()+
-  theme(legend.position = "none")
-
-
-
-
-
-# Annual variation ------------------------------------------
-
-
-annual_strat <- summ %>% filter(grepl("yeareffect[",variable,fixed = TRUE)) %>%
-  mutate(year = rep(c(1:stan_data$n_years),each = stan_data$n_strata) + (min(combined$year)-1),
-         strata = rep(c(1:stan_data$n_strata),times = stan_data$n_years)) %>%
-  inner_join(strat_names,by = "strata")
-
-
-strat_labs <- annual_strat %>%
-  filter(year == min(combined$year))
-
-vis_annual <- ggplot(data = annual_strat,
-                     aes(x = year,y = mean,
-                         group = strata_name,
-                         colour = strata_name))+
-  # geom_ribbon(aes(ymin = q5, ymax = q95),
-  #             alpha = 0.2)+
-  geom_line(alpha = 0.3)+
-  coord_cartesian(xlim = c(2008,2023))+
-  ggrepel::geom_text_repel(data = strat_labs, aes(label = strata_name),
-                           size = 1.5,
-                           min.segment.length = 0,
-                           #xlim = c(200,240),
-                           nudge_x = -2)+
-  scale_colour_viridis_d()+
-  scale_y_continuous(transform = "exp")+
-  theme(legend.position = "none")
-
-
-# explore relationship ----------------------------------------------------
-y_pred_bind <- data.frame(year = rep(c(1:stan_data$n_years)+2012,2),
-                          ebird_abund = rep(c(min(combined$ebird_abund),max(combined$ebird_abund)),each = stan_data$n_years))
-
-predictions <- summ %>% filter(grepl("raw_prediction",variable)) %>%
-  cbind(y_pred_bind)
-
-
-
-vis_relationship <- ggplot(data = combined,
-                           aes(y = count,x = ebird_abund))+
-  geom_point(aes(colour = year), alpha = 0.3)+
-#  geom_smooth(method = "gam")+
-  geom_line(data = predictions,aes(x = ebird_abund,y = mean,
-                                   colour = year,
-                                   group = year))+
-  geom_ribbon(data = predictions,aes(x = ebird_abund,y = mean,
-                                     ymin = q5,ymax = q95,
-                                   fill = year,
-                                   group = year),
-              alpha = 0.1)+
-  scale_colour_viridis_c(aesthetics = c("colour","fill"))
-
-
-vis_relationship2 <- ggplot(data = combined,
-                           aes(y = count,x = ebird_abund))+
-  geom_point(aes(colour = year), alpha = 0.3)+
-  #  geom_smooth(method = "gam")+
-  geom_line(data = predictions,aes(x = ebird_abund,y = mean,
-                                   colour = year,
-                                   group = year))+
-  geom_ribbon(data = predictions,aes(x = ebird_abund,y = mean,
-                                     ymin = q5,ymax = q95,
-                                     fill = year,
-                                     group = year),
-              alpha = 0.1)+
-  scale_colour_viridis_c(aesthetics = c("colour","fill"))+
-  scale_y_continuous(transform = "log10")+
-  scale_x_continuous(transform = "log10")
-
-
-
+# count_hist <- ggplot()+
+#   geom_histogram(data = betas_by_route,
+#                  aes(x = mean_count),
+#                  bins = 100)+
+#   geom_vline(data = flags,
+#              aes(colour = name,
+#                  xintercept = value))+
+#   geom_point(data = flags,
+#              aes(colour = name,y = 0,x = value))+
+#   theme_bw()+
+#   scale_colour_viridis_d()+
+#   scale_x_continuous(labels = scales::label_comma())
 #
-# combined_means <- combined %>%
-#   mutate(prov_state = str_extract(pattern = ".+(?=[[:punct:]])",string = route_name)) %>%
-#   group_by(prov_state,route_name,ebird_abund,logm) %>%
-#   summarise(mean_count = mean(count),
-#             min_count = quantile(count,0),
-#             max_count = quantile(count,1)) %>%
-#   filter(mean_count > 0) %>%
-#   mutate(min_count = ifelse(min_count == 0,0.01,min_count))
+# saveRDS(betas_by_route,paste0(output_dir,"/betas_by_route_alt_",
+#                vers,sp_aou,"_",sp_ebird,".rds"))
 #
-# vis_relationship_mean <- ggplot(data = combined_means,
-#                                 aes(y = (mean_count),x = ebird_abund,
-#                                     colour = prov_state))+
-#   geom_pointrange(aes(ymin = min_count,ymax = max_count),
-#                   alpha = 0.3)+
+#
+#
+#
+# # flags <- data.frame(name = c("Mean observed count across routes",
+# #                              "Mean predicted count across routes",
+# #                              "Expected count assuming lognormal and t-dist",
+# #                              "Expected count assuming lognormal",
+# #                              "Expected count using only hyperparameter (median of lognormal)",
+# #                              "Expected count using posterior median across routes"),
+# #                     value = c(mean(combined$count),
+# #                               mean(betas_by_route$mean_pred_count),
+# #                               pred_count_lognormal$mean,
+# #                               pred_count_lognormal_alt1$mean,
+# #                               pred_count_lognormal_alt2$mean,
+# #                               pred_count$mean))
+# y_pred_bind <- data.frame(year = rep(c(1:stan_data$n_years)+2012,2),
+#                           ebird_abund = rep(c(min(combined$ebird_abund),max(combined$ebird_abund)),each = stan_data$n_years))
+#
+# predictions <- summ %>% filter(grepl("raw_prediction",variable)) %>%
+#   cbind(y_pred_bind)
+#
+#
+# predictions_sel <- predictions %>%
+#   filter(year == 2022)
+#
+# obs_pred_count <- ggplot(data = betas_by_route,
+#                          aes(y = mean_count,x = mean_ebird_abund ))+
+#   geom_point(alpha = 0.3, aes(colour = pred_count_rt_median))+
+#   theme_bw()+
+#   scale_colour_viridis_c()+
+#   scale_x_continuous(labels = scales::label_comma(),
+#                      transform = "log10")+
+#   scale_y_continuous(transform = "log10",labels = scales::label_comma())+
+#   geom_line(data = predictions,aes(x = ebird_abund,y = mean, group = year),
+#             alpha = 0.5)+
+#   geom_line(data = predictions_sel,aes(x = ebird_abund,y = mean))
+#
+#
+#
+#
+# # R-squared ---------------------------------------------------------------
+#
+#
+# y_pred_w_route <- exp(posterior::as_draws_matrix(fit$draws("E",format = "df")))
+#
+# var_resid <- apply(y_pred_w_route-stan_data$count,MARGIN = 1,FUN = var)
+# var_fit <- apply(y_pred_w_route,MARGIN = 1,FUN = var)
+# R_squared_w_route <- (var_fit/(var_resid+var_fit))
+#
+# gamma_post <- posterior::as_draws_matrix(fit$draws("gamma",format = "df"))
+# BETA_post <- posterior::as_draws_matrix(fit$draws("BETA",format = "df"))
+#
+# y_pred_not_route <- matrix(data = NA,nrow = nrow(gamma_post),
+#                            ncol = stan_data$n_counts)
+# for(i in 1:stan_data$n_counts){
+#   y_pred_not_route[,i] <- exp(BETA_post + gamma_post[,stan_data$year[i]] + stan_data$log_mean_rel_abund[stan_data$route[i]])
+# }
+#
+# var_resid <- apply(y_pred_not_route-stan_data$count,MARGIN = 1,FUN = var)
+# var_fit <- apply(y_pred_not_route,MARGIN = 1,FUN = var)
+# R_squared_not_route <- (var_fit/(var_resid+var_fit))
+#
+#
+# #hist(R_squared_not_route)
+#
+#
+#
+#
+#
+# param_infer <- bind_rows(cali_alt,
+#                          cali,
+#                          cali_lognormal,
+#                          cali_lognormal_alt1,
+#                          cali_lognormal_alt2,
+#                          pred_count_alt,
+#                          pred_count,
+#                          pred_count_lognormal,
+#                          pred_count_lognormal_alt1,
+#                          pred_count_lognormal_alt2,
+#                          avail_correction_realised,
+#                          p_avail_realised,
+#                          edr_realised,
+#                          surveyed_area_realised,
+#                          rho)
+#
+#
+# adjs[1,"calibration_trimmed"] <- mean(as.numeric(cali_trim_post$calibration_mean))
+# adjs[1,"calibration_trimmed_sd"] <- sd(as.numeric(cali_trim_post$calibration_mean))
+#
+# rsq <- data.frame(mean = c(mean(R_squared_w_route),
+#          mean(R_squared_not_route),
+#          mean(as.numeric(cali_trim_post$calibration_mean)),
+#          as.numeric(skew_flag),
+#          as.numeric(kurtosis_flag)),
+# q10 = c(quantile(R_squared_w_route,0.05),
+#         quantile(R_squared_not_route,0.05),
+#         quantile(as.numeric(cali_trim_post$calibration_mean),0.05),
+#         NA,
+#         NA),
+# q90 = c(quantile(R_squared_w_route,0.95),
+#         quantile(R_squared_not_route,0.95),
+#         quantile(as.numeric(cali_trim_post$calibration_mean),0.95),
+#         NA,
+#         NA),
+# inference = c("R-squared including route-level variation",
+#               "R-squared excluding route-level variation",
+#               "calibration based on post-hoc trimmed posterior mean",
+#               "skewness of betas positive is heavy right-tail",
+#               "kurtosis of betas excess-kurtosis positive is heavy-tailed"))
+#
+# adjs[1,"beta_skew"] <- as.numeric(skew_flag)
+# adjs[1,"beta_kurtosis"] <- as.numeric(kurtosis_flag)
+#
+#
+# param_infer <- param_infer %>%
+#   bind_rows(rsq) %>%
+#   mutate(english = sp_sel,
+#          sp_eBird = sp_ebird,
+#          aou = sp_aou)
+#
+# #param_infer2 <- readRDS(paste0(output_dir,"/parameter_inference_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
+#
+# saveRDS(param_infer,paste0(output_dir,"/parameter_inference_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
+#
+#
+#
+# adjs_out <- bind_rows(adjs_out,adjs)
+#
+# # Seasonal corrections on counts ------------------------------------------
+# strat_names <- combined %>%
+#   select(strata,strata_name) %>%
+#   distinct()
+#
+# seasonal_strat <- summ %>% filter(grepl("doy_pred[",variable,fixed = TRUE)) %>%
+#   mutate(doy = rep(c(1:stan_data$n_doy),times = stan_data$n_strata) + (min(combined$day_of_year)-1),
+#          strata = rep(c(1:stan_data$n_strata),each = stan_data$n_doy)) %>%
+#   inner_join(strat_names,by = "strata")
+#
+# seasonal <- summ %>% filter(grepl("DOY_pred[",variable,fixed = TRUE)) %>%
+#   mutate(doy = c(1:stan_data$n_doy)+ (min(combined$day_of_year)-1))
+#
+# strat_labs <- seasonal_strat %>%
+#   filter(doy == max(combined$day_of_year))
+#
+# vis_season <- ggplot(data = seasonal_strat,
+#                      aes(x = doy,y = mean,
+#                          group = strata_name,
+#                          colour = strata_name))+
+#   geom_ribbon(data = seasonal,aes(x = doy,y = mean,
+#                                   ymin = q5, ymax = q95),
+#               alpha = 0.2,
+#               inherit.aes = FALSE)+
+#   geom_line(data = seasonal,aes(x = doy,y = mean),
+#             inherit.aes = FALSE)+
+#   geom_line(alpha = 0.3)+
+#   coord_cartesian(xlim = c(100,240))+
+#   ggrepel::geom_text_repel(data = strat_labs, aes(label = strata_name),
+#                            size = 1.5,
+#                            min.segment.length = 0,
+#                            xlim = c(200,240),
+#                            nudge_x = 20)+
+#   scale_colour_viridis_d()+
+#   theme(legend.position = "none")
+#
+#
+#
+#
+#
+# # Annual variation ------------------------------------------
+#
+#
+# annual_strat <- summ %>% filter(grepl("yeareffect[",variable,fixed = TRUE)) %>%
+#   mutate(year = rep(c(1:stan_data$n_years),each = stan_data$n_strata) + (min(combined$year)-1),
+#          strata = rep(c(1:stan_data$n_strata),times = stan_data$n_years)) %>%
+#   inner_join(strat_names,by = "strata")
+#
+#
+# strat_labs <- annual_strat %>%
+#   filter(year == min(combined$year))
+#
+# vis_annual <- ggplot(data = annual_strat,
+#                      aes(x = year,y = mean,
+#                          group = strata_name,
+#                          colour = strata_name))+
+#   # geom_ribbon(aes(ymin = q5, ymax = q95),
+#   #             alpha = 0.2)+
+#   geom_line(alpha = 0.3)+
+#   coord_cartesian(xlim = c(2008,2023))+
+#   ggrepel::geom_text_repel(data = strat_labs, aes(label = strata_name),
+#                            size = 1.5,
+#                            min.segment.length = 0,
+#                            #xlim = c(200,240),
+#                            nudge_x = -2)+
+#   scale_colour_viridis_d()+
+#   scale_y_continuous(transform = "exp")+
+#   theme(legend.position = "none")
+#
+#
+# # explore relationship ----------------------------------------------------
+# y_pred_bind <- data.frame(year = rep(c(1:stan_data$n_years)+2012,2),
+#                           ebird_abund = rep(c(min(combined$ebird_abund),max(combined$ebird_abund)),each = stan_data$n_years))
+#
+# predictions <- summ %>% filter(grepl("raw_prediction",variable)) %>%
+#   cbind(y_pred_bind)
+#
+#
+#
+# vis_relationship <- ggplot(data = combined,
+#                            aes(y = count,x = ebird_abund))+
+#   geom_point(aes(colour = year), alpha = 0.3)+
+# #  geom_smooth(method = "gam")+
+#   geom_line(data = predictions,aes(x = ebird_abund,y = mean,
+#                                    colour = year,
+#                                    group = year))+
+#   geom_ribbon(data = predictions,aes(x = ebird_abund,y = mean,
+#                                      ymin = q5,ymax = q95,
+#                                    fill = year,
+#                                    group = year),
+#               alpha = 0.1)+
+#   scale_colour_viridis_c(aesthetics = c("colour","fill"))
+#
+#
+# vis_relationship2 <- ggplot(data = combined,
+#                            aes(y = count,x = ebird_abund))+
+#   geom_point(aes(colour = year), alpha = 0.3)+
+#   #  geom_smooth(method = "gam")+
+#   geom_line(data = predictions,aes(x = ebird_abund,y = mean,
+#                                    colour = year,
+#                                    group = year))+
+#   geom_ribbon(data = predictions,aes(x = ebird_abund,y = mean,
+#                                      ymin = q5,ymax = q95,
+#                                      fill = year,
+#                                      group = year),
+#               alpha = 0.1)+
+#   scale_colour_viridis_c(aesthetics = c("colour","fill"))+
 #   scale_y_continuous(transform = "log10")+
-#   scale_x_continuous(transform = "log10")+
-#   geom_smooth(method = "lm")+
-#   geom_abline(slope = 1,intercept = 0)
-#
-#
-# vis_relationship_mean
-#
-
-
-# loading the breeding season abundance raster generated in
-# 2_Prepare_eBird_relative_abundance_in_buffer.R
-#
-breed_abundance <- readRDS(paste0("data/species_relative_abundance/",
-                                  sp_ebird,
-                                  "_derived_breeding_relative_abundance.rds"))
-
-names(breed_abundance) <- "breeding_abundance"
-
-breed_abundance_full <- breed_abundance
-
-# Strata level summaries --------------------------------
-# bbs_strata_buf <- bbsBayes2::load_map("bbs_usgs") %>%
-#   st_buffer(., dist = 10000) #add 10km buffer for clipping eBird data
+#   scale_x_continuous(transform = "log10")
 #
 #
 #
-# # project boundary to match raster data
-# region_boundary_proj <- st_transform(bbs_strata_buf, st_crs(breed_abundance))
-# # crop and mask to boundary of BBS
-# breed_abundance <- crop(breed_abundance, region_boundary_proj) |>
-#   mask(region_boundary_proj)
-
-
-strata_proj <- st_transform(strata,
-                            crs = st_crs(breed_abundance))
-
-# ## reprojecting the abundance surface
-# breed_sel1 <- project(breed_abundance, crs(strata), method = "near") |>
-#   # remove areas of the raster containing no data
-#   trim()
-
-abundance_in_strata <- terra::extract(breed_abundance_full,
-                                      strata_proj,
-                                       fun = sum,
-                                       na.rm = TRUE,
-                                       ID = TRUE,
-                                       exact = FALSE)
-
-
-
-## function to estimate full posterior of abundance
-
-post_abund <- function(x,draws = cali_post$calibration,
-                       fun = "mean",
-                       p = 0.025,
-                       use_log = FALSE){
-
-  y <- vector("numeric",length(x))
-
-  if(use_log){
-    xl <- log(x)
-  }
-  if(fun == "mean"){
-  for(i in 1:length(x)){
-    if(use_log){
-      y[i] <- exp(mean(xl[i]+as.numeric(draws)))
-    }else{
-     y[i] <- mean(x[i]*as.numeric(draws))
-    }
-  }
-  }
-
-  if(fun == "quantile"){
-    for(i in 1:length(x)){
-      if(use_log){
-        y[i] <- exp(quantile(xl[i]+as.numeric(draws),p, names = FALSE))
-
-      }else{
-      y[i] <- quantile(x[i]*as.numeric(draws),p, names = FALSE)
-      }
-    }
-  }
-
-  return(y)
-}
-### 3^2 scaling is to account for the area of each grid-cell
-###
-###
-log_normal_calibration <- FALSE
-use_trimmed_calibration <- TRUE
-# select calibration ------------------------------------------------------
-if(log_normal_calibration){
-  cali_use <- cali_lognormal_alt1_post
-}else{
-  cali_use <- cali_alt_post
-}
-if(use_trimmed_calibration){
-  cali_use <- cali_trim_post
-}
-names(cali_use)[1] <- "calibration"
-
-
-
-strata_abund <- data.frame(region = strata_proj$strata_name,
-                           region_type = "strata",
-                           sum_abund = 3^2 * unlist(abundance_in_strata[[2]])) %>%
-  filter(!is.na(sum_abund)) %>%
-  mutate(pop_mean = post_abund(sum_abund, use_log = FALSE,
-                               draws = cali_use$calibration,
-                                 fun = "mean"),
-         pop_median = post_abund(sum_abund, use_log = FALSE, draws = cali_use$calibration,
-                                 fun = "quantile",p = 0.5),
-         pop_lci_80 = post_abund(sum_abund, use_log = FALSE,draws = cali_use$calibration,
-                                 fun = "quantile",p = 0.1),
-         pop_uci_80 = post_abund(sum_abund, use_log = FALSE,draws = cali_use$calibration,
-                                 fun = "quantile",p = 0.9),
-         pop_lci_95 = post_abund(sum_abund, use_log = FALSE,draws = cali_use$calibration,
-                                 fun = "quantile",p = 0.025),
-         pop_uci_95 = post_abund(sum_abund, use_log = FALSE,draws = cali_use$calibration,
-                                 fun = "quantile",p = 0.975),
-         species = sp_sel,
-         species_ebird = sp_ebird,
-         strata_name = region) %>%
-  left_join(.,strata_names)
-  #filter(pop_mean != 0)
-strata_sampled <- readRDS(paste0("data/species_relative_abundance/",sp_ebird,"_bbs_strata_relative_abundance.rds")) %>%
-  select(strata_name,mean_ebird_abundance:log_ratio)
-
-strata_abund <- strata_abund %>%
-  left_join(strata_sampled,
-            by = "strata_name")
-
-# comp_plot <- ggplot(data = strata_abund,
-#                     aes(x = strata_name,
-#                         y = pop_mean))+
+# #
+# # combined_means <- combined %>%
+# #   mutate(prov_state = str_extract(pattern = ".+(?=[[:punct:]])",string = route_name)) %>%
+# #   group_by(prov_state,route_name,ebird_abund,logm) %>%
+# #   summarise(mean_count = mean(count),
+# #             min_count = quantile(count,0),
+# #             max_count = quantile(count,1)) %>%
+# #   filter(mean_count > 0) %>%
+# #   mutate(min_count = ifelse(min_count == 0,0.01,min_count))
+# #
+# # vis_relationship_mean <- ggplot(data = combined_means,
+# #                                 aes(y = (mean_count),x = ebird_abund,
+# #                                     colour = prov_state))+
+# #   geom_pointrange(aes(ymin = min_count,ymax = max_count),
+# #                   alpha = 0.3)+
+# #   scale_y_continuous(transform = "log10")+
+# #   scale_x_continuous(transform = "log10")+
+# #   geom_smooth(method = "lm")+
+# #   geom_abline(slope = 1,intercept = 0)
+# #
+# #
+# # vis_relationship_mean
+# #
+#
+#
+# # loading the breeding season abundance raster generated in
+# # 2_Prepare_eBird_relative_abundance_in_buffer.R
+# #
+# breed_abundance <- readRDS(paste0("data/species_relative_abundance_2023/",
+#                                   sp_ebird,
+#                                   "_derived_breeding_relative_abundance.rds"))
+#
+# names(breed_abundance) <- "breeding_abundance"
+#
+# breed_abundance_full <- breed_abundance
+#
+# # Strata level summaries --------------------------------
+# # bbs_strata_buf <- bbsBayes2::load_map("bbs_usgs") %>%
+# #   st_buffer(., dist = 10000) #add 10km buffer for clipping eBird data
+# #
+# #
+# #
+# # # project boundary to match raster data
+# # region_boundary_proj <- st_transform(bbs_strata_buf, st_crs(breed_abundance))
+# # # crop and mask to boundary of BBS
+# # breed_abundance <- crop(breed_abundance, region_boundary_proj) |>
+# #   mask(region_boundary_proj)
+#
+#
+# strata_proj <- st_transform(strata,
+#                             crs = st_crs(breed_abundance))
+#
+# # ## reprojecting the abundance surface
+# # breed_sel1 <- project(breed_abundance, crs(strata), method = "near") |>
+# #   # remove areas of the raster containing no data
+# #   trim()
+#
+# abundance_in_strata <- terra::extract(breed_abundance_full,
+#                                       strata_proj,
+#                                        fun = sum,
+#                                        na.rm = TRUE,
+#                                        ID = TRUE,
+#                                        exact = FALSE)
+#
+#
+#
+# ## function to estimate full posterior of abundance
+#
+# post_abund <- function(x,draws = cali_post$calibration,
+#                        fun = "mean",
+#                        p = 0.025,
+#                        use_log = FALSE){
+#
+#   y <- vector("numeric",length(x))
+#
+#   if(use_log){
+#     xl <- log(x)
+#   }
+#   if(fun == "mean"){
+#   for(i in 1:length(x)){
+#     if(use_log){
+#       y[i] <- exp(mean(xl[i]+as.numeric(draws)))
+#     }else{
+#      y[i] <- mean(x[i]*as.numeric(draws))
+#     }
+#   }
+#   }
+#
+#   if(fun == "quantile"){
+#     for(i in 1:length(x)){
+#       if(use_log){
+#         y[i] <- exp(quantile(xl[i]+as.numeric(draws),p, names = FALSE))
+#
+#       }else{
+#       y[i] <- quantile(x[i]*as.numeric(draws),p, names = FALSE)
+#       }
+#     }
+#   }
+#
+#   return(y)
+# }
+# ### 3^2 scaling is to account for the area of each grid-cell
+# ###
+# ###
+# log_normal_calibration <- FALSE
+# use_trimmed_calibration <- TRUE
+# # select calibration ------------------------------------------------------
+# if(log_normal_calibration){
+#   cali_use <- cali_lognormal_alt1_post
+# }else{
+#   cali_use <- cali_alt_post
+# }
+# if(use_trimmed_calibration){
+#   cali_use <- cali_trim_post
+# }
+# names(cali_use)[1] <- "calibration"
+#
+#
+#
+# strata_abund <- data.frame(region = strata_proj$strata_name,
+#                            region_type = "strata",
+#                            sum_abund = 3^2 * unlist(abundance_in_strata[[2]])) %>%
+#   filter(!is.na(sum_abund)) %>%
+#   mutate(pop_mean = post_abund(sum_abund, use_log = FALSE,
+#                                draws = cali_use$calibration,
+#                                  fun = "mean"),
+#          pop_median = post_abund(sum_abund, use_log = FALSE, draws = cali_use$calibration,
+#                                  fun = "quantile",p = 0.5),
+#          pop_lci_80 = post_abund(sum_abund, use_log = FALSE,draws = cali_use$calibration,
+#                                  fun = "quantile",p = 0.1),
+#          pop_uci_80 = post_abund(sum_abund, use_log = FALSE,draws = cali_use$calibration,
+#                                  fun = "quantile",p = 0.9),
+#          pop_lci_95 = post_abund(sum_abund, use_log = FALSE,draws = cali_use$calibration,
+#                                  fun = "quantile",p = 0.025),
+#          pop_uci_95 = post_abund(sum_abund, use_log = FALSE,draws = cali_use$calibration,
+#                                  fun = "quantile",p = 0.975),
+#          species = sp_sel,
+#          species_ebird = sp_ebird,
+#          strata_name = region) %>%
+#   left_join(.,strata_names)
+#   #filter(pop_mean != 0)
+# strata_sampled <- readRDS(paste0("data/species_relative_abundance_2023/",sp_ebird,"_bbs_strata_relative_abundance.rds")) %>%
+#   select(strata_name,mean_ebird_abundance:log_ratio)
+#
+# strata_abund <- strata_abund %>%
+#   left_join(strata_sampled,
+#             by = "strata_name")
+#
+# # comp_plot <- ggplot(data = strata_abund,
+# #                     aes(x = strata_name,
+# #                         y = pop_mean))+
+# #   geom_errorbar(aes(ymin = pop_lci_80,ymax = pop_uci_80),
+# #                 alpha = 0.3, width = 0)+
+# #   geom_point()+
+# #   coord_flip()
+#
+# #comp_plot
+#
+#
+# # compare to traditional estimates ----------------------------------------
+#
+# strata_trad_j <- strata_trad %>%
+#   select(st_abrev,
+#          BCR,
+#          med.PopEst,
+#          LCI80.PopEst,
+#          UCI80.PopEst)
+#
+#
+# strata_compare <- strata_abund %>%
+#   full_join(.,strata_trad_j,
+#             by = c("prov_state" = "st_abrev",
+#                    "bcr" = "BCR")) %>%
+#   mutate(ratio_cat = cut(log_ratio,breaks = c(-Inf,-0.15,0.15,Inf)),
+#          log_pop_ratio = log(pop_median/med.PopEst))
+#
+# div_pal <- RColorBrewer::brewer.pal(n = 3,name = "RdBu")
+# names(div_pal) <- levels(strata_compare$ratio_cat)
+#
+# comp_trad_new_plot <- ggplot(data = strata_compare,
+#                              aes(x = med.PopEst,
+#                                  y = pop_median))+
+#   geom_abline(slope = 1, intercept = 0)+
+#   geom_abline(slope = 2, intercept = 0,linetype = 2)+
+#   geom_abline(slope = 5, intercept = 0,linetype = 3)+
+#   geom_smooth(method = "lm",alpha = 0.2)+
 #   geom_errorbar(aes(ymin = pop_lci_80,ymax = pop_uci_80),
 #                 alpha = 0.3, width = 0)+
-#   geom_point()+
-#   coord_flip()
-
-#comp_plot
-
-
-# compare to traditional estimates ----------------------------------------
-
-strata_trad_j <- strata_trad %>%
-  select(st_abrev,
-         BCR,
-         med.PopEst,
-         LCI80.PopEst,
-         UCI80.PopEst)
-
-
-strata_compare <- strata_abund %>%
-  full_join(.,strata_trad_j,
-            by = c("prov_state" = "st_abrev",
-                   "bcr" = "BCR")) %>%
-  mutate(ratio_cat = cut(log_ratio,breaks = c(-Inf,-0.15,0.15,Inf)),
-         log_pop_ratio = log(pop_median/med.PopEst))
-
-div_pal <- RColorBrewer::brewer.pal(n = 3,name = "RdBu")
-names(div_pal) <- levels(strata_compare$ratio_cat)
-
-comp_trad_new_plot <- ggplot(data = strata_compare,
-                             aes(x = med.PopEst,
-                                 y = pop_median))+
-  geom_abline(slope = 1, intercept = 0)+
-  geom_abline(slope = 2, intercept = 0,linetype = 2)+
-  geom_abline(slope = 5, intercept = 0,linetype = 3)+
-  geom_smooth(method = "lm",alpha = 0.2)+
-  geom_errorbar(aes(ymin = pop_lci_80,ymax = pop_uci_80),
-                alpha = 0.3, width = 0)+
-  geom_errorbarh(aes(xmin = LCI80.PopEst,xmax = UCI80.PopEst),
-                alpha = 0.3)+
-  geom_point(aes(colour = ratio_cat))+
-  geom_text_repel(aes(label = strata_name),
-                  size = 3)+
-  scale_x_continuous(labels = scales::unit_format(unit = "M", scale = 1e-6))+
-  scale_y_continuous(labels = scales::unit_format(unit = "M", scale = 1e-6))+
-  # colorspace::scale_color_binned_diverging(rev = TRUE,palette = "Blue-Red 2",
-  #                                          mid = 0,
-  #                                          breaks = c(-Inf,-0.2,0,0.2,Inf))+
-  scale_colour_manual(values = div_pal)+
-  xlab("Traditional PIF population estimate")+
-  ylab("PIF-Calibrated eBird relative abundance estimate")+
-  labs(title = paste(sp_sel,"population estimates by BBS strata"),
-       subtitle = "Diagonal lines = 1:1, 2:1, and 5:1")+
-  theme_bw()
-
-png(filename = paste0("Figures/comp_trad_new_alt_",vers,sp_aou,"_",sp_ebird,".png"),
-    res = 300,
-    height = 6,
-    width = 6,
-    units = "in")
-print(comp_trad_new_plot)
-dev.off()
-
-# abund_mapable <- breed_abundance %>%
-#   terra::project(.,"EPSG:9822")
-strat_sel <- strata_compare %>%
-  filter((pop_median > 0 |
-           med.PopEst > 0) &
-  !is.na(strata_name)) %>%
-  select(strata_name)
-
-strata_w_data <- strata %>%
-  filter(strata_name %in% strat_sel$strata_name)
-
-bb <- sf::st_bbox(strata_w_data)
-
-breed_abundance_plot <- breed_abundance
-names(breed_abundance_plot) <- "breeding"
-breed_abundance_plot <- breed_abundance_plot %>%
-  mutate(.,breeding = ifelse(breeding == 0,NA,breeding),
-         breeding = (breeding*cali$median)/900) # per hectare mean density
-
-# Mapping -----------------------------------------------------------------
-
-
-abund_map <- ggplot()+
-  geom_sf(data = strata, fill = grey(0.95))+
-  geom_spatraster(data = breed_abundance_plot,
-                  maxcell = 16000000)+
-  geom_sf(data = strata, fill = NA)+
-  geom_sf_text(data = strata,aes(label = strata_name),
-               size = 1)+
-  geom_sf(data = routes_buf,aes(colour = mean_count),fill = NA)+
-  coord_sf(xlim = c(bb[c("xmin","xmax")]),
-           ylim = c(bb[c("ymin","ymax")]))+
-  #scale_fill_gradientn(12,colours = terrain.colors(12),na.value = NA)+
-  scale_fill_viridis_c(direction = -1,
-                       option = "G",
-                       na.value = NA,
-                       end = 0.9,
-                       name = "Birds/hectare")+
-  scale_colour_viridis_c(direction = -1,
-                       option = "rocket",
-                       na.value = NA,
-                       end = 0.9,
-                       begin = 0.1,
-                       name = "Mean count BBS")+
-  theme_bw()+
-  labs(title = paste(sp_sel,"eBird relative abundance values by BBS strata"))
-
-
+#   geom_errorbarh(aes(xmin = LCI80.PopEst,xmax = UCI80.PopEst),
+#                 alpha = 0.3)+
+#   geom_point(aes(colour = ratio_cat))+
+#   geom_text_repel(aes(label = strata_name),
+#                   size = 3)+
+#   scale_x_continuous(labels = scales::unit_format(unit = "M", scale = 1e-6))+
+#   scale_y_continuous(labels = scales::unit_format(unit = "M", scale = 1e-6))+
+#   # colorspace::scale_color_binned_diverging(rev = TRUE,palette = "Blue-Red 2",
+#   #                                          mid = 0,
+#   #                                          breaks = c(-Inf,-0.2,0,0.2,Inf))+
+#   scale_colour_manual(values = div_pal)+
+#   xlab("Traditional PIF population estimate")+
+#   ylab("PIF-Calibrated eBird relative abundance estimate")+
+#   labs(title = paste(sp_sel,"population estimates by BBS strata"),
+#        subtitle = "Diagonal lines = 1:1, 2:1, and 5:1")+
+#   theme_bw()
 #
-
-png(filename = paste0("Figures/abund_map_alt_",vers,sp_aou,"_",sp_ebird,".png"),
-    res = 400,
-    height = 7,
-    width = 6.5,
-    units = "in")
-print(abund_map)
-dev.off()
-
-
-saveRDS(comp_trad_new_plot,paste0("figures/saved_ggplots/trad_vs_new_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
-saveRDS(abund_map,paste0("figures/saved_ggplots/abund_map_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
-saveRDS(strata_compare,paste0("estimates/strata_comparison_",vers,sp_aou,"_",sp_ebird,".rds"))
-
-
-
-
-# National summaries ------------------------------------------------------
-
-
-
-
-
-countries_proj <- st_transform(countries,
-                            crs = st_crs(breed_abundance))
-
-# ## reprojecting the abundance surface
-# breed_sel1 <- project(breed_abundance, crs(strata), method = "near") |>
-#   # remove areas of the raster containing no data
-#   trim()
-
-abundance_in_countries <- terra::extract(breed_abundance,
-                                         countries_proj,
-                                      fun = sum,
-                                      na.rm = TRUE,
-                                      ID = TRUE,
-                                      exact = FALSE)
-
-abundance_in_countries <- abundance_in_countries %>%
-  filter(!is.na(breeding_abundance),
-         breeding_abundance > 0)
-
-
-
-country_abund <- data.frame(region = countries_proj$country_name[abundance_in_countries$ID],
-                            region_type = "country",
-                           sum_abund = 3^2 * unlist(abundance_in_countries[[2]])) %>%
-  mutate(pop_mean = post_abund(sum_abund, use_log = FALSE, draws = cali_use$calibration,
-                               fun = "mean"),
-         pop_median = post_abund(sum_abund, use_log = FALSE, draws = cali_use$calibration,
-                                 fun = "quantile",p = 0.5),
-         pop_lci_80 = post_abund(sum_abund, use_log = FALSE,draws = cali_use$calibration,
-                                 fun = "quantile",p = 0.1),
-         pop_uci_80 = post_abund(sum_abund, use_log = FALSE,draws = cali_use$calibration,
-                                 fun = "quantile",p = 0.9),
-         pop_lci_95 = post_abund(sum_abund, use_log = FALSE,draws = cali_use$calibration,
-                                 fun = "quantile",p = 0.025),
-         pop_uci_95 = post_abund(sum_abund, use_log = FALSE,draws = cali_use$calibration,
-                                 fun = "quantile",p = 0.975),
-         species = sp_sel,
-         species_ebird = sp_ebird)
-
-country_abund
-
-
-
-# BCR summaries -----------------------------------------------------------
-
-
-
-
-
-
-bcr_proj <- st_transform(bcrs,
-                               crs = st_crs(breed_abundance))
-
-
-abundance_in_bcr <- terra::extract(breed_abundance,
-                                   bcr_proj,
-                                         fun = sum,
-                                         na.rm = TRUE,
-                                         ID = TRUE,
-                                         exact = FALSE)
-
-abundance_in_bcr <- abundance_in_bcr %>%
-  filter(!is.na(breeding_abundance),
-         breeding_abundance > 0)
-
-
-
-bcr_abund <- data.frame(region = as.character(bcr_proj$BCR[abundance_in_bcr$ID]),
-                            region_type = "bcr",
-                            sum_abund = 3^2 * unlist(abundance_in_bcr[[2]])) %>%
-  filter(!is.na(sum_abund)) %>%
-  mutate(pop_mean = post_abund(sum_abund, use_log = FALSE, draws = cali_use$calibration,
-                               fun = "mean"),
-         pop_median = post_abund(sum_abund, use_log = FALSE, draws = cali_use$calibration,
-                                 fun = "quantile",p = 0.5),
-         pop_lci_80 = post_abund(sum_abund, use_log = FALSE,draws = cali_use$calibration,
-                                 fun = "quantile",p = 0.1),
-         pop_uci_80 = post_abund(sum_abund, use_log = FALSE,draws = cali_use$calibration,
-                                 fun = "quantile",p = 0.9),
-         pop_lci_95 = post_abund(sum_abund, use_log = FALSE,draws = cali_use$calibration,
-                                 fun = "quantile",p = 0.025),
-         pop_uci_95 = post_abund(sum_abund, use_log = FALSE,draws = cali_use$calibration,
-                                 fun = "quantile",p = 0.975),
-         species = sp_sel,
-         species_ebird = sp_ebird)
-
-bcr_abund
-
-
-
-
-# BCR map -----------------------------------------------------------------
-
-
-bcr_sel <- bcr_abund$region
-
-bcrs_eqarea <- sf::st_transform(bcrs,
-                                st_crs(strata))
-bcrs_w_data <- bcrs_eqarea%>%
-  filter(BCR %in% bcr_sel,
-         BCR != 999,
-         BCR != 100)
-
-bb <- sf::st_bbox(bcrs_w_data)
-
-
-
-abund_map_bcrs <- ggplot()+
-  geom_sf(data = bcrs_eqarea, fill = grey(0.95))+
-  geom_spatraster(data = breed_abundance_plot,
-                  maxcell = 16000000)+
-  geom_sf(data = bcrs_eqarea, fill = NA)+
-  geom_sf_text(data = bcrs_eqarea,aes(label = BCR),
-               size = 1)+
-  geom_sf(data = routes_buf,aes(colour = mean_count),fill = "darkred")+
-  coord_sf(xlim = c(bb[c("xmin","xmax")]),
-           ylim = c(bb[c("ymin","ymax")]))+
-  #scale_fill_gradientn(12,colours = terrain.colors(12),na.value = NA)+
-  scale_fill_viridis_c(direction = -1,
-                       option = "G",
-                       na.value = NA,
-                       end = 0.9,
-                       name = "Birds/hectare")+
-  scale_colour_viridis_c(direction = -1,
-                         option = "rocket",
-                         na.value = NA,
-                         end = 0.9,
-                         begin = 0.1,
-                         name = "Mean count BBS")+
-  theme_bw()+
-  labs(title = paste(sp_sel,"eBird relative abundance values by BCR"))
-
-
+# png(filename = paste0("Figures/comp_trad_new_alt_",vers,sp_aou,"_",sp_ebird,".png"),
+#     res = 300,
+#     height = 6,
+#     width = 6,
+#     units = "in")
+# print(comp_trad_new_plot)
+# dev.off()
 #
-
-# png(filename = paste0("Figures/abund_map_bcrs_alt_",vers,sp_aou,"_",sp_ebird,".png"),
+# # abund_mapable <- breed_abundance %>%
+# #   terra::project(.,"EPSG:9822")
+# strat_sel <- strata_compare %>%
+#   filter((pop_median > 0 |
+#            med.PopEst > 0) &
+#   !is.na(strata_name)) %>%
+#   select(strata_name)
+#
+# strata_w_data <- strata %>%
+#   filter(strata_name %in% strat_sel$strata_name)
+#
+# bb <- sf::st_bbox(strata_w_data)
+#
+# breed_abundance_plot <- breed_abundance
+# names(breed_abundance_plot) <- "breeding"
+# breed_abundance_plot <- breed_abundance_plot %>%
+#   mutate(.,breeding = ifelse(breeding == 0,NA,breeding),
+#          breeding = (breeding*cali$median)/900) # per hectare mean density
+#
+# # Mapping -----------------------------------------------------------------
+#
+#
+# abund_map <- ggplot()+
+#   geom_sf(data = strata, fill = grey(0.95))+
+#   geom_spatraster(data = breed_abundance_plot,
+#                   maxcell = 16000000)+
+#   geom_sf(data = strata, fill = NA)+
+#   geom_sf_text(data = strata,aes(label = strata_name),
+#                size = 1)+
+#   geom_sf(data = routes_buf,aes(colour = mean_count),fill = NA)+
+#   coord_sf(xlim = c(bb[c("xmin","xmax")]),
+#            ylim = c(bb[c("ymin","ymax")]))+
+#   #scale_fill_gradientn(12,colours = terrain.colors(12),na.value = NA)+
+#   scale_fill_viridis_c(direction = -1,
+#                        option = "G",
+#                        na.value = NA,
+#                        end = 0.9,
+#                        name = "Birds/hectare")+
+#   scale_colour_viridis_c(direction = -1,
+#                        option = "rocket",
+#                        na.value = NA,
+#                        end = 0.9,
+#                        begin = 0.1,
+#                        name = "Mean count BBS")+
+#   theme_bw()+
+#   labs(title = paste(sp_sel,"eBird relative abundance values by BBS strata"))
+#
+#
+# #
+#
+# png(filename = paste0("Figures/abund_map_alt_",vers,sp_aou,"_",sp_ebird,".png"),
 #     res = 400,
 #     height = 7,
 #     width = 6.5,
 #     units = "in")
-# print(abund_map_bcrs)
+# print(abund_map)
 # dev.off()
-
-
-
-# USACAN estimates -----------------------------------------
-
-
-
-USACAN_proj <- st_transform(USACAN,
-                               crs = st_crs(breed_abundance))
-
-# ## reprojecting the abundance surface
-# breed_sel1 <- project(breed_abundance, crs(strata), method = "near") |>
-#   # remove areas of the raster containing no data
-#   trim()
-
-abundance_in_USACAN <- terra::extract(breed_abundance,
-                                     USACAN_proj,
-                                         fun = sum,
-                                         na.rm = TRUE,
-                                         ID = TRUE,
-                                         exact = FALSE)
-
-
-
-USACAN_abund <- data.frame(region = "USACAN",
-                          region_type = "USACAN",
-                            sum_abund = 3^2 * unlist(abundance_in_USACAN[[2]])) %>%
-  mutate(pop_mean = post_abund(sum_abund, use_log = FALSE, fun = "mean"),
-         pop_median = post_abund(sum_abund, use_log = FALSE, draws = cali_use$calibration,
-                                 fun = "quantile",p = 0.5),
-         pop_lci_80 = post_abund(sum_abund, use_log = FALSE,draws = cali_use$calibration,
-                                 fun = "quantile",p = 0.1),
-         pop_uci_80 = post_abund(sum_abund, use_log = FALSE,draws = cali_use$calibration,
-                                 fun = "quantile",p = 0.9),
-         pop_lci_95 = post_abund(sum_abund, use_log = FALSE,draws = cali_use$calibration,
-                                 fun = "quantile",p = 0.025),
-         pop_uci_95 = post_abund(sum_abund, use_log = FALSE,draws = cali_use$calibration,
-                                 fun = "quantile",p = 0.975),
-         species = sp_sel,
-         species_ebird = sp_ebird)
-
-#USACAN_abund
-
-
-# Continent estimates -----------------------------------------
-
-
-
-continents_proj <- st_transform(continents,
-                            crs = st_crs(breed_abundance))
-
-# ## reprojecting the abundance surface
-# breed_sel1 <- project(breed_abundance, crs(strata), method = "near") |>
-#   # remove areas of the raster containing no data
-#   trim()
-
-abundance_in_continents <- terra::extract(breed_abundance,
-                                      continents_proj,
-                                      fun = sum,
-                                      na.rm = TRUE,
-                                      ID = TRUE,
-                                      exact = FALSE)
-
-abundance_in_continents <- abundance_in_continents %>%
-  filter(!is.na(breeding_abundance),
-         breeding_abundance > 0)
-
-
-
-
-continents_abund <- data.frame(region = as.character(continents_proj$CC[abundance_in_continents$ID]),
-                           region_type = "continent",
-                           sum_abund = 3^2 * unlist(abundance_in_continents[[2]])) %>%
-  mutate(pop_mean = post_abund(sum_abund, use_log = FALSE, fun = "mean"),
-         pop_median = post_abund(sum_abund, use_log = FALSE, draws = cali_use$calibration,
-                                 fun = "quantile",p = 0.5),
-         pop_lci_80 = post_abund(sum_abund, use_log = FALSE,draws = cali_use$calibration,
-                                 fun = "quantile",p = 0.1),
-         pop_uci_80 = post_abund(sum_abund, use_log = FALSE,draws = cali_use$calibration,
-                                 fun = "quantile",p = 0.9),
-         pop_lci_95 = post_abund(sum_abund, use_log = FALSE,draws = cali_use$calibration,
-                                 fun = "quantile",p = 0.025),
-         pop_uci_95 = post_abund(sum_abund, use_log = FALSE,draws = cali_use$calibration,
-                                 fun = "quantile",p = 0.975),
-         species = sp_sel,
-         species_ebird = sp_ebird)
-
-#continents_abund
-
-
-
-
-abundance_in_global <- sum(values(breed_abundance_full),na.rm = TRUE)
-
-
-
-global_abund <- data.frame(region = "global",
-                           region_type = "global",
-                           sum_abund = 3^2 * abundance_in_global) %>%
-  mutate(pop_mean = post_abund(sum_abund, use_log = FALSE, draws = cali_use$calibration,
-                               fun = "mean"),
-         pop_median = post_abund(sum_abund, use_log = FALSE, draws = cali_use$calibration,
-                                 fun = "quantile",p = 0.5),
-         pop_lci_80 = post_abund(sum_abund, use_log = FALSE,draws = cali_use$calibration,
-                                 fun = "quantile",p = 0.1),
-         pop_uci_80 = post_abund(sum_abund, use_log = FALSE,draws = cali_use$calibration,
-                                 fun = "quantile",p = 0.9),
-         pop_lci_95 = post_abund(sum_abund, use_log = FALSE,draws = cali_use$calibration,
-                                 fun = "quantile",p = 0.025),
-         pop_uci_95 = post_abund(sum_abund, use_log = FALSE,draws = cali_use$calibration,
-                                 fun = "quantile",p = 0.975),
-         species = sp_sel,
-         species_ebird = sp_ebird)
-
-global_abund
-
-
-
-pop_ests_out <- bind_rows(USACAN_abund,
-                          continents_abund,
-                          global_abund,
-                          country_abund,
-                          bcr_abund,
-                          strata_abund) %>%
-  mutate(version = "PIF_eBird")
-
-# Sum of population estimates
-
-write_excel_csv(pop_ests_out,
-                paste0("estimates/pop_ests_alt_",vers,sp_aou,sp_ebird,".csv"))
-
-
-pop_ests_out_trad_sel <- pop_ests_out_trad %>%
-  filter(species == sp_sel)
-
-
-pop_compare_stack <- pop_ests_out %>%
-  select(region,region_type,version,
-         species,species_ebird,
-         pop_median, pop_lci_80, pop_uci_80,
-         pop_lci_95, pop_uci_95) %>%
-  bind_rows(pop_ests_out_trad_sel)
-
-
-pop_compare_stack_sel <- pop_compare_stack %>%
-  filter(region_type %in% c("USACAN","continent","global","bcr"))
-
-
-side_plot <- ggplot(data = pop_compare_stack_sel,
-              aes(y = region,
-                  x = pop_median,
-                  colour = version))+
-  geom_point(position = position_dodge(width = 0.5))+
-  geom_errorbarh(aes(xmin = pop_lci_80,
-                     xmax = pop_uci_80),
-                 height = 0,
-                 position = position_dodge(width = 0.5))+
-  scale_colour_viridis_d(end = 0.8)+
-  ylab("BCRs and broadscale estimates")+
-  xlab("Population estimate with 80% CI (Millions)")+
-  scale_x_continuous(labels = scales::unit_format(unit = "M", scale = 1e-6))+
-  theme_bw()
-
-
-saveRDS(side_plot,paste0("figures/saved_ggplots/side_plot_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
-
-saveRDS(combined,paste0("data/main_data_df_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
-pdf(paste0("figures/estimate_plots_alt_",vers,sp_aou,"_",sp_ebird,".pdf"),
-    width = 11,
-    height = 8.5)
-print(vis_relationship)
-print(vis_relationship2)
-print(comp_trad_new_plot)
-print(abund_map)
-print(side_plot)
-#print(abund_map_bcrs)
-print(ppc)
-print(vis_season)
-print(vis_annual)
-print(beta_distr)
-print(resid_distr)
-print(resid_distr2)
-print(beta_hist)
-print(count_hist / calib_hist)
-print(obs_pred_count)
-dev.off()
-
-#write_csv(adjs_out,paste0("adjs_out",vers,today,".csv"))
-saveRDS(adjs,paste0("estimates/parameters_",vers,sp_aou,"_",sp_ebird,".rds"))
-
-
- } #end of species loop
 #
-
-#parallel::stopCluster(cluster)
-
+#
+# saveRDS(comp_trad_new_plot,paste0("figures/saved_ggplots/trad_vs_new_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
+# saveRDS(abund_map,paste0("figures/saved_ggplots/abund_map_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
+# saveRDS(strata_compare,paste0("estimates/strata_comparison_",vers,sp_aou,"_",sp_ebird,".rds"))
+#
+#
+#
+#
+# # National summaries ------------------------------------------------------
+#
+#
+#
+#
+#
+# countries_proj <- st_transform(countries,
+#                             crs = st_crs(breed_abundance))
+#
+# # ## reprojecting the abundance surface
+# # breed_sel1 <- project(breed_abundance, crs(strata), method = "near") |>
+# #   # remove areas of the raster containing no data
+# #   trim()
+#
+# abundance_in_countries <- terra::extract(breed_abundance,
+#                                          countries_proj,
+#                                       fun = sum,
+#                                       na.rm = TRUE,
+#                                       ID = TRUE,
+#                                       exact = FALSE)
+#
+# abundance_in_countries <- abundance_in_countries %>%
+#   filter(!is.na(breeding_abundance),
+#          breeding_abundance > 0)
+#
+#
+#
+# country_abund <- data.frame(region = countries_proj$country_name[abundance_in_countries$ID],
+#                             region_type = "country",
+#                            sum_abund = 3^2 * unlist(abundance_in_countries[[2]])) %>%
+#   mutate(pop_mean = post_abund(sum_abund, use_log = FALSE, draws = cali_use$calibration,
+#                                fun = "mean"),
+#          pop_median = post_abund(sum_abund, use_log = FALSE, draws = cali_use$calibration,
+#                                  fun = "quantile",p = 0.5),
+#          pop_lci_80 = post_abund(sum_abund, use_log = FALSE,draws = cali_use$calibration,
+#                                  fun = "quantile",p = 0.1),
+#          pop_uci_80 = post_abund(sum_abund, use_log = FALSE,draws = cali_use$calibration,
+#                                  fun = "quantile",p = 0.9),
+#          pop_lci_95 = post_abund(sum_abund, use_log = FALSE,draws = cali_use$calibration,
+#                                  fun = "quantile",p = 0.025),
+#          pop_uci_95 = post_abund(sum_abund, use_log = FALSE,draws = cali_use$calibration,
+#                                  fun = "quantile",p = 0.975),
+#          species = sp_sel,
+#          species_ebird = sp_ebird)
+#
+# country_abund
+#
+#
+#
+# # BCR summaries -----------------------------------------------------------
+#
+#
+#
+#
+#
+#
+# bcr_proj <- st_transform(bcrs,
+#                                crs = st_crs(breed_abundance))
+#
+#
+# abundance_in_bcr <- terra::extract(breed_abundance,
+#                                    bcr_proj,
+#                                          fun = sum,
+#                                          na.rm = TRUE,
+#                                          ID = TRUE,
+#                                          exact = FALSE)
+#
+# abundance_in_bcr <- abundance_in_bcr %>%
+#   filter(!is.na(breeding_abundance),
+#          breeding_abundance > 0)
+#
+#
+#
+# bcr_abund <- data.frame(region = as.character(bcr_proj$BCR[abundance_in_bcr$ID]),
+#                             region_type = "bcr",
+#                             sum_abund = 3^2 * unlist(abundance_in_bcr[[2]])) %>%
+#   filter(!is.na(sum_abund)) %>%
+#   mutate(pop_mean = post_abund(sum_abund, use_log = FALSE, draws = cali_use$calibration,
+#                                fun = "mean"),
+#          pop_median = post_abund(sum_abund, use_log = FALSE, draws = cali_use$calibration,
+#                                  fun = "quantile",p = 0.5),
+#          pop_lci_80 = post_abund(sum_abund, use_log = FALSE,draws = cali_use$calibration,
+#                                  fun = "quantile",p = 0.1),
+#          pop_uci_80 = post_abund(sum_abund, use_log = FALSE,draws = cali_use$calibration,
+#                                  fun = "quantile",p = 0.9),
+#          pop_lci_95 = post_abund(sum_abund, use_log = FALSE,draws = cali_use$calibration,
+#                                  fun = "quantile",p = 0.025),
+#          pop_uci_95 = post_abund(sum_abund, use_log = FALSE,draws = cali_use$calibration,
+#                                  fun = "quantile",p = 0.975),
+#          species = sp_sel,
+#          species_ebird = sp_ebird)
+#
+# bcr_abund
+#
+#
+#
+#
+# # BCR map -----------------------------------------------------------------
+#
+#
+# bcr_sel <- bcr_abund$region
+#
+# bcrs_eqarea <- sf::st_transform(bcrs,
+#                                 st_crs(strata))
+# bcrs_w_data <- bcrs_eqarea%>%
+#   filter(BCR %in% bcr_sel,
+#          BCR != 999,
+#          BCR != 100)
+#
+# bb <- sf::st_bbox(bcrs_w_data)
+#
+#
+#
+# abund_map_bcrs <- ggplot()+
+#   geom_sf(data = bcrs_eqarea, fill = grey(0.95))+
+#   geom_spatraster(data = breed_abundance_plot,
+#                   maxcell = 16000000)+
+#   geom_sf(data = bcrs_eqarea, fill = NA)+
+#   geom_sf_text(data = bcrs_eqarea,aes(label = BCR),
+#                size = 1)+
+#   geom_sf(data = routes_buf,aes(colour = mean_count),fill = "darkred")+
+#   coord_sf(xlim = c(bb[c("xmin","xmax")]),
+#            ylim = c(bb[c("ymin","ymax")]))+
+#   #scale_fill_gradientn(12,colours = terrain.colors(12),na.value = NA)+
+#   scale_fill_viridis_c(direction = -1,
+#                        option = "G",
+#                        na.value = NA,
+#                        end = 0.9,
+#                        name = "Birds/hectare")+
+#   scale_colour_viridis_c(direction = -1,
+#                          option = "rocket",
+#                          na.value = NA,
+#                          end = 0.9,
+#                          begin = 0.1,
+#                          name = "Mean count BBS")+
+#   theme_bw()+
+#   labs(title = paste(sp_sel,"eBird relative abundance values by BCR"))
+#
+#
+# #
+#
+# # png(filename = paste0("Figures/abund_map_bcrs_alt_",vers,sp_aou,"_",sp_ebird,".png"),
+# #     res = 400,
+# #     height = 7,
+# #     width = 6.5,
+# #     units = "in")
+# # print(abund_map_bcrs)
+# # dev.off()
+#
+#
+#
+# # USACAN estimates -----------------------------------------
+#
+#
+#
+# USACAN_proj <- st_transform(USACAN,
+#                                crs = st_crs(breed_abundance))
+#
+# # ## reprojecting the abundance surface
+# # breed_sel1 <- project(breed_abundance, crs(strata), method = "near") |>
+# #   # remove areas of the raster containing no data
+# #   trim()
+#
+# abundance_in_USACAN <- terra::extract(breed_abundance,
+#                                      USACAN_proj,
+#                                          fun = sum,
+#                                          na.rm = TRUE,
+#                                          ID = TRUE,
+#                                          exact = FALSE)
+#
+#
+#
+# USACAN_abund <- data.frame(region = "USACAN",
+#                           region_type = "USACAN",
+#                             sum_abund = 3^2 * unlist(abundance_in_USACAN[[2]])) %>%
+#   mutate(pop_mean = post_abund(sum_abund, use_log = FALSE, fun = "mean"),
+#          pop_median = post_abund(sum_abund, use_log = FALSE, draws = cali_use$calibration,
+#                                  fun = "quantile",p = 0.5),
+#          pop_lci_80 = post_abund(sum_abund, use_log = FALSE,draws = cali_use$calibration,
+#                                  fun = "quantile",p = 0.1),
+#          pop_uci_80 = post_abund(sum_abund, use_log = FALSE,draws = cali_use$calibration,
+#                                  fun = "quantile",p = 0.9),
+#          pop_lci_95 = post_abund(sum_abund, use_log = FALSE,draws = cali_use$calibration,
+#                                  fun = "quantile",p = 0.025),
+#          pop_uci_95 = post_abund(sum_abund, use_log = FALSE,draws = cali_use$calibration,
+#                                  fun = "quantile",p = 0.975),
+#          species = sp_sel,
+#          species_ebird = sp_ebird)
+#
+# #USACAN_abund
+#
+#
+# # Continent estimates -----------------------------------------
+#
+#
+#
+# continents_proj <- st_transform(continents,
+#                             crs = st_crs(breed_abundance))
+#
+# # ## reprojecting the abundance surface
+# # breed_sel1 <- project(breed_abundance, crs(strata), method = "near") |>
+# #   # remove areas of the raster containing no data
+# #   trim()
+#
+# abundance_in_continents <- terra::extract(breed_abundance,
+#                                       continents_proj,
+#                                       fun = sum,
+#                                       na.rm = TRUE,
+#                                       ID = TRUE,
+#                                       exact = FALSE)
+#
+# abundance_in_continents <- abundance_in_continents %>%
+#   filter(!is.na(breeding_abundance),
+#          breeding_abundance > 0)
+#
+#
+#
+#
+# continents_abund <- data.frame(region = as.character(continents_proj$CC[abundance_in_continents$ID]),
+#                            region_type = "continent",
+#                            sum_abund = 3^2 * unlist(abundance_in_continents[[2]])) %>%
+#   mutate(pop_mean = post_abund(sum_abund, use_log = FALSE, fun = "mean"),
+#          pop_median = post_abund(sum_abund, use_log = FALSE, draws = cali_use$calibration,
+#                                  fun = "quantile",p = 0.5),
+#          pop_lci_80 = post_abund(sum_abund, use_log = FALSE,draws = cali_use$calibration,
+#                                  fun = "quantile",p = 0.1),
+#          pop_uci_80 = post_abund(sum_abund, use_log = FALSE,draws = cali_use$calibration,
+#                                  fun = "quantile",p = 0.9),
+#          pop_lci_95 = post_abund(sum_abund, use_log = FALSE,draws = cali_use$calibration,
+#                                  fun = "quantile",p = 0.025),
+#          pop_uci_95 = post_abund(sum_abund, use_log = FALSE,draws = cali_use$calibration,
+#                                  fun = "quantile",p = 0.975),
+#          species = sp_sel,
+#          species_ebird = sp_ebird)
+#
+# #continents_abund
+#
+#
+#
+#
+# abundance_in_global <- sum(values(breed_abundance_full),na.rm = TRUE)
+#
+#
+#
+# global_abund <- data.frame(region = "global",
+#                            region_type = "global",
+#                            sum_abund = 3^2 * abundance_in_global) %>%
+#   mutate(pop_mean = post_abund(sum_abund, use_log = FALSE, draws = cali_use$calibration,
+#                                fun = "mean"),
+#          pop_median = post_abund(sum_abund, use_log = FALSE, draws = cali_use$calibration,
+#                                  fun = "quantile",p = 0.5),
+#          pop_lci_80 = post_abund(sum_abund, use_log = FALSE,draws = cali_use$calibration,
+#                                  fun = "quantile",p = 0.1),
+#          pop_uci_80 = post_abund(sum_abund, use_log = FALSE,draws = cali_use$calibration,
+#                                  fun = "quantile",p = 0.9),
+#          pop_lci_95 = post_abund(sum_abund, use_log = FALSE,draws = cali_use$calibration,
+#                                  fun = "quantile",p = 0.025),
+#          pop_uci_95 = post_abund(sum_abund, use_log = FALSE,draws = cali_use$calibration,
+#                                  fun = "quantile",p = 0.975),
+#          species = sp_sel,
+#          species_ebird = sp_ebird)
+#
+# global_abund
+#
+#
+#
+# pop_ests_out <- bind_rows(USACAN_abund,
+#                           continents_abund,
+#                           global_abund,
+#                           country_abund,
+#                           bcr_abund,
+#                           strata_abund) %>%
+#   mutate(version = "PIF_eBird")
+#
+# # Sum of population estimates
+#
+# write_excel_csv(pop_ests_out,
+#                 paste0("estimates/pop_ests_alt_",vers,sp_aou,sp_ebird,".csv"))
+#
+#
+# pop_ests_out_trad_sel <- pop_ests_out_trad %>%
+#   filter(species == sp_sel)
+#
+#
+# pop_compare_stack <- pop_ests_out %>%
+#   select(region,region_type,version,
+#          species,species_ebird,
+#          pop_median, pop_lci_80, pop_uci_80,
+#          pop_lci_95, pop_uci_95) %>%
+#   bind_rows(pop_ests_out_trad_sel)
+#
+#
+# pop_compare_stack_sel <- pop_compare_stack %>%
+#   filter(region_type %in% c("USACAN","continent","global","bcr"))
+#
+#
+# side_plot <- ggplot(data = pop_compare_stack_sel,
+#               aes(y = region,
+#                   x = pop_median,
+#                   colour = version))+
+#   geom_point(position = position_dodge(width = 0.5))+
+#   geom_errorbarh(aes(xmin = pop_lci_80,
+#                      xmax = pop_uci_80),
+#                  height = 0,
+#                  position = position_dodge(width = 0.5))+
+#   scale_colour_viridis_d(end = 0.8)+
+#   ylab("BCRs and broadscale estimates")+
+#   xlab("Population estimate with 80% CI (Millions)")+
+#   scale_x_continuous(labels = scales::unit_format(unit = "M", scale = 1e-6))+
+#   theme_bw()
+#
+#
+# saveRDS(side_plot,paste0("figures/saved_ggplots/side_plot_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
+#
+# saveRDS(combined,paste0("data/main_data_df_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
+# pdf(paste0("figures/estimate_plots_alt_",vers,sp_aou,"_",sp_ebird,".pdf"),
+#     width = 11,
+#     height = 8.5)
+# print(vis_relationship)
+# print(vis_relationship2)
+# print(comp_trad_new_plot)
+# print(abund_map)
+# print(side_plot)
+# #print(abund_map_bcrs)
+# print(ppc)
+# print(vis_season)
+# print(vis_annual)
+# print(beta_distr)
+# print(resid_distr)
+# print(resid_distr2)
+# print(beta_hist)
+# print(count_hist / calib_hist)
+# print(obs_pred_count)
+# dev.off()
+#
+# #write_csv(adjs_out,paste0("adjs_out",vers,today,".csv"))
+# saveRDS(adjs,paste0("estimates/parameters_",vers,sp_aou,"_",sp_ebird,".rds"))
+#
+#
+#  } #end of species loop
+# #
+#
+# #parallel::stopCluster(cluster)
+#
 
 

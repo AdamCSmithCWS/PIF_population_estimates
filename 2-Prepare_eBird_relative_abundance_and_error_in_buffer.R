@@ -94,6 +94,8 @@ selected_species <- unique(c("Brown Creeper","Canyon Wren",
                              "Clark's Nutcracker",
                              "White-throated Sparrow",
                              "Song Sparrow"))
+
+saveRDS(selected_species,"data/selected_species.rds")
 ii <- which(sps_list$english %in% selected_species)
 
 for(i in ii){ #rev(1:nrow(sps_list))){ ##
