@@ -338,6 +338,9 @@ cali_alt_post <- fit$draws(variables = "calibration_mean",
 
   betas <- summ %>% filter(grepl("beta[",variable,fixed = TRUE))
 
+  # tmp <- summ %>% filter(grepl("ct",variable,fixed = TRUE))
+  # tmp <- summ %>% filter(variable == "cd")
+  #
   w_excl <- c(which(betas$mean > quantile(betas$mean,0.975)),
               which(betas$mean < quantile(betas$mean,0.025)))
 
