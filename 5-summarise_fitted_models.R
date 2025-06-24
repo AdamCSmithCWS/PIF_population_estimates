@@ -23,7 +23,7 @@ if(Sys.info()[["nodename"]] == "WNCRLABN72960"){
 setwd("c:/Users/SmithAC/Documents/GitHub/PIF_population_estimates")
 }
 
-yr_ebird <- 2022 # prediction year for eBird relative abundance
+yr_ebird <- 2023 # prediction year for eBird relative abundance
 
 
 # mean counts to id routes on which species has been observed -------------
@@ -39,9 +39,6 @@ raw_counts_all <- readRDS("data/all_counts_by_route.rds")
 
 
 Inputfiles.dir <- "Stanton_2019_code/input_files/" #paste(Inputfiles.dir, '/', sep="")
-napops_species <- napops::list_species() |>
-  dplyr::select(Species,Common_Name)
-
 
 
   ExpAdjs <- read_csv("Species_correction_factors_w_edr_availability.csv")
@@ -60,94 +57,107 @@ strata_names <- strata %>%
 
 
 # load traditional estimates with EDR for later comparison -------------------------
-trad_dir <- "Stanton_2019_code/output_EDR"
+trad_dir <- "Stanton_2019_code/output"
 strata_join <- strata_names %>%
   select(strata_name,country_code,
          prov_state, bcr) %>%
   st_drop_geometry() %>%
   distinct()
 
-strata_trad_all <- read_csv(paste0(trad_dir,"/PSest_Prov_by_BCR__100iter.csv")) %>%
-  left_join(.,strata_join,
-            by = c("st_abrev" = "prov_state",
-                   "BCR" = "bcr")) %>%
-  mutate(region = strata_name,
-         region_type = "strata",
-         version = "traditional",
-         species = cn,
-         aou = Aou,
-         pop_median = med.PopEst,
-         pop_lci_80 = LCI80.PopEst,
-         pop_uci_80 = UCI80.PopEst,
-         pop_lci_95 = LCI95.PopEst,
-         pop_uci_95 = UCI95.PopEst)
 
-USACAN_trad_all <- read_csv(paste0(trad_dir,"/PSest_Global_WH_NA__100iter.csv")) %>%
-  mutate(region = "USACAN",
-         region_type = "USACAN",
-         version = "traditional",
-         species = cn,
-         aou = Aou,
-         pop_median = USCAN.med.PopEst,
-         pop_lci_80 = USCAN.80LCI.PopEst,
-         pop_uci_80 = USCAN.80UCI.PopEst,
-         pop_lci_95 = USCAN.95LCI.PopEst,
-         pop_uci_95 = USCAN.95UCI.PopEst)
+#
+# # load traditional estimates for later comparison -------------------------
+# strata_join <- strata_names %>%
+#   select(strata_name,country_code,
+#          prov_state, bcr) %>%
+#   st_drop_geometry() %>%
+#   distinct()
+#
+# strata_trad_all <- read_csv("Stanton_2019_code/output/PSest_Prov_by_BCR__100iter.csv") %>%
+#   left_join(.,strata_join,
+#             by = c("st_abrev" = "prov_state",
+#                    "BCR" = "bcr")) %>%
+#   mutate(region = strata_name,
+#          region_type = "strata",
+#          version = "traditional",
+#          species = cn,
+#          aou = Aou,
+#          pop_median = med.PopEst,
+#          pop_lci_80 = LCI80.PopEst,
+#          pop_uci_80 = UCI80.PopEst,
+#          pop_lci_95 = LCI95.PopEst,
+#          pop_uci_95 = UCI95.PopEst)
+#
+# USACAN_trad_all <- read_csv("Stanton_2019_code/output/PSest_Global_WH_NA__100iter.csv") %>%
+#   mutate(region = "USACAN",
+#          region_type = "USACAN",
+#          version = "traditional",
+#          species = cn,
+#          aou = Aou,
+#          pop_median = USCAN.med.PopEst,
+#          pop_lci_80 = USCAN.80LCI.PopEst,
+#          pop_uci_80 = USCAN.80UCI.PopEst,
+#          pop_lci_95 = USCAN.95LCI.PopEst,
+#          pop_uci_95 = USCAN.95UCI.PopEst)
+#
+#
+#
+# global_trad_all <- read_csv("Stanton_2019_code/output/PSest_Global_WH_NA__100iter.csv") %>%
+#   mutate(region = "global",
+#          region_type = "global",
+#          version = "traditional",
+#          species = cn,
+#          aou = Aou,
+#          pop_median = GL.med.PopEst,
+#          pop_lci_80 = GL.80LCI.PopEst,
+#          pop_uci_80 = GL.80UCI.PopEst,
+#          pop_lci_95 = GL.95LCI.PopEst,
+#          pop_uci_95 = GL.95UCI.PopEst)
+#
+#
+#
+# prov_trad_all <- read_csv("Stanton_2019_code/output/PSest_by_Prov__100iter.csv") %>%
+#   mutate(region = st_abrev,
+#          region_type = "prov_state",
+#          version = "traditional",
+#          species = cn,
+#          aou = Aou,
+#          pop_median = med.PopEst,
+#          pop_lci_80 = LCI80.PopEst,
+#          pop_uci_80 = UCI80.PopEst,
+#          pop_lci_95 = LCI95.PopEst,
+#          pop_uci_95 = UCI95.PopEst)
+#
+# bcr_trad_all <- read_csv("Stanton_2019_code/output/PSest_by_BCR__100iter.csv")%>%
+#   mutate(region = as.character(BCR),
+#          region_type = "bcr",
+#          version = "traditional",
+#          species = cn,
+#          aou = Aou,
+#          pop_median = med.PopEst,
+#          pop_lci_80 = LCI80.PopEst,
+#          pop_uci_80 = UCI80.PopEst,
+#          pop_lci_95 = LCI95.PopEst,
+#          pop_uci_95 = UCI95.PopEst)
+#
+#
+#
+#
+# pop_ests_out_trad <- bind_rows(USACAN_trad_all,
+#                                global_trad_all,
+#                                #country_abund,
+#                                bcr_trad_all,
+#                                strata_trad_all) %>%
+#   select(region,region_type,version,st_abrev,BCR,
+#          species,aou,
+#          pop_median, pop_lci_80, pop_uci_80,
+#          pop_lci_95, pop_uci_95)
+#
+#
+# saveRDS(pop_ests_out_trad,"all_traditional_pop_estimates.rds")
 
 
-
-global_trad_all <- read_csv(paste0(trad_dir,"/PSest_Global_WH_NA__100iter.csv")) %>%
-  mutate(region = "global",
-         region_type = "global",
-         version = "traditional",
-         species = cn,
-         aou = Aou,
-         pop_median = GL.med.PopEst,
-         pop_lci_80 = GL.80LCI.PopEst,
-         pop_uci_80 = GL.80UCI.PopEst,
-         pop_lci_95 = GL.95LCI.PopEst,
-         pop_uci_95 = GL.95UCI.PopEst)
-
-
-
-prov_trad_all <- read_csv(paste0(trad_dir,"/PSest_by_Prov__100iter.csv")) %>%
-  mutate(region = st_abrev,
-         region_type = "prov_state",
-         version = "traditional",
-         species = cn,
-         aou = Aou,
-         pop_median = med.PopEst,
-         pop_lci_80 = LCI80.PopEst,
-         pop_uci_80 = UCI80.PopEst,
-         pop_lci_95 = LCI95.PopEst,
-         pop_uci_95 = UCI95.PopEst)
-
-bcr_trad_all <- read_csv(paste0(trad_dir,"/PSest_by_BCR__100iter.csv")) %>%
-  mutate(region = as.character(BCR),
-         region_type = "bcr",
-         version = "traditional",
-         species = cn,
-         aou = Aou,
-         pop_median = med.PopEst,
-         pop_lci_80 = LCI80.PopEst,
-         pop_uci_80 = UCI80.PopEst,
-         pop_lci_95 = LCI95.PopEst,
-         pop_uci_95 = UCI95.PopEst)
-
-
-
-
-pop_ests_out_trad <- bind_rows(USACAN_trad_all,
-                               global_trad_all,
-                          #country_abund,
-                          bcr_trad_all,
-                          strata_trad_all) %>%
-  select(region,region_type,version,
-         species,aou,
-         pop_median, pop_lci_80, pop_uci_80,
-         pop_lci_95, pop_uci_95)
-
-saveRDS(pop_ests_out_trad,"all_traditional_pop_estimates_with_edr.rds")
+pop_ests_out_trad <- readRDS("all_traditional_pop_estimates.rds")
 
 
 
@@ -235,41 +245,16 @@ if(use_traditional){
 
 
 output_dir <- "G:/PIF_population_estimates/output"
-#output_dir <- "output"
+output_dir <- "output"
 trim_rel_abund <- TRUE
 
 
 # species loop ------------------------------------------------------------
 
+selected_species <- readRDS("data/selected_species.rds")
 
-for(sp_sel in unique(c(
-  "American Robin","Canyon Wren",
-                "Western Meadowlark","Baird's Sparrow","Brown Creeper",
-                "Black-capped Chickadee",
-                "Barn Swallow",
-                "Blackpoll Warbler",
-                "Mountain Bluebird",
-                "Eastern Phoebe",
-                "Rose-breasted Grosbeak",
-                "Downy Woodpecker",
-                "Red-winged Blackbird",
-                "Scarlet Tanager",
-                "Say's Phoebe",
-                "Black-chinned Hummingbird",
-                "Wilson's Snipe","Long-billed Curlew","Killdeer","Tennessee Warbler","Bay-breasted Warbler",
-                "Swainson's Thrush","Blue Jay",
-                "Blue-headed Vireo","Bicknell's Thrush",
-                "American Kestrel",
-                "Steller's Jay","Clay-colored Sparrow",
-                "Yellow-rumped Warbler","Olive-sided Flycatcher",
-                "Purple Martin",
-                "Barn Swallow",
-                "Verdin","Ash-throated Flycatcher","Black-throated Sparrow",
-                "Blue Jay","Varied Thrush","Veery","Wood Thrush","Chestnut-collared Longspur",
-                "Bobolink","Savannah Sparrow","Grasshopper Sparrow",
-                "Horned Lark",
-                "Eastern Whip-poor-will", "Common Nighthawk", "Scissor-tailed Flycatcher"
-                ))){ # rev(sps_list$english[1:348])){#sp_example[-wh_drop]){#list$english){
+
+for(sp_sel in selected_species){ # rev(sps_list$english[1:348])){#sp_example[-wh_drop]){#list$english){
 #sp_sel = "Bank Swallow"
 #for(sp_sel in rev(sps_list$english)[29]){
  sp_aou <- bbsBayes2::search_species(sp_sel)$aou[1]
@@ -281,27 +266,17 @@ for(sp_sel in unique(c(
 
 
 
-  raw_counts <- raw_counts_all %>%
-    filter(grepl(paste0("^",sp_sel),english))
+strata_trad <- pop_ests_out_trad %>%
+  filter(species == sp_sel,
+         region_type == "strata")
 
-  nsp_names <- length(unique(raw_counts$english))
+global_trad <- pop_ests_out_trad %>%
+  filter(species == sp_sel,
+         region_type == "USACAN")
 
-  if(nsp_names > 1){
-    warning(paste(sp_sel,"has too many name matches"))
-    next}
-  if(nrow(raw_counts) == 0){
-    warning(paste(sp_sel,"has no name matches"))
-    next
-  }
-
-strata_trad <- strata_trad_all %>%
-  filter(cn == sp_sel)
-
-global_trad <- global_trad_all %>%
-  filter(cn == sp_sel)
-
-bcr_trad <- bcr_trad_all %>%
-  filter(cn == sp_sel)
+bcr_trad <- pop_ests_out_trad %>%
+  filter(species == sp_sel,
+         region_type == "bcr")
 
 
 
@@ -309,11 +284,13 @@ bcr_trad <- bcr_trad_all %>%
 
 
 
-if(!file.exists(paste0("data/species_relative_abundance/",
+if(!file.exists(paste0("data/species_relative_abundance_2023/",
                        sp_ebird,"_relative_abundance.rds"))){next}
 
-rel_abund <- readRDS(paste0("data/species_relative_abundance/",
+rel_abund <- readRDS(paste0("data/species_relative_abundance_2023/",
                             sp_ebird,"_relative_abundance.rds"))
+
+
 
 
 if(trim_rel_abund){
@@ -333,19 +310,12 @@ if(trim_rel_abund){
   fit <- readRDS(paste0(output_dir,"/calibration_fit_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
   summ <- readRDS(paste0("convergence/parameter_summary_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
 
-  combined <- readRDS(paste0("data/main_data_df_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
-  stan_data <- readRDS(paste0(output_dir,"/stan_data_",vers,sp_aou,"_",sp_ebird,".rds"))
+  combined <- readRDS(paste0("stan_data/dataframe_",vers,sp_aou,"_",sp_ebird,".rds"))
+  stan_data <- readRDS(paste0("stan_data/stan_data_",vers,sp_aou,"_",sp_ebird,".rds"))
 
 
 
-
-  mean_counts <- raw_counts %>%
-    group_by(route_name) %>%
-    summarise(mean_count = mean(count)) %>%
-    filter(route_name %in% combined$route_name)
-
-  routes_buf <- routes_buf_all %>%
-    inner_join(mean_counts, by = "route_name")
+  routes_buf <- readRDS(paste0("stan_data/routes_buffered_",vers,sp_aou,"_",sp_ebird,".rds"))
 
 
 # posterior of calibration ------------------------------------------------
@@ -396,7 +366,7 @@ saveRDS(cali_trim_post,paste0("estimates/calibration_posterior_",vers,sp_aou,"_"
 
 # this is the range-wide (global) relative abundance surface for the
 # selected set of weeks that overlap the BBS field season
-breed_abundance <- readRDS(paste0("data/species_relative_abundance/",
+breed_abundance <- readRDS(paste0("data/species_relative_abundance_2023/",
                                   sp_ebird,
                                   "_derived_breeding_relative_abundance.rds"))
 
@@ -459,7 +429,7 @@ strata_abund <- data.frame(region = strata_proj$strata_name,
          strata_name = region) %>%
   left_join(.,strata_names)
   #filter(pop_mean != 0)
-strata_sampled <- readRDS(paste0("data/species_relative_abundance/",sp_ebird,"_bbs_strata_relative_abundance.rds")) %>%
+strata_sampled <- readRDS(paste0("data/species_relative_abundance_2023/",sp_ebird,"_bbs_strata_relative_abundance.rds")) %>%
   select(strata_name,mean_ebird_abundance:log_ratio)
 
 strata_abund <- strata_abund %>%
@@ -548,9 +518,9 @@ cali_use_y <- expand_grid(cali_use,yrs) %>%
   saveRDS(traj_plot,paste0("figures/saved_ggplots/abund_trajectory_strata_",vers,sp_aou,"_",sp_ebird,".rds"))
 
   USA_CAN_trajectories <- strata_population_posterior %>%
-    group_by(country, country_code, year, .draw) %>%
+    group_by(year, .draw) %>%
     summarise(population = sum(population)) %>%
-    group_by(country,country_code,year) %>%
+    group_by(year) %>%
     summarise(pop_mean = mean(population),
               pop_median = median(population),
               pop_lci_80 = interval_function_hpdi(population,probs = 0.1),
@@ -580,6 +550,9 @@ saveRDS(traj_plot,paste0("figures/saved_ggplots/abund_trajectory_",vers,sp_aou,"
   # compare to traditional estimates ----------------------------------------
 
 strata_trad_j <- strata_trad %>%
+  mutate(med.PopEst = pop_median,
+         LCI80.PopEst = pop_lci_80,
+         UCI80.PopEst = pop_uci_80) %>%
   select(st_abrev,
          BCR,
          med.PopEst,

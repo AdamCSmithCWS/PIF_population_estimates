@@ -260,7 +260,7 @@ strata_join <- strata_names %>%
   st_drop_geometry() %>%
   distinct()
 
-strata_trad_all <- read_csv("Stanton_2019_code/output_EDR/PSest_Prov_by_BCR__100iter.csv") %>%
+strata_trad_all <- read_csv("Stanton_2019_code/output/PSest_Prov_by_BCR__100iter.csv") %>%
   left_join(.,strata_join,
             by = c("st_abrev" = "prov_state",
                    "BCR" = "bcr")) %>%
@@ -275,7 +275,7 @@ strata_trad_all <- read_csv("Stanton_2019_code/output_EDR/PSest_Prov_by_BCR__100
          pop_lci_95 = LCI95.PopEst,
          pop_uci_95 = UCI95.PopEst)
 
-USACAN_trad_all <- read_csv("Stanton_2019_code/output_EDR/PSest_Global_WH_NA__100iter.csv") %>%
+USACAN_trad_all <- read_csv("Stanton_2019_code/output/PSest_Global_WH_NA__100iter.csv") %>%
   mutate(region = "USACAN",
          region_type = "USACAN",
          version = "traditional",
@@ -289,7 +289,7 @@ USACAN_trad_all <- read_csv("Stanton_2019_code/output_EDR/PSest_Global_WH_NA__10
 
 
 
-global_trad_all <- read_csv("Stanton_2019_code/output_EDR/PSest_Global_WH_NA__100iter.csv") %>%
+global_trad_all <- read_csv("Stanton_2019_code/output/PSest_Global_WH_NA__100iter.csv") %>%
   mutate(region = "global",
          region_type = "global",
          version = "traditional",
@@ -303,7 +303,7 @@ global_trad_all <- read_csv("Stanton_2019_code/output_EDR/PSest_Global_WH_NA__10
 
 
 
-prov_trad_all <- read_csv("Stanton_2019_code/output_EDR/PSest_by_Prov__100iter.csv") %>%
+prov_trad_all <- read_csv("Stanton_2019_code/output/PSest_by_Prov__100iter.csv") %>%
   mutate(region = st_abrev,
          region_type = "prov_state",
          version = "traditional",
@@ -315,7 +315,7 @@ prov_trad_all <- read_csv("Stanton_2019_code/output_EDR/PSest_by_Prov__100iter.c
          pop_lci_95 = LCI95.PopEst,
          pop_uci_95 = UCI95.PopEst)
 
-bcr_trad_all <- read_csv("Stanton_2019_code/output_EDR/PSest_by_BCR__100iter.csv")%>%
+bcr_trad_all <- read_csv("Stanton_2019_code/output/PSest_by_BCR__100iter.csv")%>%
   mutate(region = as.character(BCR),
          region_type = "bcr",
          version = "traditional",
@@ -366,7 +366,7 @@ log_normal_calibration <- TRUE # conduct calibration assuming a lognormal
 # distribution of variation among routes
 
 # base map for countries and continents -----------------------------------
-country_codes <- readxl::read_xlsx("iso_codes.xlsx") %>%
+country_codes <- readxl::read_xlsx("data/iso_codes.xlsx") %>%
   rename(country_name = Name) #
 
 americas_codes <- country_codes %>%
@@ -537,6 +537,7 @@ mean_counts <- raw_counts %>%
 routes_buf <- routes_buf_all %>%
   inner_join(mean_counts, by = "route_name")
 
+saveRDS(routes_buf,paste0("stan_data/routes_buffered_",vers,sp_aou,"_",sp_ebird,".rds"))
 
 # spatial setup -----------------------------------------------------------
 
@@ -652,6 +653,6 @@ stan_data <- list(n_routes = max(combined$route),
 adjs$n_routes <- stan_data$n_routes
 
 saveRDS(stan_data,paste0("stan_data/stan_data_",vers,sp_aou,"_",sp_ebird,".rds"))
-
+saveRDS(combined,paste0("stan_data/dataframe_",vers,sp_aou,"_",sp_ebird,".rds"))
 }
 

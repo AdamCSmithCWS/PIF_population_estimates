@@ -58,6 +58,19 @@ bbs_end <- as_date("2023-07-07") # Latest data for end of BBS-relevant breeding 
 
 metric_used <- "mean" #options are "max", mean" or "median" (although "median" won't work for seasonal)
 
+Inputfiles.dir <- "Stanton_2019_code/input_files/" #paste(Inputfiles.dir, '/', sep="")
+
+ExpAdjs <- read.csv(paste(Inputfiles.dir, 'Species_PSEst_Adjustments.csv', sep=''), stringsAsFactors=FALSE) %>%
+  mutate(cn = ifelse(cn == "McCown's Longspur",
+                     "Thick-billed Longspur",
+                     cn),
+         cn = ifelse(cn == "Gray Jay",
+                     "Canada Jay",
+                     cn),
+         cn = ifelse(grepl("Le Conte's",cn),
+                     gsub("Le Conte's","LeConte's",cn),
+                     cn))
+
 selected_species <- unique(c("Brown Creeper","Canyon Wren",
                              "Black-capped Chickadee","American Robin",
                              "Barn Swallow",
@@ -93,24 +106,38 @@ selected_species <- unique(c("Brown Creeper","Canyon Wren",
                              "Palm Warbler",
                              "Clark's Nutcracker",
                              "White-throated Sparrow",
-                             "Song Sparrow"))
+                             "Song Sparrow",
+                             "Great-blue Heron",
+                             "Sora",
+                             "Swamp Sparrow",
+                             "Common Yellowthroat",
+                             "Spotted Sandpiper",
+                             "Northern Waterthrush",
+                             "Sage Thrasher",
+                             "Sedge Wren"))
 
 saveRDS(selected_species,"data/selected_species.rds")
-ii <- which(sps_list$english %in% selected_species)
+
+remaining_species <- sps_list %>%
+  filter(n_routes_w_obs >= 100,
+         !english %in% selected_species)
+
+
+ii <- which(sps_list$english %in% remaining_species$english)
 
 for(i in ii){ #rev(1:nrow(sps_list))){ ##
 
   sp_sel <- unname(unlist(sps_list[i,"english"]))
 species_ebird <- ebirdst::get_species(sp_sel)
 
-# paste0("data/species_relative_abundance/",
+# paste0("data/species_relative_abundance_2023/",
 #        sp_ebird,
 #        "_derived_breeding_relative_abundance.rds")
 
 
-if((file.exists(paste0("data/species_relative_abundance/",
+if((file.exists(paste0("data/species_relative_abundance_2023/",
                       species_ebird,"_relative_abundance.rds")) &
-   file.exists(paste0("data/species_relative_abundance/",
+   file.exists(paste0("data/species_relative_abundance_2023/",
                       species_ebird,"_derived_breeding_relative_abundance.rds"))) &
    !re_calc){
   next
@@ -358,10 +385,10 @@ if(resident | use_weekly){
 
 }
 
-saveRDS(breed_abundance,paste0("data/species_relative_abundance/",species_ebird,"_derived_breeding_relative_abundance.rds"))
+saveRDS(breed_abundance,paste0("data/species_relative_abundance_2023/",species_ebird,"_derived_breeding_relative_abundance.rds"))
 
 if(use_uncertainty){
-  saveRDS(breed_abundance_sd,paste0("data/species_relative_abundance/",species_ebird,"_derived_breeding_relative_abundance_logsd.rds"))
+  saveRDS(breed_abundance_sd,paste0("data/species_relative_abundance_2023/",species_ebird,"_derived_breeding_relative_abundance_logsd.rds"))
 }
 
 
@@ -497,7 +524,7 @@ abundance_df <- data.frame(route_name = routes_buf_proj$route_name,
 # tst
 
 saveRDS(abundance_df,
-        paste0("data/species_relative_abundance/",species_ebird,"_relative_abundance.rds"))
+        paste0("data/species_relative_abundance_2023/",species_ebird,"_relative_abundance.rds"))
 
 abundance_strat <- bbs_strata2 %>%
   sf::st_drop_geometry() %>%
@@ -520,6 +547,6 @@ abundance_strat <- abundance_strat %>%
          log_ratio = log(sampled_avail_ratio))
 
 saveRDS(abundance_strat,
-        paste0("data/species_relative_abundance/",species_ebird,"_bbs_strata_relative_abundance.rds"))
+        paste0("data/species_relative_abundance_2023/",species_ebird,"_bbs_strata_relative_abundance.rds"))
 
 }
