@@ -254,7 +254,7 @@ trim_rel_abund <- TRUE
 selected_species <- readRDS("data/selected_species.rds")
 
 
-for(sp_sel in selected_species){ # rev(sps_list$english[1:348])){#sp_example[-wh_drop]){#list$english){
+for(sp_sel in c("American Robin","Canyon Wren")){#selected_species){ # rev(sps_list$english[1:348])){#sp_example[-wh_drop]){#list$english){
 #sp_sel = "Bank Swallow"
 #for(sp_sel in rev(sps_list$english)[29]){
  sp_aou <- bbsBayes2::search_species(sp_sel)$aou[1]
@@ -494,8 +494,6 @@ cali_use_y <- expand_grid(cali_use,yrs) %>%
 
 
 
-  ### 3^2 scaling is to account for the area of each grid-cell 9-km^2
-  ###
 
   strata_trajectories <- strata_population_posterior %>%
     group_by(region, region_type, year) %>%
@@ -731,7 +729,7 @@ bcr_abund <- data.frame(region = as.character(bcr_proj$BCR[abundance_in_bcr$ID])
 
 
 
-re_do_map <- FALSE #option to skip because they take a long time.
+re_do_map <- TRUE #option to skip because they take a long time.
 if(re_do_map){
   # abund_mapable <- breed_abundance %>%
   #   terra::project(.,"EPSG:9822")
