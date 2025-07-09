@@ -564,6 +564,23 @@ y_2020 <- combined %>%
   mutate(y_2020 = ifelse(is.na(yr),0,1))
 
 
+# selecting which time-intervals are lumped with 2020 data ----------------
+# If mid-year is after 2020, then the intervals should be:
+##  2021-2020 (meaning the y_2020 should be 0 when y == 2020)
+## 2020-2019  (meaning the y_2020 should be 0 when y == 2019)
+prev_2020_base <- ifelse(yr_ebird-(max(combined$year)) == 0,TRUE,FALSE)
+if(prev_2020_base){
+y_2020 <- y_2020 %>%
+  mutate(y_2020 = ifelse(year == 2019,0,y_2020))
+}else{
+  y_2020 <- y_2020 %>%
+    mutate(y_2020 = ifelse(year == 2021,0,y_2020))
+}
+# If mid-year is before 2020, then the intervals should be:
+##  2019-2020 (meaning the y_2020 should be 0 when y == 2020)
+## 2020-2021  (meaning the y_2020 should be 0 when y == 2021)
+
+
 
 mean_abund <- combined %>%
   select(route,logm) %>%

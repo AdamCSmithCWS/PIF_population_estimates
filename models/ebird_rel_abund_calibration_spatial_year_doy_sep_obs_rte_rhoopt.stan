@@ -102,6 +102,8 @@ parameters {
   vector[n_years] GAMMA_raw;//_hyperparameter of overall annual change values - "differences" between years
   matrix[n_strata,n_years] gamma_raw;         // strata level parameters
 
+  real GAMMA_raw_2020;//_hyperparameter of overall annual change value for the 2-year gap spanning 2020
+  vector[n_strata] gamma_raw_2020;         // strata level parameters for hte two-year gap spanning 2020
 
   vector[n_knots_doy] DOY_raw;         // GAM hyper coefficients for doy
   matrix[n_strata,n_knots_doy] doy_raw;         // GAM strata level parameters
@@ -122,6 +124,8 @@ transformed parameters{
   matrix[n_strata,n_knots_doy] doy_b;         // GAM strata level parameters
   vector[n_years] GAMMA;  // hyperparameter of annual differences
   matrix[n_strata,n_years] gamma;         // strata-level mean differences (0-centered deviation from continental mean GAMMA)
+  real GAMMA_2020;  // hyperparameter of annual differences
+  vector[n_strata] gamma_2020;  // strata lelve annual differences for the 2020 span
   matrix[n_strata,n_years] yeareffect;  // matrix of estimated annual values of trajectory
   vector[n_years] YearEffect; // hyperparameter for population-wide annual trajectory
   real RHO; // slope of the log-log relationship - used as a check, not for inference
@@ -157,32 +161,39 @@ if(est_rho){
 
 // Time series
  GAMMA = sd_GAMMA * GAMMA_raw;
+ GAMMA_2020 = sd_GAMMA * GAMMA_raw_2020 * 0.5;
+  gamma_2020 = (sd_gamma * 0.5) * gamma_raw_2020;
 
   gamma[,ebird_year] = zero_gammas; //fixed at zero
   yeareffect[,ebird_year] = zero_gammas; //fixed at zero
   YearEffect[ebird_year] = 0; //fixed at zero
 
+
 // first half of time-series - runs backwards from fixed_year
   for(t in yrev){
-  if(y_2020[t]){ // all years not equal to 2020
+  if(y_2020[t]){ // all years not equal to 2020 or 2019
     gamma[,t] = (sd_gamma * gamma_raw[,t]) + GAMMA[t];
+        YearEffect[t] = YearEffect[t+1] - GAMMA[t]; // hyperparameter trajectory interesting to monitor but no direct inference
+
   }else{
-    gamma[,t] = (0 * gamma_raw[,t]) + GAMMA[t]; // in 2020 strata-parameters forced to 0
-  }
-    yeareffect[,t] = yeareffect[,t+1] - gamma[,t];
-    YearEffect[t] = YearEffect[t+1] - GAMMA[t]; // hyperparameter trajectory interesting to monitor but no direct inference
+    gamma[,t] = gamma_2020 + GAMMA_2020; // in 2020 and 2019, difference values represent 2-year change
+      YearEffect[t] = YearEffect[t+1] - GAMMA_2020; // hyperparameter trajectory interesting to monitor but no direct inference
+}
+    yeareffect[,t] = yeareffect[,t+1] - gamma[,t]; //change from next year
   }
 // second half of time-series - runs forwards from fixed_year
+if(n_years - ebird_year){ // only necessary if ebird_year is not equal to n_years
 for(t in (ebird_year+1):n_years){
-  if(y_2020[t]){ // all years not equal to 2020
+  if(y_2020[t]){ // all years not equal to 2020 or 2021
     gamma[,t] = (sd_gamma * gamma_raw[,t]) + GAMMA[t-1];//t-1 indicators to match dimensionality
+        YearEffect[t] = YearEffect[t-1] + GAMMA[t];
       }else{
-    gamma[,t] = (0 * gamma_raw[,t]) + GAMMA[t]; // in 2020 strata-parameters forced to 0
+    gamma[,t] = gamma_2020 + GAMMA_2020; // in 2020 and 2019, difference values represent 2-year change
+      YearEffect[t] = YearEffect[t-1] + GAMMA_2020;
+      }
+    yeareffect[,t] = yeareffect[,t-1] + gamma[,t]; // change from last year
   }
-    yeareffect[,t] = yeareffect[,t-1] + gamma[,t];
-    YearEffect[t] = YearEffect[t-1] + GAMMA[t];
-  }
-
+}
 // replacing the strata level difference values
 
 
@@ -237,6 +248,9 @@ model {
   sd_gamma ~ student_t(3,0,0.2); // prior on sd of annual differences among strata, see Smith et al. 2023 supplements for prior pred checks
   sd_GAMMA ~ student_t(3,0,0.1); // prior on sd of mean hyperparameter annual differences
   GAMMA_raw ~ std_normal();
+  GAMMA_raw_2020 ~ std_normal();
+
+gamma_raw_2020 ~ icar_normal(n_strata, node1, node2);
 
 for(t in 1:n_years){
 
