@@ -40,7 +40,7 @@ data {
 
 // spatial varying time series components
   array[n_years] int<lower=0> y_2020; //indicators for 2020 = 0 if 2020 and missing if fixed_year
-  vector[n_strata] zero_gammas;   // a vector of zeros to fill fixed beta values for fixed_year
+  vector[n_strata] zero_gammas;   // a vector of zeros to fill fixed log_beta values for fixed_year
   //data for spatial iCAR among strata
   int<lower=1> n_edges;
   array [n_edges] int<lower=1, upper=n_strata> node1;  // node1[i] adjacent to node2[i]
@@ -82,10 +82,10 @@ data {
 //
 parameters {
 
-  real BETA; // mean route-level callibration log scale
-  real<lower=0> sd_beta; // sd of calibration among routes
+  real log_BETA; // mean route-level callibration log scale
+  real<lower=0> sd_log_beta; // sd of calibration among routes
   real RHO_raw; // slope of the log-log relationship - used as a check, not for inference
-  vector[n_routes] beta_raw; // route-specific calibrations
+  vector[n_routes] log_beta_raw; // route-specific calibrations
   vector[n_obs] obs_raw; // route-specific calibrations
   real<lower=0> sd_obs; // sd of calibration among routes
   real<lower=3> nu;
@@ -114,7 +114,7 @@ parameters {
 
 transformed parameters{
 
-  vector[n_routes] beta; // route-level intercepts (on linear scale these are multiplicative scaling factors for the predictor)
+  vector[n_routes] log_beta; // route-level intercepts (on linear scale these are multiplicative scaling factors for the predictor)
   vector[n_obs] obs; // observer effects
   vector[n_counts] E; // log-scale expected counts
   real<lower=0> phi; //transformed sdnoise if use_pois == 0 (and therefore Negative Binomial)
@@ -154,13 +154,17 @@ if(est_rho){
   }
 
 // route level intercepts
-  beta = sd_beta*beta_raw + BETA;//
+  log_beta = sd_log_beta*log_beta_raw + log_BETA;//
 // route level intercepts
   obs = sd_obs*obs_raw;//
 
 
 // Time series
  GAMMA = sd_GAMMA * GAMMA_raw;
+ // change values for the two-year span between 2019 and 2021
+ // BBS was cancelled in 2020, so there are no data
+ // assuming the same log-scale change value in the two years, and therefore
+ // multiplying by 0.5
  GAMMA_2020 = sd_GAMMA * GAMMA_raw_2020 * 0.5;
   gamma_2020 = (sd_gamma * 0.5) * gamma_raw_2020;
 
@@ -182,7 +186,7 @@ if(est_rho){
     yeareffect[,t] = yeareffect[,t+1] - gamma[,t]; //change from next year
   }
 // second half of time-series - runs forwards from fixed_year
-if(n_years - ebird_year){ // only necessary if ebird_year is not equal to n_years
+if(n_years - ebird_year){ // only used if ebird_year is not equal to n_years, i.e., ebird_year != final year of the BBS data
 for(t in (ebird_year+1):n_years){
   if(y_2020[t]){ // all years not equal to 2020 or 2021
     gamma[,t] = (sd_gamma * gamma_raw[,t]) + GAMMA[t-1];//t-1 indicators to match dimensionality
@@ -194,20 +198,19 @@ for(t in (ebird_year+1):n_years){
     yeareffect[,t] = yeareffect[,t-1] + gamma[,t]; // change from last year
   }
 }
-// replacing the strata level difference values
 
 
     for(i in 1:n_counts){
        real noise;
 
-      if(use_pois){
+      if(use_pois){ // noise term only meaningful for observation-level extra-Poisson variance
         noise = sdnoise*noise_raw[i];
       }else{
-        noise = 0;
+        noise = 0; //otherwise the phi parameter in the Negative Binomial models overdispersion
       }
 
 
-    E[i] = beta[route[i]] + obs[observer[i]] + doy_pred[doy[i],strata[i]] + yeareffect[strata[i],year[i]] + RHO*log_mean_rel_abund[route[i]] + noise;
+    E[i] = log_beta[route[i]] + obs[observer[i]] + doy_pred[doy[i],strata[i]] + yeareffect[strata[i],year[i]] + RHO*log_mean_rel_abund[route[i]] + noise;
   }
 
 
@@ -216,19 +219,19 @@ for(t in (ebird_year+1):n_years){
 model {
   nu ~ gamma(2,0.1); // prior on df for t-distribution of heavy tailed site-effects from https://github.com/stan-dev/stan/wiki/Prior-Choice-Recommendations#prior-for-degrees-of-freedom-in-students-t-distribution
   nu_obs ~ gamma(2,0.1); // prior on df for t-distribution of heavy tailed site-effects from https://github.com/stan-dev/stan/wiki/Prior-Choice-Recommendations#prior-for-degrees-of-freedom-in-students-t-distribution
-  BETA ~ student_t(3,0,2);
+  log_BETA ~ student_t(3,0,2);
   RHO_raw ~ normal(1,0.5);
   if(use_t){
-  beta_raw ~ student_t(nu,0,1);
+  log_beta_raw ~ student_t(nu,0,1);
   obs_raw ~ student_t(nu_obs,0,1);
   }else{
-  beta_raw ~ normal(0,1);
+  log_beta_raw ~ normal(0,1);
   obs_raw ~ normal(0,1);
   }
-  sum(beta_raw) ~ normal(0,0.001*n_routes); // soft sum to zero constraint
+  sum(log_beta_raw) ~ normal(0,0.001*n_routes); // soft sum to zero constraint
   sum(obs_raw) ~ normal(0,0.001*n_obs); // soft sum to zero constraint
 
-  sd_beta ~ student_t(3,0,1);
+  sd_log_beta ~ student_t(3,0,1);
   sd_obs ~ student_t(3,0,1);
   sdnoise ~ student_t(3,0,1); //prior on scale of extra Poisson log-normal variance or inverse sqrt(phi) for negative binomial
  // sd_gamma ~ gamma(2,10); //time-series annual variance in gamma
@@ -259,12 +262,14 @@ for(t in 1:n_years){
    gamma_raw[,t] ~ icar_normal(n_strata, node1, node2);
 
     }else{
-     gamma_raw[,t] ~ normal(0,0.001); // arbitrarily small because this is the ebird eyar
+     gamma_raw[,t] ~ normal(0,0.001); // arbitrarily small because this is the ebird year and these are not included in the likelihood
 
      }
-  }else{ //if year is 2020 - no spatial variance because there are no BBS observations that year
-
-    gamma_raw[,t] ~ std_normal(); //non-spatial substitute for year with no data
+  }else{ //if year is on either side of 2020 - no spatial variance because there are no BBS observations that year
+//These values are currently meaningless because they are not included in the likelihood
+// for years with y_2020[t] == 1, these values are ignored in favour of the values
+// from gamma_2020 + GAMMA_2020
+    gamma_raw[,t] ~ std_normal();
     sum(gamma_raw[,t]) ~ normal(0,0.001*n_strata);
 
   }
@@ -319,7 +324,7 @@ if(use_t){
 // posterior predictive check
 if(use_ppc){
 for(i in 1:n_counts){
-y_rep[i] = neg_binomial_2_log_rng(beta[route[i]] + obs[observer[i]] + doy_pred[doy[i],strata[i]] + yeareffect[strata[i],year[i]] + RHO*log_mean_rel_abund[route[i]],phi);
+y_rep[i] = neg_binomial_2_log_rng(log_beta[route[i]] + obs[observer[i]] + doy_pred[doy[i],strata[i]] + yeareffect[strata[i],year[i]] + RHO*log_mean_rel_abund[route[i]],phi);
 }
 }
 // ridiculous work around to allow for the limits on pair correction
@@ -367,22 +372,24 @@ y_rep[i] = neg_binomial_2_log_rng(beta[route[i]] + obs[observer[i]] + doy_pred[d
   c_area = (50*3.14159*(cd^2))/1000000; // area in square km
 
 
-// this calibration assumes the distribution of route-level betas is symetrical
-  calibration = (exp(BETA + 0.5*(sd_beta/adj)^2) * cp * ct) / c_area;
-  calibration_alt1 = (exp(BETA + 0.5*(sd_beta)^2) * cp * ct) / c_area;
-  calibration_alt2 = (exp(BETA) * cp * ct) / c_area;
+// this calibration assumes the distribution of route-level log_betas is symetrical
+  calibration = (exp(log_BETA + 0.5*(sd_log_beta/adj)^2) * cp * ct) / c_area;
+  // this calibration assumes the distribution of route-level log_betas is log-normal
+  calibration_alt1 = (exp(log_BETA + 0.5*(sd_log_beta)^2) * cp * ct) / c_area;
+  // this calibration uses the median of the retransformed distribution - will underestimated
+  calibration_alt2 = (exp(log_BETA) * cp * ct) / c_area;
 
-  pred_count = exp(RHO*mean(log_mean_rel_abund) + BETA + 0.5*(sd_beta/adj)^2);
-  pred_count_alt1 = exp(RHO*mean(log_mean_rel_abund) + BETA + 0.5*(sd_beta)^2);
-  pred_count_alt2 = exp(RHO*mean(log_mean_rel_abund) + BETA);
+  pred_count = exp(RHO*mean(log_mean_rel_abund) + log_BETA + 0.5*(sd_log_beta/adj)^2);
+  pred_count_alt1 = exp(RHO*mean(log_mean_rel_abund) + log_BETA + 0.5*(sd_log_beta)^2);
+  pred_count_alt2 = exp(RHO*mean(log_mean_rel_abund) + log_BETA);
 
-// predictions (year = 2022) and calibrations for each route
+// predictions (year = 2023 - year of the predicted surface) and calibrations for each route
   for(j in 1:n_routes){
-    calibration_r[j] = (exp(beta[j]) * cp * ct) / c_area;
-    pred_count_r[j] = (exp(beta[j] + RHO*log_mean_rel_abund[j]));
+    calibration_r[j] = (exp(log_beta[j]) * cp * ct) / c_area;
+    pred_count_r[j] = (exp(log_beta[j] + RHO*log_mean_rel_abund[j]));
  }
-  // this calibration does not assume a normal distribution of beta[j]
-  // but also assumes estimates a mean across the realised set of routes
+  // this calibration does not assume anything about the distribution of log_beta[j]
+  // but the following means and medians are estimated across the realised set of routes
   // it is also highly sensitive to long tails of the distribution of route-level variation
   calibration_mean = mean(calibration_r);
   calibration_median = quantile(calibration_r,0.5);
@@ -390,10 +397,10 @@ y_rep[i] = neg_binomial_2_log_rng(beta[route[i]] + obs[observer[i]] + doy_pred[d
   pred_count_median = quantile(pred_count_r,0.5);
 
 
-
+// useful mean predictions for each year to approximately visualise how the population changes with time average across all strata
 for(y in 1:n_years){
-  raw_prediction[y,1] = exp(RHO*min(log_mean_rel_abund) + BETA + 0.5*(sd_beta)^2 + YearEffect[y] );
-  raw_prediction[y,2] = exp(RHO*max(log_mean_rel_abund) + BETA + 0.5*(sd_beta)^2 + YearEffect[y] );
+  raw_prediction[y,1] = exp(RHO*min(log_mean_rel_abund) + log_BETA + 0.5*(sd_log_beta)^2 + YearEffect[y] );
+  raw_prediction[y,2] = exp(RHO*max(log_mean_rel_abund) + log_BETA + 0.5*(sd_log_beta)^2 + YearEffect[y] );
 }
 
 
