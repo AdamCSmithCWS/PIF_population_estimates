@@ -161,6 +161,10 @@ if(est_rho){
 
 // Time series
  GAMMA = sd_GAMMA * GAMMA_raw;
+ // change values for the two-year span between 2019 and 2021
+ // BBS was cancelled in 2020, so there are no data
+ // assuming the same log-scale change value in the two years, and therefore
+ // multiplying by 0.5
  GAMMA_2020 = sd_GAMMA * GAMMA_raw_2020 * 0.5;
   gamma_2020 = (sd_gamma * 0.5) * gamma_raw_2020;
 
@@ -182,7 +186,7 @@ if(est_rho){
     yeareffect[,t] = yeareffect[,t+1] - gamma[,t]; //change from next year
   }
 // second half of time-series - runs forwards from fixed_year
-if(n_years - ebird_year){ // only necessary if ebird_year is not equal to n_years
+if(n_years - ebird_year){ // only used if ebird_year is not equal to n_years, i.e., ebird_year != final year of the BBS data
 for(t in (ebird_year+1):n_years){
   if(y_2020[t]){ // all years not equal to 2020 or 2021
     gamma[,t] = (sd_gamma * gamma_raw[,t]) + GAMMA[t-1];//t-1 indicators to match dimensionality
@@ -194,16 +198,15 @@ for(t in (ebird_year+1):n_years){
     yeareffect[,t] = yeareffect[,t-1] + gamma[,t]; // change from last year
   }
 }
-// replacing the strata level difference values
 
 
     for(i in 1:n_counts){
        real noise;
 
-      if(use_pois){
+      if(use_pois){ // noise term only meaningful for observation-level extra-Poisson variance
         noise = sdnoise*noise_raw[i];
       }else{
-        noise = 0;
+        noise = 0; //otherwise the phi parameter in the Negative Binomial models overdispersion
       }
 
 
@@ -259,12 +262,14 @@ for(t in 1:n_years){
    gamma_raw[,t] ~ icar_normal(n_strata, node1, node2);
 
     }else{
-     gamma_raw[,t] ~ normal(0,0.001); // arbitrarily small because this is the ebird eyar
+     gamma_raw[,t] ~ normal(0,0.001); // arbitrarily small because this is the ebird year and these are not included in the likelihood
 
      }
-  }else{ //if year is 2020 - no spatial variance because there are no BBS observations that year
-
-    gamma_raw[,t] ~ std_normal(); //non-spatial substitute for year with no data
+  }else{ //if year is on either side of 2020 - no spatial variance because there are no BBS observations that year
+//These values are currently meaningless because they are not included in the likelihood
+// for years with y_2020[t] == 1, these values are ignored in favour of the values
+// from gamma_2020 + GAMMA_2020
+    gamma_raw[,t] ~ std_normal();
     sum(gamma_raw[,t]) ~ normal(0,0.001*n_strata);
 
   }
