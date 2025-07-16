@@ -51,7 +51,7 @@ strata_names <- strata %>%
 
 #
 #
-# # load traditional estimates with EDR for later comparison -------------------------
+# # load traditional estimates  fir later comparison -------------------------
 # trad_dir <- "Stanton_2019_code/output"
 # strata_join <- strata_names %>%
 #   select(strata_name,country_code,
@@ -143,14 +143,6 @@ strata_names <- strata %>%
 #
 
 pop_ests_out_trad <- readRDS("all_traditional_pop_estimates.rds")
-
-
-# potentially important detail from Golden Eagle paper --------------------------------------
-##  That paper USED MAX WEEKLY RELATIVE ABUNDANCE DURING KEY SEASON
-# Using the 2019 relative abundance data product as a starting point, we calculated
-# the maximum eBird relative abundance value for each 3x3-km pixel over the weeks
-# of the aerial survey (August 17th–September 14th) because these units were
-# expected to best match those of the golden eagle survey.
 
 
 
@@ -577,11 +569,11 @@ w_mean_lg_rat <- function(x,w){
   wx <- rep(NA,length(x))
   sum_w <- sum(w,na.rm = TRUE)
 
-  for(i in 1:length(x)){
+    for(i in 1:length(x)){
     if(is.finite(x[i])){
       wx[i] <- (x[i]*w[i])/sum_w
     }else{
-      wx[i] <- (log(0.01)*w[i])/sum_w
+      wx[i] <- (log(0.0001)*w[i])/sum_w
     }
   }
   return(sum(wx,na.rm = TRUE))
@@ -595,19 +587,28 @@ for(sp_sel in sp_example){
 
   if(!file.exists(paste0("data/species_relative_abundance_",yr_ebird,"/",species_ebird,"_bbs_strata_relative_abundance.rds"))){next}
 
-  # route_sampled <- readRDS(paste0("data/species_relative_abundance_",yr_ebird,"/",species_ebird,"_relative_abundance.rds"))
+  route_sampled <- readRDS(paste0("data/species_relative_abundance_",yr_ebird,"/",species_ebird,"_relative_abundance.rds"))
+
+  mean_sampled_abund <- mean(route_sampled$ebird_abund,na.rm = TRUE)
   #
-  # mean_sampled_abund <- mean(route_sampled$ebird_abund,na.rm = TRUE)
-  #
+
 
   sampl_bias1 <- readRDS(paste0("data/species_relative_abundance_",yr_ebird,"/",species_ebird,"_bbs_strata_relative_abundance.rds")) %>%
     mutate(species = sp_sel,
-           sp_ebird = species_ebird)
+           sp_ebird = species_ebird,
+           sampled_abundance = ifelse(!is.na(mean_ebird_abundance) & is.na(sampled_abundance),
+                                      0,sampled_abundance),
+           sampled_abundance = ifelse(strata_name == "USA_CAN",mean_sampled_abund,sampled_abundance),
+           sampled_avail_ratio = sampled_abundance/mean_ebird_abundance,
+           log_ratio = log(sampled_avail_ratio))
+
+
 
   tmp <- sampl_bias1 %>%
     filter(strata_name != "USA_CAN",
            !is.na(log_ratio)) %>%
-    mutate(ifelse(is.na(sampled_abundance),0,sampled_abundance))
+    mutate(log_ratio = ifelse(is.finite(log_ratio),log_ratio,log(0.001)),
+           sampled_abundance = ifelse(is.na(sampled_abundance),0,sampled_abundance))
   #
   wm_samp <- w_mean_lg_rat(tmp$log_ratio,tmp$total_ebird_abundance)
   #
@@ -625,7 +626,6 @@ sampl_bias <- sampl_bias %>%
   mutate(ratio_new_old = 1/exp(log_ratio))
 
 saveRDS(sampl_bias,"final_figures/example_species_strata_sampling_bias.rds")
-trend_effects <- read_csv("final_figures/trend_effect_summaries.csv")
 
 canw <- sampl_bias %>%
   filter(species == "Canyon Wren",
@@ -707,18 +707,22 @@ write_csv(us_can_wide,"final_figures/usa_canada_comparison_eBird_existing_w_EDR.
 
 
 
-# calculate the time-series of strata-level estimates -------------
+# calculate the difference between mean abundance and abundance in eBird year -------------
 
 
+re_sum_trend <- TRUE
 
+if(re_sum_trend){
 
 trend_effect_out <- NULL
+trend_effect_st_out <- NULL
+
 vers <- ""
-for(sp_sel in sp_example[c(46:62)]){
+for(sp_sel in sp_example){
 
   sp_aou <- bbsBayes2::search_species(sp_sel)$aou[1]
   sp_ebird <- ebirdst::get_species(sp_sel)
-
+if(sp_sel == "Ruby-throated Hummingbird"){next}
   if(file.exists(paste0(output_dir,"/calibration_fit_alt_",
                         vers,sp_aou,"_",sp_ebird,".rds"))){
 
@@ -730,17 +734,18 @@ for(sp_sel in sp_example[c(46:62)]){
 
 strata_population_posterior <- readRDS(paste0("output/strata_population_posterior_",vers,sp_aou,"_",sp_ebird,".rds"))
 
+# mean abundance across all years
     mean_pops <- strata_population_posterior %>%
       group_by(year,.draw) %>%
       summarise(pop = sum(population),.groups = "drop") %>%
       group_by(.draw) %>%
       summarise(mean_pop = mean(pop), .groups = "drop") #%>%
-
+# abundance in ebird year
     mean_pops22 <- strata_population_posterior %>%
       filter(year == yr_ebird) %>%
       group_by(.draw) %>%
       summarise(pop = sum(population),.groups = "drop")
-
+# ratio of abundance in ebird year with mean abundance all years
     trend_effect <- inner_join(mean_pops22,mean_pops,
                                by = ".draw") %>%
       mutate(p_22 = pop/mean_pop) %>%
@@ -751,9 +756,39 @@ strata_population_posterior <- readRDS(paste0("output/strata_population_posterio
       mutate(species = sp_sel,
              sp_eBird = sp_ebird)
 
+# mean abundance in all years by strata
+    mean_pops_st <- strata_population_posterior %>%
+      group_by(year,strata_name,.draw) %>%
+      summarise(pop = sum(population),.groups = "drop") %>%
+      filter(pop > 0) %>%
+      group_by(strata_name,.draw) %>%
+      summarise(mean_pop = mean(pop), .groups = "drop") #%>%
+
+# abundance in ebird year by strata
+    mean_pops22_st <- strata_population_posterior %>%
+      filter(year == yr_ebird) %>%
+      group_by(strata_name,.draw) %>%
+      summarise(pop = sum(population),.groups = "drop") %>%
+      filter(pop > 0)
+
+    # ratio of abundance in ebird year over mean abundance by strata
+    trend_effect_st <- inner_join(mean_pops22_st,mean_pops_st,
+                               by = c("strata_name",".draw")) %>%
+      mutate(p_22 = pop/mean_pop) %>%
+      group_by(strata_name) %>%
+      summarise(median_proportion = median(p_22,na.rm = TRUE),
+                mean_proportion = mean(p_22,na.rm = TRUE),
+                lci_proportion = quantile(p_22,0.025,na.rm = TRUE),
+                uci_proportion = quantile(p_22,0.975,na.rm = TRUE),
+                mean_abund = mean(mean_pop),
+                abund_22 = mean(pop)) %>%
+      mutate(species = sp_sel,
+             sp_eBird = sp_ebird)
+
 
        trend_effect_out <- bind_rows(trend_effect_out,trend_effect)
 
+      trend_effect_st_out <- bind_rows(trend_effect_st_out,trend_effect_st)
 
   }
 
@@ -767,8 +802,50 @@ trend_effects <- trend_effect_out %>%
 
 write_csv(trend_effects,"final_figures/trend_effect_summaries.csv")
 
+trend_effects_st <- trend_effect_st_out %>%
+  mutate(log_ratio = log(mean_proportion),
+         ratio = mean_proportion) %>%
+  rename(sp_ebird = sp_eBird)
 
 
+write_csv(trend_effects_st,"final_figures/trend_effect_summaries_strata.csv")
+
+}else{
+  trend_effects <- read_csv("final_figures/trend_effect_summaries.csv")
+  trend_effects_st <- read_csv("final_figures/trend_effect_summaries_strata.csv")
+
+}
+
+## explore the canyon wren sampling vs trend effects
+
+canw_sample <- canw %>%
+  mutate(log_geographic_ratio = ifelse(is.finite(log_ratio),log_ratio,
+                                       log(0.001))) %>%
+  filter(strata_name != "USA_CAN") %>%
+  select(species,sp_ebird, strata_name,log_geographic_ratio,total_ebird_abundance)
+trend_effects_st_canw <- trend_effects_st %>%
+  filter(species == "Canyon Wren",
+         strata_name != "USA_CAN") %>%
+  mutate(log_trend_ratio = log_ratio) %>%
+  select(species,sp_ebird,strata_name,log_trend_ratio) %>%
+  full_join(canw_sample, by = c("strata_name","species","sp_ebird"))%>%
+  mutate(log_trend_ratio = ifelse(is.na(log_trend_ratio),
+                                  0,log_trend_ratio),
+         w_trend = ifelse(log_trend_ratio == 0,FALSE,TRUE),
+         w_sampling = ifelse(log_geographic_ratio == log(0.001),
+                             FALSE,TRUE))
+
+tst <- ggplot(data = filter(trend_effects_st_canw,log_trend_ratio != 0),
+              aes(y = exp(-1*log_geographic_ratio),
+                  x = exp(log_trend_ratio),
+                  alpha = total_ebird_abundance))+
+  geom_point()+
+  geom_smooth()
+tst
+
+miss <- trend_effects_st_canw %>%
+  group_by(w_trend,w_sampling) %>%
+  summarise(pop = sum(total_ebird_abundance))
 
 # combined new adjustment factors -----------------------------------------
 
@@ -877,22 +954,22 @@ tabl2_paper <- pop_compare_realised_wide %>%
 
 write_csv(tabl2_paper,"Table_2_paper.csv")
 
-Trats <- ExpAdjs %>%
-  select(Species,cn,Tlr,Alr,clr) %>%
-  pivot_longer(cols = c(Tlr,Alr,clr),
-               names_to = "adjustment",
-               values_to = "LogRatio") %>%
-  mutate(adjfactor = ifelse(adjustment == "Tlr",
-                            "Availability",
-                            "Area"),
-         adjfactor = ifelse(adjustment == "clr",
-                            "Combined",
-                            adjfactor),
-         adjfactor = factor(adjfactor,
-                            levels = c("Availability","Area","Combined"),
-                            ordered = TRUE)) %>%
-  select(-adjustment) %>%
-  bind_rows(trend_effects)
+# Trats <- ExpAdjs %>%
+#   select(Species,cn,Tlr,Alr,clr) %>%
+#   pivot_longer(cols = c(Tlr,Alr,clr),
+#                names_to = "adjustment",
+#                values_to = "LogRatio") %>%
+#   mutate(adjfactor = ifelse(adjustment == "Tlr",
+#                             "Availability",
+#                             "Area"),
+#          adjfactor = ifelse(adjustment == "clr",
+#                             "Combined",
+#                             adjfactor),
+#          adjfactor = factor(adjfactor,
+#                             levels = c("Availability","Area","Combined"),
+#                             ordered = TRUE)) %>%
+#   select(-adjustment) %>%
+#   bind_rows(trend_effects)
 
 
 
@@ -951,71 +1028,72 @@ splab <- splabs %>%
   filter(adjfactor == "Overall")
 
 #
-# Trats_plot_full <- Trats_plot
-#
-# Trats_plot <- Trats_plot %>%
-#   filter(cn %in% sp_example,
-#          adjfactor != "Combined")
-#
-# adj_plot <- ggplot(data = Trats_plot,
-#                    aes(x = adjfactor,
-#                        y = Ratio))+
-#   # geom_hline(yintercept = c((10),
-#   #                           (0.1)),
-#   #            alpha = 0.8,
-#   #            linetype = 3)+
-#   # geom_hline(yintercept = c((5),
-#   #                           (0.2)),
-#   #            alpha = 0.6,
-#   #            linetype = 2)+
-#   # geom_hline(yintercept = c((2),
-#   #                           (0.5)),
-#   #            alpha = 0.6,
-#   #            linetype = 2)+
-#   geom_hline(yintercept = c(0.1,0.2,0.5,1,2,5,10),
-#              alpha = 0.15)+
-#   geom_hline(yintercept = c(1),
-#              alpha = 0.8)+
-#   geom_violin(fill = NA)+
-#   geom_point(aes(group = Species),position = position_dodge(width = 0.05),
-#              alpha = 0.1)+
-#   geom_line(data = splabs,
-#             aes(group = Species,
-#                 colour = Species),#position = position_dodge(width = 0.05),
-#             alpha = 0.6)+
-#   geom_point(data = splabs,
-#              aes(group = Species,
-#                  colour = Species),#position = position_dodge(width = 0.05),
-#              alpha = 1)+
-#   ylab("Multiplicative change in\npopulation estimate")+
-#   #  ylab("Ratio new/existing\n values > 1 = increased population estimate")+
-#   xlab("Adjustment factor")+
-#   geom_label_repel(data = splab,
-#                    aes(label = Species,group = Species,
-#                        colour = Species),
-#                    #position = position_dodge(width = 0.05),
-#                    min.segment.length = 0,
-#                    size = 3,alpha = 0.9,point.padding = 0.3,label.size = 0.5,
-#                    nudge_x = 1)+
-#   #scale_colour_brewer(type = "qual",palette = "Dark2")+
-#   scale_colour_viridis_d(option = "turbo")+
-#   scale_x_discrete(expand = expansion(c(0.01,0.5)))+
-#   scale_y_continuous(transform = "log",
-#                      breaks = c(0.1,0.2,0.5,1,2,5,10))+
-#   theme_classic()+
-#   theme(legend.position = "none")
-#
-# pdf("final_figures/Multiplicative_change_factors_all.pdf",
-#     width = 6.5,
-#     height = 4.5)
-# print(adj_plot)
-# dev.off()
-#
+Trats_plot_full <- Trats_plot
+
+Trats_plot <- Trats_plot %>%
+  filter(cn %in% sp_example,
+         adjfactor != "Combined")
+
+adj_plot <- ggplot(data = Trats_plot,
+                   aes(x = adjfactor,
+                       y = Ratio))+
+  # geom_hline(yintercept = c((10),
+  #                           (0.1)),
+  #            alpha = 0.8,
+  #            linetype = 3)+
+  # geom_hline(yintercept = c((5),
+  #                           (0.2)),
+  #            alpha = 0.6,
+  #            linetype = 2)+
+  # geom_hline(yintercept = c((2),
+  #                           (0.5)),
+  #            alpha = 0.6,
+  #            linetype = 2)+
+  geom_hline(yintercept = c(0.1,0.2,0.5,1,2,5,10),
+             alpha = 0.15)+
+  geom_hline(yintercept = c(1),
+             alpha = 0.8)+
+  geom_violin(fill = NA)+
+  geom_point(aes(group = Species),position = position_dodge(width = 0.05),
+             alpha = 0.1)+
+  geom_line(data = splabs,
+            aes(group = Species,
+                colour = Species),#position = position_dodge(width = 0.05),
+            alpha = 0.6)+
+  geom_point(data = splabs,
+             aes(group = Species,
+                 colour = Species),#position = position_dodge(width = 0.05),
+             alpha = 1)+
+  ylab("Multiplicative change in\npopulation estimate")+
+  #  ylab("Ratio new/existing\n values > 1 = increased population estimate")+
+  xlab("Adjustment factor")+
+  geom_label_repel(data = splab,
+                   aes(label = Species,group = Species,
+                       colour = Species),
+                   #position = position_dodge(width = 0.05),
+                   min.segment.length = 0,
+                   size = 3,alpha = 0.9,point.padding = 0.3,label.size = 0.5,
+                   nudge_x = 1)+
+  #scale_colour_brewer(type = "qual",palette = "Dark2")+
+  scale_colour_viridis_d(option = "turbo")+
+  scale_x_discrete(expand = expansion(c(0.01,0.5)))+
+  scale_y_continuous(transform = "log",
+                     breaks = c(0.1,0.2,0.5,1,2,5,10))+
+  theme_classic()+
+  theme(legend.position = "none")
+
+pdf("final_figures/Multiplicative_change_factors_all.pdf",
+    width = 6.5,
+    height = 4.5)
+print(adj_plot)
+dev.off()
+
 
 
 
 trat_sel <- Trats_plot %>%
-  filter(!(adjfactor == "Combined" & cn %in% sp_label)) %>%
+  filter( cn %in% sp_label,
+          adjfactor != "Combined") %>%
   mutate(adjfactor = factor(adjfactor,
                             levels = c("Geographic Bias",
                                        "Trend",
@@ -1100,13 +1178,41 @@ dev.off()
 
 # XY comparison of existing and revised -----------------------------------
 
+
+pop_compare_realised_wide_all <- pop_compare_realised %>%
+  pivot_wider(names_from = version,
+              names_sep = "_",
+              values_from = c(pop_median,pop_lci_80,pop_lci_95,
+                              pop_uci_80,pop_uci_95)) %>%
+  mutate(pop_median_PIF_traditional = ifelse(is.na(pop_median_PIF_traditional),
+                                             0,
+                                             pop_median_PIF_traditional),
+         pop_lci_80_PIF_traditional = ifelse(is.na(pop_lci_80_PIF_traditional),
+                                             0,
+                                             pop_lci_80_PIF_traditional),
+         pop_uci_80_PIF_traditional = ifelse(is.na(pop_uci_80_PIF_traditional),
+                                             0,
+                                             pop_uci_80_PIF_traditional),
+         pop_lci_95_PIF_traditional = ifelse(is.na(pop_lci_95_PIF_traditional),
+                                             0,
+                                             pop_lci_95_PIF_traditional),
+         pop_uci_95_PIF_traditional = ifelse(is.na(pop_uci_95_PIF_traditional),
+                                             0,
+                                             pop_uci_95_PIF_traditional),
+         dif_mag_new_trad = pop_median_PIF_eBird_with_EDR_Avail/pop_median_PIF_traditional) %>%
+  rename(Ratio = dif_mag_new_trad,
+         cn = species) %>%
+  mutate(adjfactor = "Overall")
+
 adjs_wide <- Trats_plot %>%
   pivot_wider(id_cols = c(Species,cn),
               names_from = adjfactor,
               values_from = Ratio) %>%
-  inner_join(pop_compare_realised_wide,
+  inner_join(pop_compare_realised_wide_all,
              by = "cn")
 
+splabs <- adjs_wide %>%
+  filter(cn %in% sp_label)
 
 line5 <- data.frame(pop_median_PIF_traditional = c(c(1e3,5e8),c(1e3,5e8),c(1e3,5e8),c(1e3,5e8)),
                     pop_median_PIF_eBird_with_EDR_Avail = c(c(1e3,5e8),c(2e3,10e8),c(5e3,25e8),c(10e3,50e8)),
@@ -1119,26 +1225,26 @@ cross_plot <- ggplot(data = adjs_wide,
   geom_line(data = line5,
             aes(group = multi,
                 linetype = multif))+
-  # geom_linerange(aes(xmin = Existing_uscan_95lci_popest,
-  #                    xmax = Existing_uscan_95uci_popest),
-  #                alpha = 0.3)+
-  # geom_linerange(aes(ymin = New_uscan_95lci_popest,
-  #                    ymax = New_uscan_95uci_popest),
-  #                alpha = 0.2)+
+  geom_linerange(aes(xmin = pop_lci_95_PIF_traditional,
+                     xmax = pop_uci_95_PIF_traditional),
+                 alpha = 0.3)+
+  geom_linerange(aes(ymin = pop_lci_95_PIF_eBird_with_EDR_Avail,
+                     ymax = pop_uci_95_PIF_eBird_with_EDR_Avail),
+                 alpha = 0.3)+
   geom_point(alpha = 0.3)+
-  # geom_point(data = out_wide_lab,
-  #            aes(colour = Species))+
-  # scale_colour_brewer(type = "qual",palette = "Dark2")+
+  geom_point(data = splabs,
+             aes(colour = Species))+
   scale_y_continuous(labels = scales::unit_format(unit = "M", scale = 1e-6),
                      transform = "log10")+
   scale_x_continuous(labels = scales::unit_format(unit = "M", scale = 1e-6),
                      transform = "log10")+
   coord_cartesian(xlim = c(1e5,4e8), ylim = c(1e5,9e9))+
-  # geom_label_repel(data = out_wide_lab,
-  #                  aes(label = Species,group = Species,
-  #                      colour = Species),
-  #                  min.segment.length = 0,
-  #                  size = 3,alpha = 0.9,point.padding = 0.3,label.size = 0.5)+
+  geom_label_repel(data = splabs,
+                   aes(label = Species,group = Species,
+                       colour = Species),
+                   min.segment.length = 0,
+                   size = 3,alpha = 0.9,point.padding = 0.3,label.size = 0.5)+
+  scale_colour_viridis_d(option = "turbo")+
   theme_bw()+
   theme(legend.position = "none")+
   ylab("Revised Population estimate (Millions)")+
@@ -1466,7 +1572,7 @@ dev.off()
 
 
 
-# Strata time-series ------------------------------------------------------
+# Strata time-series and seasonal patterns ------------------------------------------------------
 sp_sel <- "American Robin"
 sp_sel <- "Canyon Wren"
 
