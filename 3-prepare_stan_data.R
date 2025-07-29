@@ -363,8 +363,6 @@ skew <- function(x, na.rm = FALSE){
   n <- length(x)
   sum((x - mean(x))^3)/(n - 2)/var(x)^(3/2)
 }
-log_normal_calibration <- TRUE # conduct calibration assuming a lognormal
-# distribution of variation among routes
 
 # base map for countries and continents -----------------------------------
 country_codes <- readxl::read_xlsx("data/iso_codes.xlsx") %>%
@@ -444,7 +442,7 @@ re_run_model <- TRUE # set to true to rerun the stan model fit
 #output_dir <- "G:/PIF_population_estimates/output"
 output_dir <- "output"
 trim_rel_abund <- TRUE
-trim_bbs_routes <- TRUE
+trim_bbs_routes <- FALSE
 
 for(sp_sel in selected_species){ #
 

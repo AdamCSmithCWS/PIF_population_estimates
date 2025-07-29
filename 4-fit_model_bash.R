@@ -11,7 +11,7 @@ yr_ebird <- 2023 # prediction year for eBird relative abundance
 selected_species <- readRDS("data/selected_species.rds")
 
 #Parallel species loop ---------------------------------------------------
-n_cores <- 5
+n_cores <- 2
 cluster <- makeCluster(n_cores, type = "PSOCK")
 registerDoParallel(cluster)
 
@@ -27,7 +27,8 @@ test <- foreach(sp_sel = selected_species,
 #for(sp_sel in selected_species){
  sp_aou <- bbsBayes2::search_species(sp_sel)$aou[1]
   sp_ebird <- ebirdst::get_species(sp_sel)
-  vers <- "all_routes"
+  vers <- ""
+  #vers <- "all_routes"
 
 
 
