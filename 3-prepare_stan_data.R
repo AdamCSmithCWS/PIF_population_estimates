@@ -260,7 +260,8 @@ strata_join <- strata_names %>%
   st_drop_geometry() %>%
   distinct()
 
-strata_trad_all <- read_csv("Stanton_2019_code/output/PSest_Prov_by_BCR__100iter.csv") %>%
+trad_dir <- "Stanton_2019_code/output_alldata/"
+strata_trad_all <- read_csv(paste0(trad_dir,"PSest_Prov_by_BCR__100iter.csv")) %>%
   left_join(.,strata_join,
             by = c("st_abrev" = "prov_state",
                    "BCR" = "bcr")) %>%
@@ -275,7 +276,7 @@ strata_trad_all <- read_csv("Stanton_2019_code/output/PSest_Prov_by_BCR__100iter
          pop_lci_95 = LCI95.PopEst,
          pop_uci_95 = UCI95.PopEst)
 
-USACAN_trad_all <- read_csv("Stanton_2019_code/output/PSest_Global_WH_NA__100iter.csv") %>%
+USACAN_trad_all <- read_csv(paste0(trad_dir,"PSest_Global_WH_NA__100iter.csv")) %>%
   mutate(region = "USACAN",
          region_type = "USACAN",
          version = "traditional",
@@ -289,7 +290,7 @@ USACAN_trad_all <- read_csv("Stanton_2019_code/output/PSest_Global_WH_NA__100ite
 
 
 
-global_trad_all <- read_csv("Stanton_2019_code/output/PSest_Global_WH_NA__100iter.csv") %>%
+global_trad_all <- read_csv(paste0(trad_dir,"PSest_Global_WH_NA__100iter.csv")) %>%
   mutate(region = "global",
          region_type = "global",
          version = "traditional",
@@ -303,7 +304,7 @@ global_trad_all <- read_csv("Stanton_2019_code/output/PSest_Global_WH_NA__100ite
 
 
 
-prov_trad_all <- read_csv("Stanton_2019_code/output/PSest_by_Prov__100iter.csv") %>%
+prov_trad_all <- read_csv(paste0(trad_dir,"PSest_by_Prov__100iter.csv")) %>%
   mutate(region = st_abrev,
          region_type = "prov_state",
          version = "traditional",
@@ -315,7 +316,7 @@ prov_trad_all <- read_csv("Stanton_2019_code/output/PSest_by_Prov__100iter.csv")
          pop_lci_95 = LCI95.PopEst,
          pop_uci_95 = UCI95.PopEst)
 
-bcr_trad_all <- read_csv("Stanton_2019_code/output/PSest_by_BCR__100iter.csv")%>%
+bcr_trad_all <- read_csv(paste0(trad_dir,"PSest_by_BCR__100iter.csv"))%>%
   mutate(region = as.character(BCR),
          region_type = "bcr",
          version = "traditional",
@@ -503,8 +504,10 @@ if(trim_bbs_routes){ # if TRUE drops routes with < 10th %ile observed mean count
 
 
   tenth_percentile_bbs <- unname(quantile(temp_means$mean_obs,0.1))
+  if(tenth_percentile_bbs > 0){
   temp_means <- temp_means %>%
-    filter(mean_obs > tenth_percentile_bbs)
+    filter(mean_obs >= tenth_percentile_bbs)
+  }
 
   raw_counts <- raw_counts %>%
     filter(route_name %in% temp_means$route_name)

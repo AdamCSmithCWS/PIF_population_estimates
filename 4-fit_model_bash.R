@@ -27,17 +27,17 @@ test <- foreach(sp_sel = selected_species,
 #for(sp_sel in selected_species){
  sp_aou <- bbsBayes2::search_species(sp_sel)$aou[1]
   sp_ebird <- ebirdst::get_species(sp_sel)
-  vers <- ""
+  vers <- "all_routes"
 
 
 
   stan_data <- readRDS(paste0("stan_data/stan_data_",vers,sp_aou,"_",sp_ebird,".rds"))
   params_to_summarise <- c("nu",
-                           "BETA",
-                           "beta_raw",
+                           "log_BETA",
+                           "log_beta_raw",
                            "RHO",
-                           "beta",
-                           "sd_beta",
+                           "log_beta",
+                           "sd_log_beta",
                            "sd_obs",
                            "obs",
                            "nu_obs",
@@ -80,11 +80,19 @@ test <- foreach(sp_sel = selected_species,
                            "pred_count_mean",
                            "pred_count_r")
 
+  #vers <- "seas_opt_"
 
+  if(vers == "seas_opt_"){
+    stan_data[["use_season"]] <- 0
+    model <- cmdstanr::cmdstan_model("models/ebird_rel_abund_calibration_spatial_year_doy_sep_obs_rte_rhoopt_seas_opt.stan")
+  }
+  if(vers == ""){
     model <- cmdstanr::cmdstan_model("models/ebird_rel_abund_calibration_spatial_year_doy_sep_obs_rte_rhoopt.stan")
 
+  }
 
-fit <- model$sample(data = stan_data,
+
+  fit <- model$sample(data = stan_data,
                     parallel_chains = 4,
                     refresh = 500,
                     iter_warmup = 2000,
@@ -95,6 +103,7 @@ fit <- model$sample(data = stan_data,
 
 
 summ <- fit$summary(variables = params_to_summarise)
+
 
 fit$save_object(paste0(output_dir,"/calibration_fit_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
 

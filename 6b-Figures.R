@@ -639,15 +639,6 @@ USA_CAN_sample_bias <- sampl_bias %>%
 
 
 
-canw <- sampl_bias %>%
-  filter(species == "Canyon Wren",
-         !is.na(mean_ebird_abundance),
-         mean_ebird_abundance > 0)
-
-
-USA_CAN_sample_bias <- sampl_bias %>%
-  filter(strata_name == "USA_CAN")
-
 
 
 
