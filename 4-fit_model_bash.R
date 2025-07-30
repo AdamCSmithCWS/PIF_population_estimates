@@ -4,14 +4,16 @@ library(bbsBayes2)
 library(cmdstanr)
 library(doParallel)
 library(foreach)
+setwd("C:/Users/SmithAC/Documents/GitHub/PIF_population_estimates")
 
 output_dir <- "output"
 yr_ebird <- 2023 # prediction year for eBird relative abundance
 
 selected_species <- readRDS("data/selected_species.rds")
 
+re_fit <- FALSE
 #Parallel species loop ---------------------------------------------------
-n_cores <- 2
+n_cores <- 8
 cluster <- makeCluster(n_cores, type = "PSOCK")
 registerDoParallel(cluster)
 
@@ -24,13 +26,14 @@ test <- foreach(sp_sel = selected_species,
                 .errorhandling = "pass") %dopar%
   {
 
+
 #for(sp_sel in selected_species){
  sp_aou <- bbsBayes2::search_species(sp_sel)$aou[1]
   sp_ebird <- ebirdst::get_species(sp_sel)
   vers <- ""
   #vers <- "all_routes"
 
-
+if(file.exists(paste0(output_dir,"/calibration_fit_alt_",vers,sp_aou,"_",sp_ebird,".rds")) & !re_fit){next}
 
   stan_data <- readRDS(paste0("stan_data/stan_data_",vers,sp_aou,"_",sp_ebird,".rds"))
   params_to_summarise <- c("nu",
