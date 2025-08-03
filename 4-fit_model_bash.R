@@ -7,6 +7,7 @@ library(foreach)
 setwd("C:/Users/SmithAC/Documents/GitHub/PIF_population_estimates")
 
 output_dir <- "output"
+output_dir <- "F:\PIF_pop_estimates\output"
 yr_ebird <- 2023 # prediction year for eBird relative abundance
 
 selected_species <- readRDS("data/selected_species.rds")

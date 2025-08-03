@@ -254,7 +254,7 @@ trim_rel_abund <- TRUE
 selected_species <- readRDS("data/selected_species.rds")
 
 #c("American Robin","Canyon Wren")){#
-for(sp_sel in selected_species){ # rev(sps_list$english[1:348])){#sp_example[-wh_drop]){#list$english){
+for(sp_sel in selected_species[1:62]){ # rev(sps_list$english[1:348])){#sp_example[-wh_drop]){#list$english){
 #sp_sel = "Bank Swallow"
 #for(sp_sel in rev(sps_list$english)[29]){
  sp_aou <- bbsBayes2::search_species(sp_sel)$aou[1]

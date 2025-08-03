@@ -222,6 +222,9 @@ dev.off()
 # BBS route map with example insets ---------------------------------------
 strata <- bbsBayes2::load_map("bbs_usgs")
 
+country_codes <- readxl::read_xlsx("data/iso_codes.xlsx") %>%
+  rename(country_name = Name) #
+
 bb <- st_bbox(strata)
 
 countries <- rnaturalearthhires::countries10 %>%
@@ -502,38 +505,38 @@ side_plot1
 #
 # side_plot_forest
 #
-
-
-bi_plot1 <- ggplot(data = pop_compare_wide_usacan,
-                     aes(y = pop_median_PIF_eBird_with_EDR_Avail,
-                         x = pop_median_PIF_traditional,
-                         colour = primary_breeding_habitat_sub))+
-  geom_abline(slope = 1, intercept = 0)+
-  geom_point()+
-  geom_errorbarh(aes(xmin = pop_lci_95_PIF_traditional,
-                     xmax = pop_uci_95_PIF_traditional),
-                 height = 0, alpha = 0.3)+
-  geom_errorbar(aes(ymin = pop_lci_95_PIF_eBird_with_EDR_Avail,
-                     ymax = pop_uci_95_PIF_eBird_with_EDR_Avail),
-                 width = 0, alpha = 0.3)+
-  geom_text_repel(aes(label = species_ebird),
-                  size = 2,min.segment.length = 0)+
-  scale_colour_viridis_d(end = 1, name = "Forest type",
-                         option = "H")+
-  #scale_colour_viridis_c(end = 0.95, name = "Area")+
-  ylab("Population estimate with eBird map correction")+
-  xlab("Traditional Population estimate with 95% CI (Millions)")+
-  scale_x_continuous(labels = scales::unit_format(unit = "M", scale = 1e-6),
-                     transform = "log10")+
-  scale_y_continuous(labels = scales::unit_format(unit = "M", scale = 1e-6),
-                     transform = "log10")+
-  theme_bw()+
-  facet_wrap(vars(primary_breeding_habitat_major),
-             scales = "free")
-
-bi_plot1
-
-
+#
+#
+# bi_plot1 <- ggplot(data = pop_compare_wide_usacan,
+#                      aes(y = pop_median_PIF_eBird_with_EDR_Avail,
+#                          x = pop_median_PIF_traditional,
+#                          colour = primary_breeding_habitat_sub))+
+#   geom_abline(slope = 1, intercept = 0)+
+#   geom_point()+
+#   geom_errorbarh(aes(xmin = pop_lci_95_PIF_traditional,
+#                      xmax = pop_uci_95_PIF_traditional),
+#                  height = 0, alpha = 0.3)+
+#   geom_errorbar(aes(ymin = pop_lci_95_PIF_eBird_with_EDR_Avail,
+#                      ymax = pop_uci_95_PIF_eBird_with_EDR_Avail),
+#                  width = 0, alpha = 0.3)+
+#   geom_text_repel(aes(label = species_ebird),
+#                   size = 2,min.segment.length = 0)+
+#   scale_colour_viridis_d(end = 1, name = "Forest type",
+#                          option = "H")+
+#   #scale_colour_viridis_c(end = 0.95, name = "Area")+
+#   ylab("Population estimate with eBird map correction")+
+#   xlab("Traditional Population estimate with 95% CI (Millions)")+
+#   scale_x_continuous(labels = scales::unit_format(unit = "M", scale = 1e-6),
+#                      transform = "log10")+
+#   scale_y_continuous(labels = scales::unit_format(unit = "M", scale = 1e-6),
+#                      transform = "log10")+
+#   theme_bw()+
+#   facet_wrap(vars(primary_breeding_habitat_major),
+#              scales = "free")
+#
+# bi_plot1
+#
+#
 
 
 
@@ -1189,41 +1192,42 @@ write_csv(table_2,"Table_2.csv")
 
 # Compile parameters from full-model ---------------------------------------
 
-
-
-library(tidybayes)
-library(tidyverse)
-yr_ebird <- 2022 # prediction year for eBird relative abundance
-
-output_dir <- "G:/PIF_population_estimates/output"
-
-
-params <- NULL
-for(sp_sel in sp_example){
-  for(vers in c("trad_rho","trad","_rho","")[c(4)]){
-    # rev(sps_list$english[1:348])){#sp_example[-wh_drop]){#list$english){
-    #sp_sel = "Bank Swallow"
-    #for(sp_sel in rev(sps_list$english)[29]){
-    sp_aou <- bbsBayes2::search_species(sp_sel)$aou[1]
-    sp_ebird <- ebirdst::get_species(sp_sel)
-
-  if(!file.exists(paste0(output_dir,"/parameter_inference_alt_",vers,sp_aou,"_",sp_ebird,".rds"))){next}
-    param_infer2 <- readRDS(paste0(output_dir,"/parameter_inference_alt_",vers,sp_aou,"_",sp_ebird,".rds")) %>%
-      mutate(version = vers)
-
-    params <- bind_rows(params,param_infer2)
-  }# sp
-}# vers
-
-
-retrans <- params %>%
-  filter(grepl("alibration",inference),
-         grepl("mean",inference))
-
-
-rhos <- params %>% filter(variable == "RHO", !is.na(rhat))
-area_surveyed <- params %>% filter(grepl("c_area",variable))
-
+#
+#
+# library(tidybayes)
+# library(tidyverse)
+# yr_ebird <- 2022 # prediction year for eBird relative abundance
+#
+# output_dir <- "G:/PIF_population_estimates/output"
+# output_dir <- "/output"
+#
+#
+# params <- NULL
+# for(sp_sel in sp_example){
+#   for(vers in c("trad_rho","trad","_rho","")[c(4)]){
+#     # rev(sps_list$english[1:348])){#sp_example[-wh_drop]){#list$english){
+#     #sp_sel = "Bank Swallow"
+#     #for(sp_sel in rev(sps_list$english)[29]){
+#     sp_aou <- bbsBayes2::search_species(sp_sel)$aou[1]
+#     sp_ebird <- ebirdst::get_species(sp_sel)
+#
+#   if(!file.exists(paste0(output_dir,"/parameter_inference_alt_",vers,sp_aou,"_",sp_ebird,".rds"))){next}
+#     param_infer2 <- readRDS(paste0(output_dir,"/parameter_inference_alt_",vers,sp_aou,"_",sp_ebird,".rds")) %>%
+#       mutate(version = vers)
+#
+#     params <- bind_rows(params,param_infer2)
+#   }# sp
+# }# vers
+#
+#
+# retrans <- params %>%
+#   filter(grepl("alibration",inference),
+#          grepl("mean",inference))
+#
+#
+# rhos <- params %>% filter(variable == "RHO", !is.na(rhat))
+# area_surveyed <- params %>% filter(grepl("c_area",variable))
+#
 
 
 
@@ -1249,14 +1253,14 @@ for(sp_sel in sp_example){
 
   species_ebird <- ebirdst::get_species(sp_sel)
 
-  if(!file.exists(paste0("data/species_relative_abundance/",species_ebird,"_bbs_strata_relative_abundance.rds"))){next}
+  if(!file.exists(paste0("data/species_relative_abundance_2023/",species_ebird,"_bbs_strata_relative_abundance.rds"))){next}
 
-  # route_sampled <- readRDS(paste0("data/species_relative_abundance/",species_ebird,"_relative_abundance.rds"))
+  # route_sampled <- readRDS(paste0("data/species_relative_abundance_2023/",species_ebird,"_relative_abundance.rds"))
   #
   # mean_sampled_abund <- mean(route_sampled$ebird_abund,na.rm = TRUE)
   #
 
-  sampl_bias1 <- readRDS(paste0("data/species_relative_abundance/",species_ebird,"_bbs_strata_relative_abundance.rds")) %>%
+  sampl_bias1 <- readRDS(paste0("data/species_relative_abundance_2023/",species_ebird,"_bbs_strata_relative_abundance.rds")) %>%
     mutate(species = sp_sel,
            sp_ebird = species_ebird)
 
@@ -1369,7 +1373,7 @@ for(sp_sel in sp_example){
     fit <- readRDS(paste0(output_dir,"/calibration_fit_alt_",
                           vers,sp_aou,"_",sp_ebird,".rds"))
 
-    raw_dat <- readRDS(paste0("data/main_data_df_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
+    raw_dat <- readRDS(paste0("stan_data/dataframe_",vers,sp_aou,"_",sp_ebird,".rds"))
 
 
 strata_population_posterior <- readRDS(paste0("output/strata_population_posterior_",vers,sp_aou,"_",sp_ebird,".rds"))
@@ -1950,7 +1954,7 @@ for(sp_sel in c("American Robin","Canyon Wren")){
   cali_use <- readRDS(paste0("output/calibration_",vers,sp_aou,"_",sp_ebird,".rds"))
 
 
-  breed_abundance <- readRDS(paste0("data/species_relative_abundance/",
+  breed_abundance <- readRDS(paste0("data/species_relative_abundance_2023/",
                                     sp_ebird,
                                     "_derived_breeding_relative_abundance.rds"))
 
