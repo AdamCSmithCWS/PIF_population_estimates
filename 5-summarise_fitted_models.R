@@ -244,8 +244,8 @@ if(use_traditional){
 }
 
 
-output_dir <- "G:/PIF_population_estimates/output"
-output_dir <- "output"
+output_dir <- "F:/PIF_pop_estimates/output"
+#output_dir <- "output"
 trim_rel_abund <- TRUE
 
 

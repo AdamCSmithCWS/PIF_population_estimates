@@ -7,7 +7,7 @@ library(foreach)
 setwd("C:/Users/SmithAC/Documents/GitHub/PIF_population_estimates")
 
 output_dir <- "output"
-output_dir <- "F:\PIF_pop_estimates\output"
+output_dir <- "F:/PIF_pop_estimates/output"
 yr_ebird <- 2023 # prediction year for eBird relative abundance
 
 selected_species <- readRDS("data/selected_species.rds")
@@ -34,7 +34,7 @@ test <- foreach(sp_sel = selected_species,
   vers <- ""
   #vers <- "all_routes"
 
-if(file.exists(paste0(output_dir,"/calibration_fit_alt_",vers,sp_aou,"_",sp_ebird,".rds")) & !re_fit){next}
+if(!file.exists(paste0(output_dir,"/calibration_fit_alt_",vers,sp_aou,"_",sp_ebird,".rds")) | re_fit){
 
   stan_data <- readRDS(paste0("stan_data/stan_data_",vers,sp_aou,"_",sp_ebird,".rds"))
   params_to_summarise <- c("nu",
@@ -115,6 +115,7 @@ fit$save_object(paste0(output_dir,"/calibration_fit_alt_",vers,sp_aou,"_",sp_ebi
 
 saveRDS(summ,paste0("convergence/parameter_summary_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
 
+}
 
 }
 

@@ -1086,11 +1086,11 @@ if(EDR_for_all){
 
 
 splabs <- Trats %>%
-  filter(factor == "Combined")
+  filter(adjfactor == "Combined")
 
 out_wide_sel <- out_wide %>%
-  rename(New_distance = New_edr____ifelse_use_edr__true__false_,
-         New_availability = New_availability____ifelse_use_availability__true__false_) %>%
+  rename(New_distance = New_edr,
+         New_availability = New_availability) %>%
   filter(New_distance == TRUE) %>%
   left_join(splabs)
 
@@ -1145,8 +1145,8 @@ dev.off()
 
 
 comparison_table <- out_wide %>%
-  rename(Used_EDR = New_edr____ifelse_use_edr__true__false_,
-         Used_availability = New_availability____ifelse_use_availability__true__false_,
+  rename(Used_EDR = New_edr,
+         Used_availability = New_availability,
          species = cn) %>%
   select(species,aou,
          Used_EDR,
@@ -1303,7 +1303,7 @@ USA_CAN_sample_bias <- sampl_bias %>%
 # calculate the ratio of existing and ebird estiates with edr -------------
 
 
-output_dir <- "G:/PIF_population_estimates/output"
+output_dir <- "F:/PIF_pop_estimates/output"
 
 
 all_pop_ests <- NULL
@@ -1362,11 +1362,11 @@ write_csv(us_can_wide,"final_figures/usa_canada_comparison_eBird_existing_w_EDR.
 
 trend_effect_out <- NULL
 vers <- ""
-for(sp_sel in sp_example){
+for(sp_sel in sp_example[45:62]){
 
   sp_aou <- bbsBayes2::search_species(sp_sel)$aou[1]
   sp_ebird <- ebirdst::get_species(sp_sel)
-
+if(sp_sel == "Ruby-throated Hummingbird"){next}
   if(file.exists(paste0(output_dir,"/calibration_fit_alt_",
                         vers,sp_aou,"_",sp_ebird,".rds"))){
 
@@ -1509,6 +1509,7 @@ tabl2_paper <- pop_compare_realised_wide %>%
   select(cn,area_ratio,availability_ratio,habitat_ratio,trend_ratio,
            Ratio,pop_median_PIF_eBird_with_EDR_Avail,pop_median_PIF_traditional) %>%
   arrange(-Ratio) %>%
+  filter(cn %in% sp_example) %>%
   mutate(Species = cn,
          `Effective Survey Area` = signif(area_ratio,3),
          Availability = signif(availability_ratio,3),
@@ -1590,70 +1591,71 @@ sp_label <- c("American Robin",
               "Purple Martin",
               "Black-chinned Hummingbird")
 
-splabs <- Trats_plot %>%
-  filter(cn %in% sp_label)
-splab <- splabs %>%
-  filter(adjfactor == "Overall")
-
-adj_plot <- ggplot(data = Trats_plot,
-                   aes(x = adjfactor,
-                       y = Ratio))+
-  # geom_hline(yintercept = c((10),
-  #                           (0.1)),
-  #            alpha = 0.8,
-  #            linetype = 3)+
-  # geom_hline(yintercept = c((5),
-  #                           (0.2)),
-  #            alpha = 0.6,
-  #            linetype = 2)+
-  # geom_hline(yintercept = c((2),
-  #                           (0.5)),
-  #            alpha = 0.6,
-  #            linetype = 2)+
-  geom_hline(yintercept = c(0.1,0.2,0.5,1,2,5,10),
-             alpha = 0.15)+
-  geom_hline(yintercept = c(1),
-             alpha = 0.8)+
-  geom_violin(fill = NA)+
-  geom_point(aes(group = Species),position = position_dodge(width = 0.05),
-             alpha = 0.1)+
-  geom_line(data = splabs,
-            aes(group = Species,
-                colour = Species),#position = position_dodge(width = 0.05),
-            alpha = 0.6)+
-  geom_point(data = splabs,
-             aes(group = Species,
-                 colour = Species),#position = position_dodge(width = 0.05),
-             alpha = 1)+
-  ylab("Multiplicative change in\npopulation estimate")+
-  #  ylab("Ratio new/existing\n values > 1 = increased population estimate")+
-  xlab("Adjustment factor")+
-  geom_label_repel(data = splab,
-                   aes(label = Species,group = Species,
-                       colour = Species),
-                   #position = position_dodge(width = 0.05),
-                   min.segment.length = 0,
-                   size = 3,alpha = 0.9,point.padding = 0.3,label.size = 0.5,
-                   nudge_x = 1)+
-  #scale_colour_brewer(type = "qual",palette = "Dark2")+
-  scale_colour_viridis_d(option = "turbo")+
-  scale_x_discrete(expand = expansion(c(0.01,0.5)))+
-  scale_y_continuous(transform = "log",
-                     breaks = c(0.1,0.2,0.5,1,2,5,10))+
-  theme_classic()+
-  theme(legend.position = "none")
-
-pdf("final_figures/Multiplicative_change_factors_all.pdf",
-    width = 6.5,
-    height = 4.5)
-print(adj_plot)
-dev.off()
-
+# splabs <- Trats_plot %>%
+#   filter(cn %in% sp_label)
+# splab <- splabs %>%
+#   filter(adjfactor == "Overall")
+#
+# adj_plot <- ggplot(data = Trats_plot,
+#                    aes(x = adjfactor,
+#                        y = Ratio))+
+#   # geom_hline(yintercept = c((10),
+#   #                           (0.1)),
+#   #            alpha = 0.8,
+#   #            linetype = 3)+
+#   # geom_hline(yintercept = c((5),
+#   #                           (0.2)),
+#   #            alpha = 0.6,
+#   #            linetype = 2)+
+#   # geom_hline(yintercept = c((2),
+#   #                           (0.5)),
+#   #            alpha = 0.6,
+#   #            linetype = 2)+
+#   geom_hline(yintercept = c(0.1,0.2,0.5,1,2,5,10),
+#              alpha = 0.15)+
+#   geom_hline(yintercept = c(1),
+#              alpha = 0.8)+
+#   geom_violin(fill = NA)+
+#   geom_point(aes(group = Species),position = position_dodge(width = 0.05),
+#              alpha = 0.1)+
+#   geom_line(data = splabs,
+#             aes(group = Species,
+#                 colour = Species),#position = position_dodge(width = 0.05),
+#             alpha = 0.6)+
+#   geom_point(data = splabs,
+#              aes(group = Species,
+#                  colour = Species),#position = position_dodge(width = 0.05),
+#              alpha = 1)+
+#   ylab("Multiplicative change in\npopulation estimate")+
+#   #  ylab("Ratio new/existing\n values > 1 = increased population estimate")+
+#   xlab("Adjustment factor")+
+#   geom_label_repel(data = splab,
+#                    aes(label = Species,group = Species,
+#                        colour = Species),
+#                    #position = position_dodge(width = 0.05),
+#                    min.segment.length = 0,
+#                    size = 3,alpha = 0.9,point.padding = 0.3,label.size = 0.5,
+#                    nudge_x = 1)+
+#   #scale_colour_brewer(type = "qual",palette = "Dark2")+
+#   scale_colour_viridis_d(option = "turbo")+
+#   scale_x_discrete(expand = expansion(c(0.01,0.5)))+
+#   scale_y_continuous(transform = "log",
+#                      breaks = c(0.1,0.2,0.5,1,2,5,10))+
+#   theme_classic()+
+#   theme(legend.position = "none")
+#
+# pdf("final_figures/Multiplicative_change_factors_all.pdf",
+#     width = 6.5,
+#     height = 4.5)
+# print(adj_plot)
+# dev.off()
+#
 
 
 
 trat_sel <- Trats_plot %>%
-  filter(!(adjfactor == "Combined" & cn %in% sp_label)) %>%
+  filter(adjfactor != "Combined",
+         cn %in% sp_example) %>%
   mutate(adjfactor = factor(adjfactor,
                             levels = c("Geographic Bias",
                                        "Trend",
@@ -1735,84 +1737,84 @@ dev.off()
 
 # same adjustments different order ----------------------------------------
 
-
-trat_sel <- Trats_plot %>%
-  filter(!(adjfactor == "Combined" & cn %in% sp_label)) %>%
-  mutate(adjfactor = factor(adjfactor,
-                            levels = c("Availability",
-                                       "Area",
-                                       "Combined",
-                                       "Geographic Bias",
-                                       "Trend",
-                                       "Overall"),
-                            labels = c("Availability",
-                                       "Area",
-                                       "Avail+Area",
-                                       "Geographic Bias",
-                                       "Trend",
-                                       "Overall"),
-                            ordered = TRUE))
-
-splab <- trat_sel %>%
-  filter(adjfactor == "Overall",
-         cn %in% sp_label)
-
-splabs <- trat_sel %>%
-  filter(cn %in% sp_label)
-
-adj_plot2 <- ggplot(data = trat_sel,
-                    aes(x = adjfactor,
-                        y = Ratio))+
-  # geom_hline(yintercept = c((10),
-  #                           (0.1)),
-  #            alpha = 0.8,
-  #            linetype = 3)+
-  # geom_hline(yintercept = c((5),
-  #                           (0.2)),
-  #            alpha = 0.6,
-  #            linetype = 2)+
-  # geom_hline(yintercept = c((2),
-  #                           (0.5)),
-  #            alpha = 0.6,
-  #            linetype = 2)+
-  geom_hline(yintercept = c(0.1,0.2,0.5,1,2,5,10),
-             alpha = 0.15)+
-  geom_hline(yintercept = c(1),
-             alpha = 0.8)+
-  geom_violin(fill = NA)+
-  geom_point(aes(group = Species),position = position_dodge(width = 0.05),
-             alpha = 0.1)+
-  geom_line(data = splabs,
-            aes(group = Species,
-                colour = Species),#position = position_dodge(width = 0.05),
-            alpha = 0.6)+
-  geom_point(data = splabs,
-             aes(group = Species,
-                 colour = Species),#position = position_dodge(width = 0.05),
-             alpha = 1)+
-  ylab("Multiplicative change in\npopulation estimate")+
-  #  ylab("Ratio new/existing\n values > 1 = increased population estimate")+
-  xlab("Adjustment factor")+
-  geom_label_repel(data = splab,
-                   aes(label = Species,group = Species,
-                       colour = Species),
-                   #position = position_dodge(width = 0.05),
-                   min.segment.length = 0,
-                   size = 3,alpha = 0.9,point.padding = 0.3,label.size = 0.5,
-                   nudge_x = 1)+
-  #scale_colour_brewer(type = "qual",palette = "Dark2")+
-  scale_colour_viridis_d(option = "turbo")+
-  scale_x_discrete(expand = expansion(c(0.01,0.5)))+
-  scale_y_continuous(transform = "log",
-                     breaks = c(0.1,0.2,0.5,1,2,5,10))+
-  theme_classic()+
-  theme(legend.position = "none")
-
-pdf("final_figures/Multiplicative_change_factors_3.pdf",
-    width = 6.5,
-    height = 4.5)
-print(adj_plot2)
-dev.off()
+#
+# trat_sel <- Trats_plot %>%
+#   filter(!(adjfactor == "Combined" & cn %in% sp_label)) %>%
+#   mutate(adjfactor = factor(adjfactor,
+#                             levels = c("Availability",
+#                                        "Area",
+#                                        "Combined",
+#                                        "Geographic Bias",
+#                                        "Trend",
+#                                        "Overall"),
+#                             labels = c("Availability",
+#                                        "Area",
+#                                        "Avail+Area",
+#                                        "Geographic Bias",
+#                                        "Trend",
+#                                        "Overall"),
+#                             ordered = TRUE))
+#
+# splab <- trat_sel %>%
+#   filter(adjfactor == "Overall",
+#          cn %in% sp_label)
+#
+# splabs <- trat_sel %>%
+#   filter(cn %in% sp_label)
+#
+# adj_plot2 <- ggplot(data = trat_sel,
+#                     aes(x = adjfactor,
+#                         y = Ratio))+
+#   # geom_hline(yintercept = c((10),
+#   #                           (0.1)),
+#   #            alpha = 0.8,
+#   #            linetype = 3)+
+#   # geom_hline(yintercept = c((5),
+#   #                           (0.2)),
+#   #            alpha = 0.6,
+#   #            linetype = 2)+
+#   # geom_hline(yintercept = c((2),
+#   #                           (0.5)),
+#   #            alpha = 0.6,
+#   #            linetype = 2)+
+#   geom_hline(yintercept = c(0.1,0.2,0.5,1,2,5,10),
+#              alpha = 0.15)+
+#   geom_hline(yintercept = c(1),
+#              alpha = 0.8)+
+#   geom_violin(fill = NA)+
+#   geom_point(aes(group = Species),position = position_dodge(width = 0.05),
+#              alpha = 0.1)+
+#   geom_line(data = splabs,
+#             aes(group = Species,
+#                 colour = Species),#position = position_dodge(width = 0.05),
+#             alpha = 0.6)+
+#   geom_point(data = splabs,
+#              aes(group = Species,
+#                  colour = Species),#position = position_dodge(width = 0.05),
+#              alpha = 1)+
+#   ylab("Multiplicative change in\npopulation estimate")+
+#   #  ylab("Ratio new/existing\n values > 1 = increased population estimate")+
+#   xlab("Adjustment factor")+
+#   geom_label_repel(data = splab,
+#                    aes(label = Species,group = Species,
+#                        colour = Species),
+#                    #position = position_dodge(width = 0.05),
+#                    min.segment.length = 0,
+#                    size = 3,alpha = 0.9,point.padding = 0.3,label.size = 0.5,
+#                    nudge_x = 1)+
+#   #scale_colour_brewer(type = "qual",palette = "Dark2")+
+#   scale_colour_viridis_d(option = "turbo")+
+#   scale_x_discrete(expand = expansion(c(0.01,0.5)))+
+#   scale_y_continuous(transform = "log",
+#                      breaks = c(0.1,0.2,0.5,1,2,5,10))+
+#   theme_classic()+
+#   theme(legend.position = "none")
+#
+# pdf("final_figures/Multiplicative_change_factors_3.pdf",
+#     width = 6.5,
+#     height = 4.5)
+# print(adj_plot2)
+# dev.off()
 
 
 
