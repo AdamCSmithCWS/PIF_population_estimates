@@ -1519,7 +1519,11 @@ tabl2_paper <- pop_compare_realised_wide %>%
          New = signif(pop_median_PIF_eBird_with_EDR_Avail/1e6,3),
          Existing = signif(pop_median_PIF_traditional/1e6,3)) %>%
   select(-c(cn,area_ratio,availability_ratio,habitat_ratio,trend_ratio,
-            Ratio,pop_median_PIF_eBird_with_EDR_Avail,pop_median_PIF_traditional))
+            Ratio,pop_median_PIF_eBird_with_EDR_Avail,pop_median_PIF_traditional)) %>%
+  left_join(sps_list,
+            by = c("Species" = "english")) %>%
+  mutate(`Scientific Name` = paste(genus,species)) %>%
+  select(-c(genus,species,n_routes_w_obs,french,aou))
 
 write_csv(tabl2_paper,"Table_2_paper.csv")
 
