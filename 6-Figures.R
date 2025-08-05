@@ -2098,6 +2098,8 @@ strat_focus <- strata %>%
 bb <- sf::st_bbox(pop_strata_map_sel)
 
 strata_map_compare <- ggplot()+
+  geom_sf(data = strata,
+          fill = NA)+
   geom_sf(data = bcrs_plot,
           fill = NA)+
   geom_sf(data = filter(pop_strata_map_sel,species_factor == sp_sel),
@@ -2144,7 +2146,7 @@ strata_map_compare_2 <- ggplot()+
           linewidth = 0.6)+
   scale_fill_viridis_c(na.value = NA,
                        name = paste0("Proportion of\n",
-                                     "USA Canada\n",sp_sel,"\nPopulation"))+
+                                     "USA+Canada\n",sp_sel,"\nPopulation"))+
   coord_sf(xlim = bb2[c("xmin","xmax")],
            ylim = bb2[c("ymin","ymax")])+
   facet_grid(cols = vars(version_factor))+
