@@ -2061,3 +2061,107 @@ dev.off()
 
 
 
+
+
+# Strata abundance map comparison -----------------------------------------
+
+
+pop_compare_stack <- pop_compare_stack_sel %>%
+  filter(region_type %in% c("strata"),
+         species %in% c("American Robin","Canyon Wren")) %>%
+  mutate(species_factor = factor(factor(species),levels = levels(pop_compare_wide_usacan$species_factor)))
+
+
+pop_strata_map <- strata %>%
+  inner_join(pop_compare_stack,
+             by = c("strata_name" = "region")) %>%
+  group_by(species,version) %>%
+  mutate(p_pop = pop_median/sum(pop_median))
+
+hlt_col <- viridisLite::inferno(1,begin = 0.6,end = 0.7)
+sp_sel <- "American Robin"
+
+pop_strata_map_sel <- pop_strata_map %>%
+  mutate(p_pop = ifelse(p_pop < 0.001, NA,p_pop),
+         version_factor = factor(version,
+                                 levels = c("PIF_eBird_with_EDR_Avail",
+                                            "PIF_traditional"),
+                                 labels = c("Revised",
+                                            "Existing"))) %>%
+  filter(species_factor == sp_sel,
+         !is.na(p_pop))
+strat_focus <- strata %>%
+  filter(strata_name %in% c("CA-BC-5",
+                            "CA-YT-4",
+                            "US-AK-4"))
+
+bb <- sf::st_bbox(pop_strata_map_sel)
+
+strata_map_compare <- ggplot()+
+  geom_sf(data = bcrs_plot,
+          fill = NA)+
+  geom_sf(data = filter(pop_strata_map_sel,species_factor == sp_sel),
+          aes(fill = p_pop))+
+  geom_sf(data = strat_focus,
+          fill = NA,
+          colour = hlt_col)+
+  scale_fill_viridis_c(na.value = NA,
+                       name = paste0("Proportion of\n",
+                                     "USA Canada\n",sp_sel,"\nPopulation"))+
+  coord_sf(xlim = bb[c("xmin","xmax")],
+           ylim = bb[c("ymin","ymax")])+
+  facet_grid(cols = vars(version_factor))+
+  labs(title = sp_sel)+
+  theme_bw()+
+  theme(legend.position = "right")
+
+
+
+sp_sel <- "Canyon Wren"
+
+pop_strata_map_sel2 <- pop_strata_map %>%
+  mutate(p_pop = ifelse(p_pop < 0.01, NA,p_pop),
+         version_factor = factor(version,
+                                 levels = c("PIF_eBird_with_EDR_Avail",
+                                            "PIF_traditional"),
+                                 labels = c("Revised",
+                                            "Existing"))) %>%
+  filter(species_factor == sp_sel,
+         !is.na(p_pop))
+
+bb2 <- sf::st_bbox(pop_strata_map_sel2)
+strat_focus <- strata %>%
+  filter(strata_name %in% c("US-AZ-16"))
+
+strata_map_compare_2 <- ggplot()+
+  geom_sf(data = strata,
+          fill = NA)+
+  geom_sf(data = pop_strata_map_sel2,
+          aes(fill = p_pop))+
+  geom_sf(data = strat_focus,
+          fill = NA,
+          colour = hlt_col,
+          linewidth = 0.6)+
+  scale_fill_viridis_c(na.value = NA,
+                       name = paste0("Proportion of\n",
+                                     "USA Canada\n",sp_sel,"\nPopulation"))+
+  coord_sf(xlim = bb2[c("xmin","xmax")],
+           ylim = bb2[c("ymin","ymax")])+
+  facet_grid(cols = vars(version_factor))+
+  labs(title = sp_sel)+
+  theme_bw()+
+  theme(legend.position = "right")
+
+
+strata_comp <- strata_map_compare /strata_map_compare_2
+print(strata_comp)
+
+
+pdf(file = "Final_Figures/strata_pop_comparison.pdf",
+    width = 7,
+    height = 7)
+print(strata_comp)
+dev.off()
+
+
+
