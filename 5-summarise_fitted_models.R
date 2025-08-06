@@ -254,7 +254,7 @@ trim_rel_abund <- TRUE
 selected_species <- readRDS("data/selected_species.rds")
 
 #c("American Robin","Canyon Wren")){#
-for(sp_sel in selected_species[1:62]){ # rev(sps_list$english[1:348])){#sp_example[-wh_drop]){#list$english){
+for(sp_sel in selected_species){ # rev(sps_list$english[1:348])){#sp_example[-wh_drop]){#list$english){
 #sp_sel = "Bank Swallow"
 #for(sp_sel in rev(sps_list$english)[29]){
  sp_aou <- bbsBayes2::search_species(sp_sel)$aou[1]
@@ -597,6 +597,8 @@ comp_trad_new_plot <- ggplot(data = strata_compare,
   geom_errorbarh(aes(xmin = LCI80.PopEst,xmax = UCI80.PopEst),
                 alpha = 0.3)+
   geom_point(aes(colour = ratio_cat))+
+  geom_smooth(method = "lm", se = FALSE,
+              colour = grey(0.5))+
   geom_text_repel(aes(label = strata_name),
                   size = 2)+
   scale_x_continuous(labels = scales::unit_format(unit = "M", scale = 1e-6))+
@@ -606,8 +608,8 @@ comp_trad_new_plot <- ggplot(data = strata_compare,
                       na.translate = FALSE)+
   # scale_colour_viridis_c(option = "turbo", direction = -1,
   #                        name = "BBS sampling bias \n log(sampled/avail)")+
-  xlab("PIF population estimate (updated adjustments)")+
-  ylab("New PIF population estimate with calibrated \n eBird relative abundance estimate")+
+  xlab("Existing PIF population estimate")+
+  ylab("Revised PIF population estimate (adjusted for sampling bias)")+
   labs(title = paste(sp_sel))+
   theme_bw()
 
@@ -729,7 +731,7 @@ bcr_abund <- data.frame(region = as.character(bcr_proj$BCR[abundance_in_bcr$ID])
 
 
 
-re_do_map <- TRUE #option to skip because they take a long time.
+re_do_map <- FALSE #option to skip because they take a long time.
 if(re_do_map){
   # abund_mapable <- breed_abundance %>%
   #   terra::project(.,"EPSG:9822")
