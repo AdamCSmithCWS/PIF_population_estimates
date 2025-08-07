@@ -1054,140 +1054,231 @@ write_excel_csv(table_2_full,
 #   filter(species %in% sp_label)
 #
 
+#
+# # comparison of estimates using non-ebird approach ------------------------
+#
+# out_long <- NULL
+# for(EDR_for_all in c(TRUE,FALSE)){
+#
+# Output.dir <- ifelse(EDR_for_all,"Stanton_2019_code/output_EDR_alldata/",
+#                      "Stanton_2019_code/output_alldata/")
+#
+# tmp1 <- read_csv(paste(Output.dir, 'PSest_Global_WH_NA_',"_", 100, 'iter.csv', sep='')) %>%
+#   rename_with(.fn= ~tolower(gsub(".","_",.x, fixed = TRUE))) %>%
+#   mutate(adjustments = ifelse(EDR_for_all,"New","Existing"))
+#
+# out_long <- bind_rows(out_long,tmp1)
+#
+# pref <- ifelse(EDR_for_all,"New","Existing")
+# tmp1 <- tmp1 %>%
+#   rename_with(.cols = -c(cn,aou),.fn = ~paste(pref,.x,sep = "_"))
+#
+#
+# if(EDR_for_all){
+#   out_wide <- tmp1
+# }else{
+#   out_wide <- out_wide %>%
+#     inner_join(tmp1,by = c("cn","aou"))
+# }
+#
+# }
+#
+#
+#
+# splabs <- Trats %>%
+#   filter(adjfactor == "Combined")
+#
+# out_wide_sel <- out_wide %>%
+#   rename(New_distance = New_edr,
+#          New_availability = New_availability) %>%
+#   filter(New_distance == TRUE) %>%
+#   left_join(splabs)
+#
+#
+# out_wide_lab <- out_wide_sel %>%
+#   filter(cn %in% sp_label)
+#
+# line5 <- data.frame(Existing_uscan_med_popest = c(c(1e3,5e8),c(1e3,5e8),c(1e3,5e8),c(1e3,5e8)),
+#                     New_uscan_med_popest = c(c(1e3,5e8),c(2e3,10e8),c(5e3,25e8),c(10e3,50e8)),
+#                     multi = c(1,1,2,2,5,5,10,10),
+#                     multif = factor(c(1,1,2,2,5,5,10,10)))
+#
+# cross_plot <- ggplot(data = out_wide_sel,
+#                      aes(x = Existing_uscan_med_popest,
+#                          y = New_uscan_med_popest))+
+#   geom_line(data = line5,
+#             aes(group = multi,
+#                 linetype = multif))+
+#   geom_linerange(aes(xmin = Existing_uscan_95lci_popest,
+#                       xmax = Existing_uscan_95uci_popest),
+#                  alpha = 0.3)+
+#   geom_linerange(aes(ymin = New_uscan_95lci_popest,
+#                      ymax = New_uscan_95uci_popest),
+#                  alpha = 0.2)+
+#   geom_point(alpha = 0.3)+
+#   geom_point(data = out_wide_lab,
+#              aes(colour = Species))+
+#   scale_colour_brewer(type = "qual",palette = "Dark2")+
+#   scale_y_continuous(labels = scales::unit_format(unit = "M", scale = 1e-6),
+#                      transform = "log10")+
+#   scale_x_continuous(labels = scales::unit_format(unit = "M", scale = 1e-6),
+#                      transform = "log10")+
+#   geom_label_repel(data = out_wide_lab,
+#                    aes(label = Species,group = Species,
+#                        colour = Species),
+#                    min.segment.length = 0,
+#                    size = 3,alpha = 0.9,point.padding = 0.3,label.size = 0.5)+
+#   theme_bw()+
+#   theme(legend.position = "none")+
+#   ylab("Population estimate \n updated for distance and availability")+
+#   xlab("Existing population estimate")
+#
+#
+#
+# pdf("final_figures/xy_comparison.pdf",
+#     width = 6.5,
+#     height = 4.5)
+# print(cross_plot)
+# dev.off()
+#
+#
+#
+#
+# comparison_table <- out_wide %>%
+#   rename(Used_EDR = New_edr,
+#          Used_availability = New_availability,
+#          species = cn) %>%
+#   select(species,aou,
+#          Used_EDR,
+#          Used_availability,
+#          contains("New_uscan"),
+#          contains("Existing_uscan"),
+#          contains("New_ps_"),
+#          contains("Existing_ps_")) %>%
+#   left_join(table_2_full,
+#             by = c("species" = "species")) %>%
+#   relocate(species,sp_code,aou)
+#
+#
+# write_csv(comparison_table,"comparison_before_eBird_adjustment.csv")
+#
+#
+# table_2 <- comparison_table %>%
+#   filter(species %in% sp_label) %>%
+#   select(species,sp_code,
+#          distance_existing,
+#          distance_edr,
+#          time_of_day_existing,
+#          availability,
+#          New_uscan_med_popest,
+#          Existing_uscan_med_popest,
+#          log_ratio_distance,
+#          log_ratio_availability,
+#          log_ratio_combined) %>%
+#   mutate(ratio_distance = exp(log_ratio_distance),
+#          ratio_availability = exp(log_ratio_availability),
+#          ratio_combined = exp(log_ratio_combined),
+#          ratio_realised = New_uscan_med_popest/Existing_uscan_med_popest,
+#          New_uscan_med_popest = New_uscan_med_popest/1e6,
+#          Existing_uscan_med_popest = Existing_uscan_med_popest/1e6) %>%
+#   select(species,sp_code,ratio_distance,ratio_availability,ratio_realised,
+#          New_uscan_med_popest,Existing_uscan_med_popest) %>%
+#   mutate(across(.cols = ratio_distance:Existing_uscan_med_popest,
+#                 .fns = ~signif(.x,3)))
+#
+# write_csv(table_2,"Table_2.csv")
+#
+#
+#
+#
+#
 
-# comparison of estimates using non-ebird approach ------------------------
-
-out_long <- NULL
-for(EDR_for_all in c(TRUE,FALSE)){
-
-Output.dir <- ifelse(EDR_for_all,"Stanton_2019_code/output_EDR_alldata/",
-                     "Stanton_2019_code/output_alldata/")
-
-tmp1 <- read_csv(paste(Output.dir, 'PSest_Global_WH_NA_',"_", 100, 'iter.csv', sep='')) %>%
-  rename_with(.fn= ~tolower(gsub(".","_",.x, fixed = TRUE))) %>%
-  mutate(adjustments = ifelse(EDR_for_all,"New","Existing"))
-
-out_long <- bind_rows(out_long,tmp1)
-
-pref <- ifelse(EDR_for_all,"New","Existing")
-tmp1 <- tmp1 %>%
-  rename_with(.cols = -c(cn,aou),.fn = ~paste(pref,.x,sep = "_"))
-
-
-if(EDR_for_all){
-  out_wide <- tmp1
-}else{
-  out_wide <- out_wide %>%
-    inner_join(tmp1,by = c("cn","aou"))
-}
-
-}
 
 
 
-splabs <- Trats %>%
-  filter(adjfactor == "Combined")
-
-out_wide_sel <- out_wide %>%
-  rename(New_distance = New_edr,
-         New_availability = New_availability) %>%
-  filter(New_distance == TRUE) %>%
-  left_join(splabs)
 
 
-out_wide_lab <- out_wide_sel %>%
+# XY comparison of existing and revised -----------------------------------
+
+
+pop_compare_realised_wide_all <- pop_compare_realised %>%
+  pivot_wider(names_from = version,
+              names_sep = "_",
+              values_from = c(pop_median,pop_lci_80,pop_lci_95,
+                              pop_uci_80,pop_uci_95)) %>%
+  mutate(pop_median_PIF_traditional = ifelse(is.na(pop_median_PIF_traditional),
+                                             0,
+                                             pop_median_PIF_traditional),
+         pop_lci_80_PIF_traditional = ifelse(is.na(pop_lci_80_PIF_traditional),
+                                             0,
+                                             pop_lci_80_PIF_traditional),
+         pop_uci_80_PIF_traditional = ifelse(is.na(pop_uci_80_PIF_traditional),
+                                             0,
+                                             pop_uci_80_PIF_traditional),
+         pop_lci_95_PIF_traditional = ifelse(is.na(pop_lci_95_PIF_traditional),
+                                             0,
+                                             pop_lci_95_PIF_traditional),
+         pop_uci_95_PIF_traditional = ifelse(is.na(pop_uci_95_PIF_traditional),
+                                             0,
+                                             pop_uci_95_PIF_traditional),
+         dif_mag_new_trad = pop_median_PIF_eBird_with_EDR_Avail/pop_median_PIF_traditional) %>%
+  rename(Ratio = dif_mag_new_trad,
+         cn = species) %>%
+  mutate(adjfactor = "Overall")
+
+adjs_wide <- Trats_plot %>%
+  pivot_wider(id_cols = c(Species,cn),
+              names_from = adjfactor,
+              values_from = Ratio) %>%
+  inner_join(pop_compare_realised_wide_all,
+             by = "cn")
+
+splabs <- adjs_wide %>%
   filter(cn %in% sp_label)
 
-line5 <- data.frame(Existing_uscan_med_popest = c(c(1e3,5e8),c(1e3,5e8),c(1e3,5e8),c(1e3,5e8)),
-                    New_uscan_med_popest = c(c(1e3,5e8),c(2e3,10e8),c(5e3,25e8),c(10e3,50e8)),
+line5 <- data.frame(pop_median_PIF_traditional = c(c(1e3,5e8),c(1e3,5e8),c(1e3,5e8),c(1e3,5e8)),
+                    pop_median_PIF_eBird_with_EDR_Avail = c(c(1e3,5e8),c(2e3,10e8),c(5e3,25e8),c(10e3,50e8)),
                     multi = c(1,1,2,2,5,5,10,10),
                     multif = factor(c(1,1,2,2,5,5,10,10)))
 
-cross_plot <- ggplot(data = out_wide_sel,
-                     aes(x = Existing_uscan_med_popest,
-                         y = New_uscan_med_popest))+
+cross_plot <- ggplot(data = adjs_wide,
+                     aes(x = pop_median_PIF_traditional,
+                         y = pop_median_PIF_eBird_with_EDR_Avail))+
   geom_line(data = line5,
             aes(group = multi,
                 linetype = multif))+
-  geom_linerange(aes(xmin = Existing_uscan_95lci_popest,
-                      xmax = Existing_uscan_95uci_popest),
+  geom_linerange(aes(xmin = pop_lci_95_PIF_traditional,
+                     xmax = pop_uci_95_PIF_traditional),
                  alpha = 0.3)+
-  geom_linerange(aes(ymin = New_uscan_95lci_popest,
-                     ymax = New_uscan_95uci_popest),
-                 alpha = 0.2)+
+  geom_linerange(aes(ymin = pop_lci_95_PIF_eBird_with_EDR_Avail,
+                     ymax = pop_uci_95_PIF_eBird_with_EDR_Avail),
+                 alpha = 0.3)+
   geom_point(alpha = 0.3)+
-  geom_point(data = out_wide_lab,
+  geom_point(data = splabs,
              aes(colour = Species))+
-  scale_colour_brewer(type = "qual",palette = "Dark2")+
   scale_y_continuous(labels = scales::unit_format(unit = "M", scale = 1e-6),
                      transform = "log10")+
   scale_x_continuous(labels = scales::unit_format(unit = "M", scale = 1e-6),
                      transform = "log10")+
-  geom_label_repel(data = out_wide_lab,
+  coord_cartesian(xlim = c(1e5,4e8), ylim = c(1e5,9e9))+
+  geom_label_repel(data = splabs,
                    aes(label = Species,group = Species,
                        colour = Species),
                    min.segment.length = 0,
                    size = 3,alpha = 0.9,point.padding = 0.3,label.size = 0.5)+
+  scale_colour_viridis_d(option = "turbo")+
   theme_bw()+
   theme(legend.position = "none")+
-  ylab("Population estimate \n updated for distance and availability")+
-  xlab("Existing population estimate")
+  ylab("Revised Population estimate (Millions)")+
+  xlab("Existing population estimate (Millions)")
 
 
 
-pdf("final_figures/xy_comparison.pdf",
+pdf("final_figures/xy_comparison_overall.pdf",
     width = 6.5,
     height = 4.5)
 print(cross_plot)
 dev.off()
-
-
-
-
-comparison_table <- out_wide %>%
-  rename(Used_EDR = New_edr,
-         Used_availability = New_availability,
-         species = cn) %>%
-  select(species,aou,
-         Used_EDR,
-         Used_availability,
-         contains("New_uscan"),
-         contains("Existing_uscan"),
-         contains("New_ps_"),
-         contains("Existing_ps_")) %>%
-  left_join(table_2_full,
-            by = c("species" = "species")) %>%
-  relocate(species,sp_code,aou)
-
-
-write_csv(comparison_table,"comparison_before_eBird_adjustment.csv")
-
-
-table_2 <- comparison_table %>%
-  filter(species %in% sp_label) %>%
-  select(species,sp_code,
-         distance_existing,
-         distance_edr,
-         time_of_day_existing,
-         availability,
-         New_uscan_med_popest,
-         Existing_uscan_med_popest,
-         log_ratio_distance,
-         log_ratio_availability,
-         log_ratio_combined) %>%
-  mutate(ratio_distance = exp(log_ratio_distance),
-         ratio_availability = exp(log_ratio_availability),
-         ratio_combined = exp(log_ratio_combined),
-         ratio_realised = New_uscan_med_popest/Existing_uscan_med_popest,
-         New_uscan_med_popest = New_uscan_med_popest/1e6,
-         Existing_uscan_med_popest = Existing_uscan_med_popest/1e6) %>%
-  select(species,sp_code,ratio_distance,ratio_availability,ratio_realised,
-         New_uscan_med_popest,Existing_uscan_med_popest) %>%
-  mutate(across(.cols = ratio_distance:Existing_uscan_med_popest,
-                .fns = ~signif(.x,3)))
-
-write_csv(table_2,"Table_2.csv")
-
 
 
 # Compile parameters from full-model ---------------------------------------
@@ -1362,7 +1453,7 @@ write_csv(us_can_wide,"final_figures/usa_canada_comparison_eBird_existing_w_EDR.
 
 trend_effect_out <- NULL
 vers <- ""
-for(sp_sel in sp_example[45:62]){
+for(sp_sel in sp_example){
 
   sp_aou <- bbsBayes2::search_species(sp_sel)$aou[1]
   sp_ebird <- ebirdst::get_species(sp_sel)
@@ -2109,7 +2200,7 @@ strata_map_compare <- ggplot()+
           colour = hlt_col)+
   scale_fill_viridis_c(na.value = NA,
                        name = paste0("Proportion of\n",
-                                     "USA Canada\n",sp_sel,"\nPopulation"))+
+                                     "USA+Canada\n",sp_sel,"\nPopulation"))+
   coord_sf(xlim = bb[c("xmin","xmax")],
            ylim = bb[c("ymin","ymax")])+
   facet_grid(cols = vars(version_factor))+
