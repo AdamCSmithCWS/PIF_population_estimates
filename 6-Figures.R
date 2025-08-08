@@ -1198,88 +1198,6 @@ write_excel_csv(table_2_full,
 
 
 
-# XY comparison of existing and revised -----------------------------------
-
-
-pop_compare_realised_wide_all <- pop_compare_realised %>%
-  pivot_wider(names_from = version,
-              names_sep = "_",
-              values_from = c(pop_median,pop_lci_80,pop_lci_95,
-                              pop_uci_80,pop_uci_95)) %>%
-  mutate(pop_median_PIF_traditional = ifelse(is.na(pop_median_PIF_traditional),
-                                             0,
-                                             pop_median_PIF_traditional),
-         pop_lci_80_PIF_traditional = ifelse(is.na(pop_lci_80_PIF_traditional),
-                                             0,
-                                             pop_lci_80_PIF_traditional),
-         pop_uci_80_PIF_traditional = ifelse(is.na(pop_uci_80_PIF_traditional),
-                                             0,
-                                             pop_uci_80_PIF_traditional),
-         pop_lci_95_PIF_traditional = ifelse(is.na(pop_lci_95_PIF_traditional),
-                                             0,
-                                             pop_lci_95_PIF_traditional),
-         pop_uci_95_PIF_traditional = ifelse(is.na(pop_uci_95_PIF_traditional),
-                                             0,
-                                             pop_uci_95_PIF_traditional),
-         dif_mag_new_trad = pop_median_PIF_eBird_with_EDR_Avail/pop_median_PIF_traditional) %>%
-  rename(Ratio = dif_mag_new_trad,
-         cn = species) %>%
-  mutate(adjfactor = "Overall")
-
-adjs_wide <- Trats_plot %>%
-  pivot_wider(id_cols = c(Species,cn),
-              names_from = adjfactor,
-              values_from = Ratio) %>%
-  inner_join(pop_compare_realised_wide_all,
-             by = "cn")
-
-splabs <- adjs_wide %>%
-  filter(cn %in% sp_label)
-
-line5 <- data.frame(pop_median_PIF_traditional = c(c(1e3,5e8),c(1e3,5e8),c(1e3,5e8),c(1e3,5e8)),
-                    pop_median_PIF_eBird_with_EDR_Avail = c(c(1e3,5e8),c(2e3,10e8),c(5e3,25e8),c(10e3,50e8)),
-                    multi = c(1,1,2,2,5,5,10,10),
-                    multif = factor(c(1,1,2,2,5,5,10,10)))
-
-cross_plot <- ggplot(data = adjs_wide,
-                     aes(x = pop_median_PIF_traditional,
-                         y = pop_median_PIF_eBird_with_EDR_Avail))+
-  geom_line(data = line5,
-            aes(group = multi,
-                linetype = multif))+
-  geom_linerange(aes(xmin = pop_lci_95_PIF_traditional,
-                     xmax = pop_uci_95_PIF_traditional),
-                 alpha = 0.3)+
-  geom_linerange(aes(ymin = pop_lci_95_PIF_eBird_with_EDR_Avail,
-                     ymax = pop_uci_95_PIF_eBird_with_EDR_Avail),
-                 alpha = 0.3)+
-  geom_point(alpha = 0.3)+
-  geom_point(data = splabs,
-             aes(colour = Species))+
-  scale_y_continuous(labels = scales::unit_format(unit = "M", scale = 1e-6),
-                     transform = "log10")+
-  scale_x_continuous(labels = scales::unit_format(unit = "M", scale = 1e-6),
-                     transform = "log10")+
-  coord_cartesian(xlim = c(1e5,4e8), ylim = c(1e5,9e9))+
-  geom_label_repel(data = splabs,
-                   aes(label = Species,group = Species,
-                       colour = Species),
-                   min.segment.length = 0,
-                   size = 3,alpha = 0.9,point.padding = 0.3,label.size = 0.5)+
-  scale_colour_viridis_d(option = "turbo")+
-  theme_bw()+
-  theme(legend.position = "none")+
-  ylab("Revised Population estimate (Millions)")+
-  xlab("Existing population estimate (Millions)")
-
-
-
-pdf("final_figures/xy_comparison_overall.pdf",
-    width = 6.5,
-    height = 4.5)
-print(cross_plot)
-dev.off()
-
 
 # Compile parameters from full-model ---------------------------------------
 
@@ -1618,22 +1536,22 @@ tabl2_paper <- pop_compare_realised_wide %>%
 
 write_csv(tabl2_paper,"Table_2_paper.csv")
 
-Trats <- ExpAdjs %>%
-  select(Species,cn,Tlr,Alr,clr) %>%
-  pivot_longer(cols = c(Tlr,Alr,clr),
-               names_to = "adjustment",
-               values_to = "LogRatio") %>%
-  mutate(adjfactor = ifelse(adjustment == "Tlr",
-                            "Availability",
-                            "Area"),
-         adjfactor = ifelse(adjustment == "clr",
-                            "Combined",
-                            adjfactor),
-         adjfactor = factor(adjfactor,
-                            levels = c("Availability","Area","Combined"),
-                            ordered = TRUE)) %>%
-  select(-adjustment) %>%
-  bind_rows(trend_effects)
+# Trats <- ExpAdjs %>%
+#   select(Species,cn,Tlr,Alr,clr) %>%
+#   pivot_longer(cols = c(Tlr,Alr,clr),
+#                names_to = "adjustment",
+#                values_to = "LogRatio") %>%
+#   mutate(adjfactor = ifelse(adjustment == "Tlr",
+#                             "Availability",
+#                             "Area"),
+#          adjfactor = ifelse(adjustment == "clr",
+#                             "Combined",
+#                             adjfactor),
+#          adjfactor = factor(adjfactor,
+#                             levels = c("Availability","Area","Combined"),
+#                             ordered = TRUE)) %>%
+#   select(-adjustment) %>%
+#   bind_rows(trend_effects)
 
 
 
@@ -1828,6 +1746,90 @@ print(adj_plot2)
 dev.off()
 
 
+
+
+# XY comparison of existing and revised -----------------------------------
+
+
+pop_compare_realised_wide_all <- pop_compare_realised %>%
+  pivot_wider(names_from = version,
+              names_sep = "_",
+              values_from = c(pop_median,pop_lci_80,pop_lci_95,
+                              pop_uci_80,pop_uci_95)) %>%
+  mutate(pop_median_PIF_traditional = ifelse(is.na(pop_median_PIF_traditional),
+                                             0,
+                                             pop_median_PIF_traditional),
+         pop_lci_80_PIF_traditional = ifelse(is.na(pop_lci_80_PIF_traditional),
+                                             0,
+                                             pop_lci_80_PIF_traditional),
+         pop_uci_80_PIF_traditional = ifelse(is.na(pop_uci_80_PIF_traditional),
+                                             0,
+                                             pop_uci_80_PIF_traditional),
+         pop_lci_95_PIF_traditional = ifelse(is.na(pop_lci_95_PIF_traditional),
+                                             0,
+                                             pop_lci_95_PIF_traditional),
+         pop_uci_95_PIF_traditional = ifelse(is.na(pop_uci_95_PIF_traditional),
+                                             0,
+                                             pop_uci_95_PIF_traditional),
+         dif_mag_new_trad = pop_median_PIF_eBird_with_EDR_Avail/pop_median_PIF_traditional) %>%
+  rename(Ratio = dif_mag_new_trad,
+         cn = species) %>%
+  mutate(adjfactor = "Overall")
+
+
+line5 <- data.frame(pop_median_PIF_traditional = c(c(1e3,5e8),c(1e3,5e8),c(1e3,5e8),c(1e3,5e8)),
+                    pop_median_PIF_eBird_with_EDR_Avail = c(c(1e3,5e8),c(2e3,10e8),c(5e3,25e8),c(10e3,50e8)),
+                    multi = c(1,1,2,2,5,5,10,10),
+                    multif = factor(c(1,1,2,2,5,5,10,10)))
+
+adjs_wide <- Trats_plot %>%
+  pivot_wider(id_cols = c(Species,cn),
+              names_from = adjfactor,
+              values_from = Ratio) %>%
+  inner_join(pop_compare_realised_wide_all,
+             by = "cn")
+
+splabs <- adjs_wide %>%
+  filter(cn %in% sp_label)
+
+cross_plot <- ggplot(data = adjs_wide,
+                     aes(x = pop_median_PIF_traditional,
+                         y = pop_median_PIF_eBird_with_EDR_Avail))+
+  geom_line(data = line5,
+            aes(group = multi,
+                linetype = multif))+
+  geom_linerange(aes(xmin = pop_lci_95_PIF_traditional,
+                     xmax = pop_uci_95_PIF_traditional),
+                 alpha = 0.3)+
+  geom_linerange(aes(ymin = pop_lci_95_PIF_eBird_with_EDR_Avail,
+                     ymax = pop_uci_95_PIF_eBird_with_EDR_Avail),
+                 alpha = 0.3)+
+  geom_point(alpha = 0.3)+
+  geom_point(data = splabs,
+             aes(colour = Species))+
+  scale_y_continuous(labels = scales::unit_format(unit = "M", scale = 1e-6),
+                     transform = "log10")+
+  scale_x_continuous(labels = scales::unit_format(unit = "M", scale = 1e-6),
+                     transform = "log10")+
+  coord_cartesian(xlim = c(1e5,4e8), ylim = c(1e5,9e9))+
+  geom_label_repel(data = splabs,
+                   aes(label = Species,group = Species,
+                       colour = Species),
+                   min.segment.length = 0,
+                   size = 3,alpha = 0.9,point.padding = 0.3,label.size = 0.5)+
+  scale_colour_viridis_d(option = "turbo")+
+  theme_bw()+
+  theme(legend.position = "none")+
+  ylab("Revised Population estimate (Millions)")+
+  xlab("Existing population estimate (Millions)")
+
+
+
+pdf("final_figures/xy_comparison_overall.pdf",
+    width = 6.5,
+    height = 4.5)
+print(cross_plot)
+dev.off()
 
 
 # same adjustments different order ----------------------------------------
