@@ -587,11 +587,11 @@ names(div_pal) <- pal_labs#levels(strata_compare$ratio_cat)
 comp_trad_new_plot <- ggplot(data = strata_compare,
                              aes(x = med.PopEst,
                                  y = pop_median))+
-  geom_abline(slope = 1, intercept = 0)+
-  geom_abline(slope = 2, intercept = 0,linetype = 2)+
-  geom_abline(slope = 5, intercept = 0,linetype = 3)+
-  geom_abline(slope = 0.5, intercept = 0,linetype = 2)+
-  geom_abline(slope = 0.2, intercept = 0,linetype = 3)+
+  # geom_abline(slope = 1, intercept = 0)+
+  # geom_abline(slope = 2, intercept = 0,linetype = 2)+
+  # geom_abline(slope = 5, intercept = 0,linetype = 3)+
+  # geom_abline(slope = 0.5, intercept = 0,linetype = 2)+
+  # geom_abline(slope = 0.2, intercept = 0,linetype = 3)+
   geom_errorbar(aes(ymin = pop_lci_80,ymax = pop_uci_80),
                 alpha = 0.3, width = 0)+
   geom_errorbarh(aes(xmin = LCI80.PopEst,xmax = UCI80.PopEst),
@@ -609,7 +609,7 @@ comp_trad_new_plot <- ggplot(data = strata_compare,
   # scale_colour_viridis_c(option = "turbo", direction = -1,
   #                        name = "BBS sampling bias \n log(sampled/avail)")+
   xlab("Existing PIF population estimate")+
-  ylab("Revised PIF population estimate (adjusted for sampling bias)")+
+  ylab("Revised PIF population estimate")+
   labs(title = paste(sp_sel))+
   theme_bw()
 
