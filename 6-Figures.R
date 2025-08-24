@@ -336,7 +336,7 @@ sp_example <- readRDS("data/selected_species.rds")
 
 ExpAdjs <- read_csv("Species_correction_factors_w_edr_availability.csv")
 
-re_summarise <- TRUE # set to true to re-run this summary loop
+re_summarise <- FALSE # set to true to re-run this summary loop
 if(re_summarise){
 pop_compare_stack_sel <-NULL
 
@@ -929,123 +929,123 @@ Trats2 <- ExpAdjs %>%
 Trats <- inner_join(Trats,Trats2,
                     by = c("Species","cn","adjfactor"))
 
-
-
-sp_label <- c("American Robin",
-              "Mountain Bluebird",
-              #"Eastern Phoebe",
-              #"Rose-breasted Grosbeak",
-              "Canyon Wren",
-              "Downy Woodpecker",
-              #"Red-winged Blackbird",
-              #"Western Meadowlark",
-              #"Black-capped Chickadee",
-              "Scarlet Tanager",
-              "Say's Phoebe",
-              #"Brown Creeper",
-              "Black-chinned Hummingbird")
-
-splabs <- Trats %>%
-  filter(cn %in% sp_label)
-splab <- splabs %>%
-  filter(adjfactor == "Combined")
-
-adj_plot <- ggplot(data = Trats,
-                      aes(x = adjfactor,
-                          y = Ratio))+
-  # geom_hline(yintercept = c((10),
-  #                           (0.1)),
-  #            alpha = 0.8,
-  #            linetype = 3)+
-  # geom_hline(yintercept = c((5),
-  #                           (0.2)),
-  #            alpha = 0.6,
-  #            linetype = 2)+
-  # geom_hline(yintercept = c((2),
-  #                           (0.5)),
-  #            alpha = 0.6,
-  #            linetype = 2)+
-  geom_hline(yintercept = c(0.1,0.2,0.5,1,2,5,10),
-             alpha = 0.15)+
-  geom_hline(yintercept = c(1),
-             alpha = 0.8)+
-  geom_violin(fill = NA)+
-  geom_point(aes(group = Species),position = position_dodge(width = 0.05),
-             alpha = 0.1)+
-  geom_line(data = splabs,
-             aes(group = Species,
-                 colour = Species),#position = position_dodge(width = 0.05),
-             alpha = 0.6)+
-  geom_point(data = splabs,
-             aes(group = Species,
-                 colour = Species),#position = position_dodge(width = 0.05),
-             alpha = 1)+
-  ylab("Multiplicative change in\npopulation estimate")+
-#  ylab("Ratio new/existing\n values > 1 = increased population estimate")+
-  xlab("Adjustment factor")+
-  geom_label_repel(data = splab,
-                  aes(label = Species,group = Species,
-                      colour = Species),
-            #position = position_dodge(width = 0.05),
-            min.segment.length = 0,
-            size = 3,alpha = 0.9,point.padding = 0.3,label.size = 0.5,
-            nudge_x = 0.6)+
-  scale_colour_brewer(type = "qual",palette = "Dark2")+
-  scale_x_discrete(expand = expansion(c(0.2,0.5)))+
-  scale_y_continuous(transform = "log",
-                     breaks = c(0.1,0.2,0.5,1,2,5,10))+
-  theme_classic()+
-  theme(legend.position = "none")
-
-pdf("final_figures/Multiplicative_change_factors.pdf",
-    width = 6.5,
-    height = 4.5)
-print(adj_plot)
-dev.off()
-
-
-
-table_2_full <- ExpAdjs %>%
-  mutate(species = cn,
-         sp_code = Species,
-         distance_existing = Dist2,
-         distance_existing_lower = Dist.Lower,
-         distance_existing_upper = Dist.Upper,
-         distance_edr = edr,
-         distance_edr_sd = edr_sd,
-         edr_model = EDR_model,
-         time_of_day_existing = 1/exp(TimeAdj.meanlog),
-         tod_uci = 1/exp(TimeAdj.meanlog+TimeAdj.sdlog),
-         tod_lci = 1/exp(TimeAdj.meanlog-TimeAdj.sdlog),
-         time_of_day_existing_approx_sd = (tod_lci-tod_uci)/2,
-         availability = availability,
-         availability_sd = availability_sd,
-         availability_model = availability_model,
-         log_ratio_distance = Alr,
-         log_ratio_availability = Tlr,
-         log_ratio_combined = clr) %>%
-  select(species,
-         sp_code,
-         distance_existing,
-         distance_existing_lower,
-         distance_existing_upper,
-         distance_edr,
-         distance_edr_sd,
-         edr_model,
-         time_of_day_existing,
-         time_of_day_existing_approx_sd,
-         availability,
-         availability_sd,
-         availability_model,
-         log_ratio_distance,
-         log_ratio_availability,
-         log_ratio_combined) %>%
-  mutate(across(where(is.double), ~round(.x,3)),
-         sp_code = ifelse(is.na(sp_code),"",sp_code))
-
-write_excel_csv(table_2_full,
-                "adjustment_factors_existing_new_PIF_pop_est.csv")
-
+#
+#
+# sp_label <- c("American Robin",
+#               "Mountain Bluebird",
+#               #"Eastern Phoebe",
+#               #"Rose-breasted Grosbeak",
+#               "Canyon Wren",
+#               "Downy Woodpecker",
+#               #"Red-winged Blackbird",
+#               #"Western Meadowlark",
+#               #"Black-capped Chickadee",
+#               "Scarlet Tanager",
+#               "Say's Phoebe",
+#               #"Brown Creeper",
+#               "Black-chinned Hummingbird")
+#
+# splabs <- Trats %>%
+#   filter(cn %in% sp_label)
+# splab <- splabs %>%
+#   filter(adjfactor == "Combined")
+#
+# adj_plot <- ggplot(data = Trats,
+#                       aes(x = adjfactor,
+#                           y = Ratio))+
+#   # geom_hline(yintercept = c((10),
+#   #                           (0.1)),
+#   #            alpha = 0.8,
+#   #            linetype = 3)+
+#   # geom_hline(yintercept = c((5),
+#   #                           (0.2)),
+#   #            alpha = 0.6,
+#   #            linetype = 2)+
+#   # geom_hline(yintercept = c((2),
+#   #                           (0.5)),
+#   #            alpha = 0.6,
+#   #            linetype = 2)+
+#   geom_hline(yintercept = c(0.1,0.2,0.5,1,2,5,10),
+#              alpha = 0.15)+
+#   geom_hline(yintercept = c(1),
+#              alpha = 0.8)+
+#   geom_violin(fill = NA)+
+#   geom_point(aes(group = Species),position = position_dodge(width = 0.05),
+#              alpha = 0.1)+
+#   geom_line(data = splabs,
+#              aes(group = Species,
+#                  colour = Species),#position = position_dodge(width = 0.05),
+#              alpha = 0.6)+
+#   geom_point(data = splabs,
+#              aes(group = Species,
+#                  colour = Species),#position = position_dodge(width = 0.05),
+#              alpha = 1)+
+#   ylab("Multiplicative change in\npopulation estimate")+
+# #  ylab("Ratio new/existing\n values > 1 = increased population estimate")+
+#   xlab("Adjustment factor")+
+#   geom_label_repel(data = splab,
+#                   aes(label = Species,group = Species,
+#                       colour = Species),
+#             #position = position_dodge(width = 0.05),
+#             min.segment.length = 0,
+#             size = 3,alpha = 0.9,point.padding = 0.3,label.size = 0.5,
+#             nudge_x = 0.6)+
+#   scale_colour_brewer(type = "qual",palette = "Dark2")+
+#   scale_x_discrete(expand = expansion(c(0.2,0.5)))+
+#   scale_y_continuous(transform = "log",
+#                      breaks = c(0.1,0.2,0.5,1,2,5,10))+
+#   theme_classic()+
+#   theme(legend.position = "none")
+#
+# pdf("final_figures/Multiplicative_change_factors.pdf",
+#     width = 6.5,
+#     height = 4.5)
+# print(adj_plot)
+# dev.off()
+#
+#
+#
+# table_2_full <- ExpAdjs %>%
+#   mutate(species = cn,
+#          sp_code = Species,
+#          distance_existing = Dist2,
+#          distance_existing_lower = Dist.Lower,
+#          distance_existing_upper = Dist.Upper,
+#          distance_edr = edr,
+#          distance_edr_sd = edr_sd,
+#          edr_model = EDR_model,
+#          time_of_day_existing = 1/exp(TimeAdj.meanlog),
+#          tod_uci = 1/exp(TimeAdj.meanlog+TimeAdj.sdlog),
+#          tod_lci = 1/exp(TimeAdj.meanlog-TimeAdj.sdlog),
+#          time_of_day_existing_approx_sd = (tod_lci-tod_uci)/2,
+#          availability = availability,
+#          availability_sd = availability_sd,
+#          availability_model = availability_model,
+#          log_ratio_distance = Alr,
+#          log_ratio_availability = Tlr,
+#          log_ratio_combined = clr) %>%
+#   select(species,
+#          sp_code,
+#          distance_existing,
+#          distance_existing_lower,
+#          distance_existing_upper,
+#          distance_edr,
+#          distance_edr_sd,
+#          edr_model,
+#          time_of_day_existing,
+#          time_of_day_existing_approx_sd,
+#          availability,
+#          availability_sd,
+#          availability_model,
+#          log_ratio_distance,
+#          log_ratio_availability,
+#          log_ratio_combined) %>%
+#   mutate(across(where(is.double), ~round(.x,3)),
+#          sp_code = ifelse(is.na(sp_code),"",sp_code))
+#
+# write_excel_csv(table_2_full,
+#                 "adjustment_factors_existing_new_PIF_pop_est.csv")
+#
 
 
 
@@ -1598,7 +1598,8 @@ sp_label <- c("American Robin",
               "Western Meadowlark",
               "Black-capped Chickadee",
               "Scarlet Tanager",
-              "Say's Phoebe",
+              "Common Nighthawk",
+              #"Say's Phoebe",
               #"Brown Creeper",
               "Veery",
               "Purple Martin",
@@ -1739,7 +1740,7 @@ adj_plot2 <- ggplot(data = trat_sel,
   theme_classic()+
   theme(legend.position = "none")
 
-pdf("final_figures/Multiplicative_change_factors_2.pdf",
+pdf("final_figures/Multiplicative_change_factors_paper.pdf",
     width = 6.5,
     height = 4.5)
 print(adj_plot2)
