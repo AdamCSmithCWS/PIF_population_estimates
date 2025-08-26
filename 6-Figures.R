@@ -1589,7 +1589,8 @@ Trats_plot <- Trats %>%
 
 
 sp_label <- c("American Robin",
-              "Mountain Bluebird",
+              #"Mountain Bluebird",
+              "Clark's Nutcracker",
               "Eastern Phoebe",
               #"Rose-breasted Grosbeak",
               "Canyon Wren",
