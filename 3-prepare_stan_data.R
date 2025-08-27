@@ -61,7 +61,7 @@ mean_doy = round(surveys$mean_doy)
 
 Inputfiles.dir <- "Stanton_2019_code/input_files/" #paste(Inputfiles.dir, '/', sep="")
 
-re_napops <- FALSE # set to True to re-run the napops extraction
+re_napops <- FALSE # set to True to re-run the napops extraction of ERDs and Availability estimates
 
 if(re_napops){
   napops_species <- napops::list_species() |>
@@ -424,11 +424,6 @@ estimate_rho <- FALSE # set to true to allow the model to estimate a non-unit lo
 use_traditional <- FALSE # if TRUE uses the traditional adjustments for TOD and distance
 
 
-
-
-
-
-
 if(use_traditional){
   vers <- ifelse(estimate_rho,"trad_rho","trad")
 }else{
@@ -523,8 +518,8 @@ inner_join(.,raw_counts,
          yr = year-(min(year)-1),
          observer = as.integer(factor(obs_n)),
          strata = as.integer(factor(strata_name)),
-         doy = 1+(day_of_year-(min(day_of_year))),
-         route_obs = as.integer(factor(paste(route_name,obs_n,sep = "-")))) # doy centered on earliest survey day for species
+         doy = 1+(day_of_year-(min(day_of_year))),# doy centered on earliest survey day for species
+         route_obs = as.integer(factor(paste(route_name,obs_n,sep = "-"))))
 
 
 
@@ -539,6 +534,8 @@ routes_buf <- routes_buf_all %>%
   inner_join(mean_counts, by = "route_name")
 
 saveRDS(routes_buf,paste0("stan_data/routes_buffered_",vers,sp_aou,"_",sp_ebird,".rds"))
+
+
 
 # spatial setup -----------------------------------------------------------
 
@@ -596,9 +593,7 @@ adjs <- ExpAdjs %>%
 if(nrow(adjs) == 0){next}
 if(!use_traditional & !(adjs$use_edr | adjs$use_availability)){next}
 
-#library(cmdstanr)
-#
-#
+
 # Fit stan model ----------------------------------------------------------
 
 # setup for GAM of doy ----------------------------------------------------

@@ -14,7 +14,8 @@ selected_species <- readRDS("data/selected_species.rds")
 
 re_fit <- FALSE
 #Parallel species loop ---------------------------------------------------
-n_cores <- 8
+## run on machine with 64 cores, 128GB RAM
+n_cores <- 8 # requires total of 32 (8*4) cores 4 parallel chains for each of 8 species
 cluster <- makeCluster(n_cores, type = "PSOCK")
 registerDoParallel(cluster)
 
@@ -28,11 +29,9 @@ test <- foreach(sp_sel = selected_species,
   {
 
 
-#for(sp_sel in selected_species){
  sp_aou <- bbsBayes2::search_species(sp_sel)$aou[1]
   sp_ebird <- ebirdst::get_species(sp_sel)
   vers <- ""
-  #vers <- "all_routes"
 
 if(!file.exists(paste0(output_dir,"/calibration_fit_alt_",vers,sp_aou,"_",sp_ebird,".rds")) | re_fit){
 
@@ -87,7 +86,7 @@ if(!file.exists(paste0(output_dir,"/calibration_fit_alt_",vers,sp_aou,"_",sp_ebi
 
   #vers <- "seas_opt_"
 
-  if(vers == "seas_opt_"){
+  if(vers == "seas_opt_"){ # alternate version of model that removes the seasonal component
     stan_data[["use_season"]] <- 0
     model <- cmdstanr::cmdstan_model("models/ebird_rel_abund_calibration_spatial_year_doy_sep_obs_rte_rhoopt_seas_opt.stan")
   }

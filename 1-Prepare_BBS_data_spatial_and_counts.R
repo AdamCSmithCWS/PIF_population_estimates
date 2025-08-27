@@ -1,9 +1,28 @@
 library(sf)
 library(tidyverse)
-#library(ebirdst)
 library(patchwork)
 library(terra)
 library(bbsBayes2)
+
+
+#############################################
+#############################################
+# NOTE: This script will not run
+#
+# The objects saved by this script are included so that subsequent scripts will run.
+#
+# The original GIS data required for this script are not official
+# Therefore the output from this script is included in the data and code archive
+# The script is included for transparency
+# When the data for the route-paths is officially released, this script and the data
+# archive will be updated.
+
+
+
+
+
+
+
 
 # Script to prepare the BBS count data from the last 10-years and
 # combine it with the spatial information on route-paths.
@@ -33,7 +52,7 @@ for(i in 1:length(prov)){
 }
 return(y)
 }
-
+## a shapefile currated by the Canadian national BBS office bbs@ec.gc.ca
 routes_can <- st_read(dsn = "data/Canada/ALLROUTES_2022.shp") %>%
   st_make_valid() #%>%
 
@@ -46,8 +65,9 @@ select(route_name,prov_state,route)
 
 # US routes ---------------------------------------------------------------
 
-
-## US routes - old unofficial shapefile created by John Sauer
+## sample of route-paths from unofficial gis data
+## US routes - old unofficial shapefile archived online
+## at https://earthworks.stanford.edu/catalog/stanford-vy474dv5024
 routes_us <- readRDS("data/United_States_selected_BBS_route_paths.rds") %>%
   sf::st_transform(crs = sf::st_crs(routes_can)) %>%
   distinct() %>%
@@ -96,12 +116,12 @@ vie
 
 # Route buffering ---------------------------------------------------------
 
-
+## 400m buffer around all BBS route paths
 
 routes_buf <- routes_all %>%
   group_by(route_name) %>%
   summarise(., do_union = FALSE)  %>%
-  st_buffer(., dist = 400)
+  st_buffer(., dist = 400) # 400 m
 
 buf_a <- as.numeric(st_area(routes_buf)/1e6)
 
@@ -157,7 +177,7 @@ route_starts <- routes_w_data %>%
                          "latitude"),crs = st_crs(4326)) %>%
   st_transform(.,crs = st_crs(routes_buf))
 
-## routes_buf is now an 800mm buffer of all route paths with surveys
+## routes_buf is now an 400mm buffer of all route paths with surveys
 routes_buf <- routes_buf %>%
   filter(route_name %in% route_starts$route_name)
 
@@ -176,7 +196,7 @@ routes_buf <- routes_buf %>%
 ## it must be adjuste for the area of each buffered region
 # BBS counts --------------------------------------------------------------
 
-surveys <- load_bbs_data(release = 2024)$routes %>%
+surveys <- bbsBayes2::load_bbs_data(release = 2024)$routes %>%
   select(-route_name) %>%
   filter(year > 2012) %>%  # 10 years from 2013 - 2023, missing 2020.
   mutate(route_name = paste(state_num,route,sep = "-"),
@@ -262,7 +282,7 @@ saveRDS(raw_counts_route,
         "data/all_counts_by_route.rds")
 
 saveRDS(routes_buf,
-        "data/all_routes_buffered_1km.rds")
+        "data/all_routes_buffered_400m.rds")
 
 
 
@@ -284,50 +304,6 @@ saveRDS(routes_buf,
 
 
 
-
-#
-#
-# # define projection
-# crs_laea <- paste0("+proj=laea +lat_0=", 42.1,
-#                    " +lon_0=", -120)
-#
-# tmpb <- tmpb %>%
-#   st_transform(.,crs = st_crs(crs_laea))
-#
-# tmp <- tmp %>%
-#   st_transform(.,crs = st_crs(crs_laea))
-#
-# tmpbb <- tmp %>%
-#   st_buffer(., dist = 10000) %>%
-#   st_bbox()
-#
-# # transform to the custom projection using nearest neighbor resampling
-# breed_abundance_pr <- project(breed_abundance,
-#                         crs_laea,
-#                              method = "near")
-#
-#
-# breed_abundance_df <- as.data.frame(breed_abundance_pr, xy = TRUE )
-#
-# vie <- ggplot()+
-#   geom_tile(data = breed_abundance_df,
-#               aes(x = x, y = y,
-#                   fill = breeding))+
-#   scale_fill_viridis_c()+
-#   theme_void()
-#   # geom_sf(data = tmpb)+
-#   # geom_sf(data = tmp)+
-#   # coord_sf(xlim = tmpbb[c("xmin","xmax")],
-#   #          ylim = tmpbb[c("ymin","ymax")])
-#
-# vie
-#
-#
-# pdf("rufu_hab_cartoon.pdf",
-#     height = 22,width = 17)
-# print(vie)
-# dev.off()
-#
 
 
 

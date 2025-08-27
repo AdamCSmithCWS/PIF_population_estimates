@@ -8,12 +8,15 @@ library(bbsBayes2)
 library(cmdstanr)
 library(ggrepel)
 library(tidyterra)
-#library(napops)
 library(tidybayes)
-library(doParallel)
-library(foreach)
 library(HDInterval)
 library(ggtext)
+
+
+# Script to summarise the fitted models -----------------------------------
+
+## generates various graphs, summaries, and comparisons for each species
+
 
 source("functions/hpdi.R")
 source("functions/posterior_abundance.R")
@@ -38,10 +41,7 @@ raw_counts_all <- readRDS("data/all_counts_by_route.rds")
 # Add na-pops EDRs --------------------------------------------------------
 
 
-Inputfiles.dir <- "Stanton_2019_code/input_files/" #paste(Inputfiles.dir, '/', sep="")
-
-
-  ExpAdjs <- read_csv("Species_correction_factors_w_edr_availability.csv")
+ExpAdjs <- read_csv("Species_correction_factors_w_edr_availability.csv")
 
 
 
@@ -253,10 +253,8 @@ trim_rel_abund <- TRUE
 
 selected_species <- readRDS("data/selected_species.rds")
 
-#c("American Robin","Canyon Wren")){#
-for(sp_sel in selected_species){ # rev(sps_list$english[1:348])){#sp_example[-wh_drop]){#list$english){
-#sp_sel = "Bank Swallow"
-#for(sp_sel in rev(sps_list$english)[29]){
+for(sp_sel in selected_species){
+
  sp_aou <- bbsBayes2::search_species(sp_sel)$aou[1]
   sp_ebird <- ebirdst::get_species(sp_sel)
 
@@ -287,17 +285,6 @@ bcr_trad <- pop_ests_out_trad %>%
 if(!file.exists(paste0("data/species_relative_abundance_2023/",
                        sp_ebird,"_relative_abundance.rds"))){next}
 
-rel_abund <- readRDS(paste0("data/species_relative_abundance_2023/",
-                            sp_ebird,"_relative_abundance.rds"))
-
-
-
-
-if(trim_rel_abund){
-  tenth_percentile <- unname(quantile(rel_abund$ebird_abund,0.1))
-  rel_abund <- rel_abund %>%
-    filter(ebird_abund >= tenth_percentile)
-}
 
 
 
@@ -320,7 +307,9 @@ if(trim_rel_abund){
 
 # posterior of calibration ------------------------------------------------
 
-
+# load the hyperparameter estimates,
+# but only used to provide structure for the trimmed mean
+# calculation below, not used in the final calibration
 cali_alt_post <- fit$draws(variables = "calibration_mean",
                            format = "df")
 
@@ -350,8 +339,10 @@ cali_alt_post <- fit$draws(variables = "calibration_mean",
 cali_route_post <- fit$draws(variables = "calibration_r",
                            format = "df")
 
+# set up structure for the trimmed mean
 cali_trim_post <- cali_alt_post
 
+# replace values of the hyperpareter with the trimmed mean values
 for(i in 1:nrow(cali_route_post)){
   cali_trim_post[i,1] <- mean(as.numeric(cali_route_post[i,betas_keep]))
 }
@@ -381,6 +372,26 @@ breed_abundance_full <- breed_abundance
 
 # BBS strata level estimates (to match PIF stratification) ----------------
 
+
+## process is to summarise the relative abundance within given regions
+## Then multiply those sums by the full posterior of the calibration
+## to generate estimates with uncertainty
+##
+## One could apply the full posterior of the calibration to the
+## pixel values (generating a full posterior of the mapped surface)
+## one could also combine the uncertainty of the calibration with the
+## uncertainty of the pixel=level relative abundances, but both of those
+## approaches would have extreme computational costs.
+##
+## The first approach would be mathematically equivalent to what's done here
+## because the uncertainty at a pixel level would be the same across each posterior
+## draw i.e., sum(calibration * pixel-values) = calibration*sum(pixel-values)
+##
+## The second approach would account for the uncertainty in the relative abundance
+## surface and is worth exploring, with full consideration of the spatial autocorrelation
+## in the eBird uncertainty estimates (e.g., each pixel's uncertainty is not independent,
+##  but how dependent is it?)
+##
 
 strata_proj <- st_transform(strata,
                             crs = st_crs(breed_abundance))
@@ -443,6 +454,8 @@ strata_abund <- strata_abund %>%
 
 
 # Annual strata-level abundances ------------------------------------------
+# population size trajectories for each stratum with BBS data
+# Excludes strata with population but no BBS time-series estimates
 strats <- combined %>%
   select(strata_name,strata) %>%
   distinct() %>%
@@ -675,7 +688,7 @@ country_abund <- data.frame(region = countries_proj$country_name[abundance_in_co
          species = sp_sel,
          species_ebird = sp_ebird)
 
-country_abund
+#country_abund # will be combined with other regional estimates below
 
 
 
@@ -724,7 +737,7 @@ bcr_abund <- data.frame(region = as.character(bcr_proj$BCR[abundance_in_bcr$ID])
          species_ebird = sp_ebird)
 
 #bcr_abund
-
+# will be combined with other regional estimates below
 
 
 # mapping with BCR extent -------------------------------------------------
@@ -854,7 +867,7 @@ USACAN_abund <- data.frame(region = "USACAN",
          species_ebird = sp_ebird)
 
 #USACAN_abund
-
+# will be combined with other regional estimates below
 
 # Continent estimates -----------------------------------------
 
@@ -902,7 +915,7 @@ continents_abund <- data.frame(region = as.character(continents_proj$CC[abundanc
          species_ebird = sp_ebird)
 
 #continents_abund
-
+# will be combined with other regional estimates below
 
 
 
@@ -929,8 +942,8 @@ global_abund <- data.frame(region = "global",
          species = sp_sel,
          species_ebird = sp_ebird)
 
-global_abund
-
+#global_abund
+# will be combined with other regional estimates in next line
 
 
 pop_ests_out <- bind_rows(USACAN_abund,
@@ -982,7 +995,7 @@ side_plot <- ggplot(data = pop_compare_stack_sel,
 saveRDS(side_plot,paste0("figures/saved_ggplots/side_plot_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
 
 
-# Seasonal patterns by strata ------------------------------------------
+# Exploring the estimated seasonal patterns by strata ------------------------------------------
 strat_names <- combined %>%
   select(strata,strata_name,day_of_year) %>%
   distinct()

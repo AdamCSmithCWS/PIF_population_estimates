@@ -1,11 +1,10 @@
 library(sf)
 library(tidyverse)
 library(ebirdst)
-#ebirdst::set_ebirdst_access_key("vhhebtg39lu",overwrite = TRUE) #expire November 29 2025
-#library(patchwork)
 library(terra)
 library(bbsBayes2)
 
+#source("eBirdst.R") #script to set access key for local user (not included in archive)
 # download and extract eBird seasonal relative abundance within
 # BBS route path buffers
 
@@ -13,10 +12,10 @@ if(Sys.info()[["nodename"]] == "WNCRLABN72960"){
   setwd("c:/Users/SmithAC/Documents/GitHub/PIF_population_estimates")
 }
 
-routes_buf <- readRDS("data/all_routes_buffered.rds")
-#routes_buf <- readRDS("all_routes_buffered_1km.rds")
+routes_buf <- readRDS("data/all_routes_buffered_400m.rds")
 
-#
+# run once to generate list of species with simplified english names
+# and then saved as rds
 # sps_list <- readRDS("data/all_counts_by_route.rds") %>%
 #   filter(count > 0) %>%
 #   select(aou,english,french,genus,species,route_name) %>%
@@ -60,6 +59,9 @@ metric_used <- "mean" #options are "max", mean" or "median" (although "median" w
 
 Inputfiles.dir <- "Stanton_2019_code/input_files/" #paste(Inputfiles.dir, '/', sep="")
 
+
+# loading the Stanton et al. PIF adjustment factors
+# with some english names updated to match the BBS and eBird databases
 ExpAdjs <- read.csv(paste(Inputfiles.dir, 'Species_PSEst_Adjustments.csv', sep=''), stringsAsFactors=FALSE) %>%
   mutate(cn = ifelse(cn == "McCown's Longspur",
                      "Thick-billed Longspur",
@@ -71,6 +73,8 @@ ExpAdjs <- read.csv(paste(Inputfiles.dir, 'Species_PSEst_Adjustments.csv', sep='
                      gsub("Le Conte's","LeConte's",cn),
                      cn))
 
+# somewhat pragmatic list of possible 60 species to explore, compiled over
+# multiple iterative discussions with coauthors
 selected_species <- unique(c("Brown Creeper","Canyon Wren",
                              "Black-capped Chickadee","American Robin",
                              "Barn Swallow",
@@ -117,6 +121,7 @@ selected_species <- unique(c("Brown Creeper","Canyon Wren",
 
 saveRDS(selected_species,"data/selected_species.rds")
 
+# filtering down to ensure species meet minimum data by PIF population estimates criterion
 remaining_species <- sps_list %>%
   filter(n_routes_w_obs >= 100,
          !english %in% selected_species)
@@ -124,14 +129,10 @@ remaining_species <- sps_list %>%
 
 ii <- which(sps_list$english %in% remaining_species$english)
 
-for(i in ii){ #rev(1:nrow(sps_list))){ ##
+for(i in ii){
 
   sp_sel <- unname(unlist(sps_list[i,"english"]))
 species_ebird <- ebirdst::get_species(sp_sel)
-
-# paste0("data/species_relative_abundance_2023/",
-#        sp_ebird,
-#        "_derived_breeding_relative_abundance.rds")
 
 
 if((file.exists(paste0("data/species_relative_abundance_2023/",
@@ -247,7 +248,7 @@ if(resident | use_weekly){
 
   # The resident relative abundance is not linearly related
   # to the BBS mean observations (log-linear) (e.g., BCCH)
-  # Therefore: if resident, then extract the weekly abundance data for the
+  # Therefore: extract the weekly abundance data for the
   # BBS survey season and generate a breeding season abundance
 
 
@@ -469,6 +470,9 @@ abundance_ci_in_buffers <- terra::extract(breed_abundance_ci,
                                           ID = FALSE,
                                           exact = TRUE)
 }
+# this argument creates an area-weighted mean of the cells that are overlapped
+# by the buffer
+
 abundance_sampled <- terra::extract(breed_abundance,
                                        routes_nm,
                                        fun = mean,
@@ -476,8 +480,6 @@ abundance_sampled <- terra::extract(breed_abundance,
                                        ID = FALSE,
                                        exact = TRUE)
 
-# this argument creates an area-weighted mean of the cells that are overlapped
-# by the buffer
 # plot(breed_abundance)
 # plot(routes_buf_proj,add = TRUE)
 # plot(breed_abundance,add = TRUE)
