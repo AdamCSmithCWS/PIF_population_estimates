@@ -14,9 +14,10 @@ data/BCR_Terrestrial/
 data/Canada/
 Stillmanetal/
 convergence/
-estimates/
+**calibration_posterior**
+**strata_comparison**
+csv_estimates/
 output/
 **comp_trad_new**
 ebirdst.R
-
 

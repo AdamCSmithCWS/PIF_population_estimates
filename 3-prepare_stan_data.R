@@ -242,7 +242,7 @@ write_csv(ExpAdjs,"Species_correction_factors_w_edr_availability.csv")
 
 
 
-routes_buf_all <- readRDS("data/all_routes_buffered.rds")
+routes_buf_all <- readRDS("data/all_routes_buffered_400m.rds")
 
 strata <- bbsBayes2::load_map("bbs_usgs")
 
