@@ -802,7 +802,7 @@ tabl2_paper <- pop_compare_realised_wide %>%
   mutate(`Scientific Name` = paste(genus,species)) %>%
   select(-c(genus,species,n_routes_w_obs,french,aou))
 
-write_csv(tabl2_paper,"Table_2_paper.csv")
+write_csv(tabl2_paper,"final_figures/Table_2_paper.csv")
 
 
 
