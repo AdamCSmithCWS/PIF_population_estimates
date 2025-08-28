@@ -774,19 +774,108 @@ ExpAdjs <- read_csv("Species_correction_factors_w_edr_availability.csv") %>%
          clr = log(comb_r))
 
 adj_tmp <- ExpAdjs %>%
+  select(cn,Tr,Ar,comb_r,
+         Dist2,Dist.Upper,Dist.Lower,
+         edr, edr_sd,
+         TimeAdj.meanlog,TimeAdj.sdlog,tod,
+         availability, availability_sd) %>%
+  rename(availability_ratio = Tr,
+         area_ratio = Ar,
+         combined = comb_r)
+
+
+breed_habitats_etc <- acad %>%
+  select(primary_breeding_habitat_major,primary_breeding_habitat_sub,
+         common_name,
+         mig_status) %>%
+  distinct()
+
+
+tabl2_supplement <- pop_compare_realised_wide %>%
+  left_join(hab_tmp) %>%
+  left_join(trend_tmp) %>%
+  left_join(adj_tmp) %>%
+  mutate(tod_avail = 1/tod)%>%
+  arrange(-Ratio) %>%
+  filter(cn %in% sp_example) %>%
+  mutate(Species = cn,
+         `Ratio of adjustments for Effective Survey Area` = signif(area_ratio,3),
+         `Ratio of adjustments for Availability` = signif(availability_ratio,3),
+         `Adjustment for Geographic Bias` = signif(habitat_ratio,3),
+         `Adjustment for Temporal Trend` = signif(trend_ratio,3),
+         `Realised Overall Ratio` = signif(Ratio,3),
+         New = signif(pop_median_PIF_eBird_with_EDR_Avail/1e6,3),
+         Existing = signif(pop_median_PIF_traditional/1e6,3),
+         edr = signif(edr,3),
+         availability = signif(availability,3),
+         edr_sd = signif(edr_sd,3),
+         availability_sd = signif(availability_sd,3),
+         TimeAdj.meanlog = signif(TimeAdj.meanlog,3),
+         TimeAdj.sdlog = signif(TimeAdj.sdlog,3),
+         tod_avail = signif(tod_avail,3)) %>%
+  left_join(.,breed_habitats_etc,
+            by = c("Species" = "common_name")) %>%
+  mutate(`ACAD Breeding Habitat` = paste(primary_breeding_habitat_major,
+                                         primary_breeding_habitat_sub,
+                                         sep = " - "),
+         `Migration Status` = ifelse(mig_status == "M",
+                                     "Migrant","Resident")) %>%
+  select(-c(cn,area_ratio,availability_ratio,habitat_ratio,trend_ratio,
+            Ratio,pop_median_PIF_eBird_with_EDR_Avail,pop_median_PIF_traditional)) %>%
+  left_join(sps_list,
+            by = c("Species" = "english")) %>%
+  mutate(`Scientific Name` = paste(genus,species)) %>%
+  select(-c(genus,species,n_routes_w_obs,french,aou,
+            adjfactor,combined,primary_breeding_habitat_major,
+            primary_breeding_habitat_sub,tod, mig_status)) %>%
+  relocate(Species,
+           `Scientific Name`,
+           `ACAD Breeding Habitat`,
+           `Migration Status`,
+           New,
+           Existing,
+           `Realised Overall Ratio`,
+           edr,
+           edr_sd,
+           Dist2,
+           Dist.Lower,
+           Dist.Upper,
+           availability,
+           availability_sd,
+           tod_avail,
+           TimeAdj.meanlog,
+           TimeAdj.sdlog) %>%
+  rename(`Revised population estimate` = New,
+         `Existing population estimate` = Existing,
+         `Ratio of revised/existing` = `Realised Overall Ratio`,
+         `EDR (revised)` = edr,
+         `EDR SD (revised)` = edr_sd,
+         `EDR (existing distance)` = Dist2,
+         `EDR lower bound (existing distance)` = Dist.Lower,
+         `EDR upper bound (existing distance)` = Dist.Upper,
+         `Time of day (existing - log scale)` = TimeAdj.meanlog,
+         `Time of day SD (existing - log scale)` = TimeAdj.sdlog,
+         `Availability (existing - Time of day scaled to represent availability)` = tod_avail,
+         `Availability (revised)` = availability,
+         `Availability SD (revised)` = availability_sd)
+
+write_csv(tabl2_supplement,"estimates/Supplemental_Table.csv")
+
+adj_tmp <- ExpAdjs %>%
   select(cn,Tr,Ar,comb_r) %>%
   rename(availability_ratio = Tr,
          area_ratio = Ar,
          combined = comb_r)
 
+
 tabl2_paper <- pop_compare_realised_wide %>%
   left_join(hab_tmp) %>%
   left_join(trend_tmp) %>%
   left_join(adj_tmp) %>%
+  filter(cn %in% sp_example) %>%
   select(cn,area_ratio,availability_ratio,habitat_ratio,trend_ratio,
            Ratio,pop_median_PIF_eBird_with_EDR_Avail,pop_median_PIF_traditional) %>%
   arrange(-Ratio) %>%
-  filter(cn %in% sp_example) %>%
   mutate(Species = cn,
          `Effective Survey Area` = signif(area_ratio,3),
          Availability = signif(availability_ratio,3),
