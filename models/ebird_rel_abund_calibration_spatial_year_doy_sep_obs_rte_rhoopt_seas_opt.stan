@@ -190,7 +190,7 @@ if(est_rho){
 if(n_years - ebird_year){ // only used if ebird_year is not equal to n_years, i.e., ebird_year != final year of the BBS data
 for(t in (ebird_year+1):n_years){
   if(y_2020[t]){ // all years not equal to 2020 or 2021
-    gamma[,t] = (sd_gamma * gamma_raw[,t]) + GAMMA[t-1];//t-1 indicators to match dimensionality
+    gamma[,t] = (sd_gamma * gamma_raw[,t]) + GAMMA[t];//t-1 indicators to match dimensionality
         YearEffect[t] = YearEffect[t-1] + GAMMA[t];
       }else{
     gamma[,t] = gamma_2020 + GAMMA_2020; // in 2020 and 2019, difference values represent 2-year change
@@ -274,7 +274,7 @@ for(t in 1:n_years){
      }
   }else{ //if year is on either side of 2020 - no spatial variance because there are no BBS observations that year
 //These values are currently meaningless because they are not included in the likelihood
-// for years with y_2020[t] == 1, these values are ignored in favour of the values
+// for years with y_2020[t] == 0, these values are ignored in favour of the values
 // from gamma_2020 + GAMMA_2020
     gamma_raw[,t] ~ std_normal();
     sum(gamma_raw[,t]) ~ normal(0,0.001*n_strata);

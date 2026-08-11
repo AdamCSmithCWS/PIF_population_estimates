@@ -1001,7 +1001,8 @@ adj_plot2 <- ggplot(data = trat_sel,
              alpha = 0.1)+
   geom_line(data = splabs,
             aes(group = Species,
-                colour = Species),#position = position_dodge(width = 0.05),
+                colour = Species,
+                linetype = Species),#position = position_dodge(width = 0.05),
             alpha = 0.6)+
   geom_point(data = splabs,
              aes(group = Species,
@@ -1100,7 +1101,7 @@ cross_plot <- ggplot(data = adjs_wide,
   coord_cartesian(xlim = c(1e5,4e8), ylim = c(1e5,9e9))+
   geom_label_repel(data = splabs,
                    aes(label = Species,group = Species,
-                       colour = Species),
+                       colour = Species,linetype = Species),
                    min.segment.length = 0,
                    size = 3,alpha = 0.9,point.padding = 0.3,label.size = 0.5)+
   scale_colour_viridis_d(option = "turbo")+

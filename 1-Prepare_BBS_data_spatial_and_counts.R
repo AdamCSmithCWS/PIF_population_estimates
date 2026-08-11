@@ -53,7 +53,7 @@ for(i in 1:length(prov)){
 return(y)
 }
 ## a shapefile currated by the Canadian national BBS office bbs@ec.gc.ca
-routes_can <- st_read(dsn = "data/Canada/ALLROUTES_2022.shp") %>%
+routes_can <- st_read(dsn = "data/Canada/ALLROUTES_2024.shp") %>%
   st_make_valid() #%>%
 
 routes_can <- routes_can %>%
@@ -68,7 +68,7 @@ select(route_name,prov_state,route)
 ## sample of route-paths from unofficial gis data
 ## US routes - old unofficial shapefile archived online
 ## at https://earthworks.stanford.edu/catalog/stanford-vy474dv5024
-routes_us <- readRDS("data/United_States_selected_BBS_route_paths.rds") %>%
+routes_us <- readRDS("data/GIS/United_States_selected_BBS_route_paths.rds") %>%
   sf::st_transform(crs = sf::st_crs(routes_can)) %>%
   distinct() %>%
   st_make_valid()
@@ -180,6 +180,12 @@ route_starts <- routes_w_data %>%
 ## routes_buf is now an 400mm buffer of all route paths with surveys
 routes_buf <- routes_buf %>%
   filter(route_name %in% route_starts$route_name)
+
+routes_all <- routes_all %>%
+  filter(route_name %in% route_starts$route_name)
+
+saveRDS(routes_all,
+        "data/GIS/all_bbs_route_paths_w_data.rds")
 
 # vie <- ggplot()+
 #   geom_sf(data = routes_buf,
