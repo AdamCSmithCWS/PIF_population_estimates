@@ -11,9 +11,8 @@ functions {
       vector yeareffect_flat,
       array[] int strat_year_idx,
       vector log_mean_rel_abund,
-      array[] int route,
       real RHO,
-      real sdobs, vector obs_raw, array[] int observer,
+      real sd_obs, vector obs_raw, array[] int observer,
       int use_pois, real sdnoise, vector noise_raw) {
     int n = size(route);
     vector[n] noise_effect;
@@ -27,7 +26,7 @@ functions {
     return log_beta[route]
            + yeareffect_flat[strat_year_idx]
            + doy_flat[strat_doy_idx]
-           + sdobs * obs_raw[observer]
+           + sd_obs * obs_raw[observer]
            + RHO*log_mean_rel_abund[route]
            + noise_effect;
   }
@@ -50,7 +49,6 @@ data {
   int<lower=1> n_doy; // number of unique values of doy (max(doy))
   int<lower=1> n_strata; // number of unique values of doy (max(doy))
   int<lower=1> mean_doy; // mean day of year across all BBS surveys
-  int<lower=1> n_years_m1; // n_years-1
 
   array[n_counts] int<lower=0> count; // Raw BBS counts
   array[n_counts] int<lower=1> route; // route indicators for counts
@@ -101,7 +99,6 @@ data {
   int<lower=0,upper=1> use_t; //indicator if route variation should be based on heavy tailed t-distribution instead of a normal
   int<lower=0,upper=1> est_rho; //indicator if model should estimate slope of log-log relationship or leave it fixed at 1.0
   int<lower=0,upper=1> use_ppc; //indicator if model should generate posterior predictions
-  int<lower=0,upper=1> use_season; //indicator if seasonal-adjustment should be used
   int<lower=0,upper=1> use_likelihood; //indicator if model should use data if == 0, then only prior predictions
 
 }
@@ -153,7 +150,7 @@ parameters {
 
   vector[n_knots_doy] DOY_raw;         // GAM hyper coefficients for doy
   array[n_knots_doy] sum_to_zero_vector[n_strata] doy_raw;         // GAM strata level parameters
-  vector<lower=0>[n_strata] sd_doy;    // sd of doy effects among strata
+  real<lower=0> sd_doy;    // sd of doy effects among strata
   real<lower=0> sd_DOY;    // sd of doy effect hyperparameter
 
 }
@@ -185,9 +182,11 @@ if(est_rho){
   DOY_b = sd_DOY*DOY_raw;
   DOY_pred = doy_basis*DOY_b;
 
-  for(k in 1:n_strata){
-    doy_b[k,] = (sd_doy[k] * transpose(doy_raw[k,])) + transpose(DOY_b);
-    doy_pred[,k] = doy_basis * transpose(doy_b[k,]);
+  for(s in 1:n_strata){
+    for(k in 1:n_knots_doy){
+    doy_b[s,k] = (sd_doy * doy_raw[k,s]) + (DOY_b[k]);
+    }
+    doy_pred[,s] = doy_basis * transpose(doy_b[s,]);
   }
 
 // overdispersion
@@ -217,12 +216,12 @@ if(est_rho){
 
 // first half of time-series - runs backwards from ebird_year
   for(t in yrev){
-  if(y_2020[t]){ // all years not equal to 2020 or 2019
-    gamma[,t] = (sd_gamma * gamma_raw[,t]) + GAMMA[t];
+  if(y_2020[t]){ // all years not equal to 2020 or 2021
+    gamma[,t] = (sd_gamma * gamma_raw[t,]) + GAMMA[t];
         YearEffect[t] = YearEffect[t+1] - GAMMA[t]; // hyperparameter trajectory interesting to monitor but no direct inference
 
   }else{
-    gamma[,t] = gamma_2020 + GAMMA_2020; // in 2020 and 2019, difference values represent 2-year change
+    gamma[,t] = gamma_2020 + GAMMA_2020; // in 2020 and 2021, difference values represent 2-year change
       YearEffect[t] = YearEffect[t+1] - GAMMA_2020; // hyperparameter trajectory interesting to monitor but no direct inference
 }
     yeareffect[,t] = yeareffect[,t+1] - gamma[,t]; //change from next year
@@ -230,8 +229,8 @@ if(est_rho){
 // second half of time-series - runs forwards from fixed_year
 if(n_years - ebird_year){ // only used if ebird_year is not equal to n_years, i.e., ebird_year != final year of the BBS data
 for(t in (ebird_year+1):n_years){
-  if(y_2020[t]){ // all years not equal to 2020 or 2021
-    gamma[,t] = (sd_gamma * gamma_raw[,t]) + GAMMA[t];//t-1 indicators to match dimensionality
+  if(y_2020[t]){ // all years not equal to 2019 or 2020
+    gamma[,t] = (sd_gamma * gamma_raw[t,]) + GAMMA[t];//t-1 indicators to match dimensionality
         YearEffect[t] = YearEffect[t-1] + GAMMA[t];
       }else{
     gamma[,t] = gamma_2020 + GAMMA_2020; // in 2020 and 2019, difference values represent 2-year change
@@ -292,7 +291,7 @@ model {
 // spatial treatment of doy effects
   for(k in 1:n_knots_doy){
  //doy_raw[1:n_strata,k] ~ icar_normal(n_strata, node1, node2);         // GAM strata level parameters for doy
- target += -0.5 * dot_self(doy_raw[node1,k] - doy_raw[node2,k]);
+ target += -0.5 * dot_self(doy_raw[k,node1] - doy_raw[k,node2]);
 }
 
   sd_gamma ~ student_t(3,0,0.2); // prior on sd of annual differences among strata, see Smith et al. 2023 supplements for prior pred checks
@@ -333,9 +332,8 @@ if(use_likelihood){
       to_vector(yeareffect),
       strat_year_idx,
       log_mean_rel_abund,
-      route,
       RHO,
-      sdobs, obs_raw, observer,
+      sd_obs, obs_raw, observer,
       use_pois, sdnoise, noise_raw);
 
 
@@ -396,13 +394,12 @@ if(use_ppc){
       to_vector(yeareffect),
       strat_year_idx,
       log_mean_rel_abund,
-      route,
       RHO,
-      sdobs, obs_raw, observer,
+      sd_obs, obs_raw, observer,
       use_pois, sdnoise, noise_raw);
 
 
-y_rep[i] = neg_binomial_2_log_rng(E,phi);
+y_rep = neg_binomial_2_log_rng(E,phi);
 
 }
 // ridiculous work around to allow for the limits on pair correction

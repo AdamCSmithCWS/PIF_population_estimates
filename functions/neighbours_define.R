@@ -14,6 +14,7 @@ neighbours_define <- function(real_strata_map = realized_strata_map, #sf map of 
                               voronoi = FALSE,
                               nn_fill = FALSE,
                               add_map = NULL,
+                              queen = TRUE,
                               strat_indicator = "strat",
                               island_link_dist_factor = 1.2 #consider nearest strata neighbours if distances are within this factor of each other, when linking otherwise isolated islands of strata
 
@@ -98,7 +99,7 @@ neighbours_define <- function(real_strata_map = realized_strata_map, #sf map of 
 
       vintj = arrange(working_strata_map,strat_lab)
 
-      nb_db = spdep::poly2nb(vintj,row.names = vintj$strat_lab,queen = FALSE)
+      nb_db = suppressWarnings(spdep::poly2nb(vintj,row.names = vintj$strat_lab,queen = queen))
 
       nb_info = spdep::nb2WB(nb_db)
       ## addin an option to check disjoint subgraphs
@@ -218,7 +219,7 @@ neighbours_define <- function(real_strata_map = realized_strata_map, #sf map of 
     vintj <- st_join(vint,centres,join = st_contains)
     vintj <- arrange(vintj,strat_lab)
 
-    nb_db <- spdep::poly2nb(vintj,row.names = vintj$strat_lab,queen = FALSE)#polygon to neighbour definition
+    nb_db <- suppressWarnings(spdep::poly2nb(vintj,row.names = vintj$strat_lab,queen = queen))#polygon to neighbour definition
     nb_mat <- spdep::nb2mat(nb_db, style = "B",
                            zero.policy = TRUE) #binary adjacency matrix
 

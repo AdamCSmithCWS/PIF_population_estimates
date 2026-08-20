@@ -38,16 +38,11 @@ raw_counts_all <- readRDS("data/all_counts_by_route.rds")
 
 
 
-# Add na-pops EDRs --------------------------------------------------------
-
-
-ExpAdjs <- read_csv("Species_correction_factors_w_edr_availability.csv")
-
-
 
 routes_buf_all <- readRDS("data/all_routes_buffered_400m.rds")
 
-strata <- bbsBayes2::load_map("bbs_usgs")
+strata <- bbsBayes2::load_map("bbs_usgs") |>
+  mutate(bcr = as.integer(bcr))
 
 strata_names <- strata %>%
   sf::st_drop_geometry()
@@ -219,9 +214,11 @@ continents <- countries %>%
 #Bird Studies Canada and NABCI.  2014.  Bird Conservation Regions.  Published by
 #Bird Studies Canada on behalf of the North American Bird Conservation Initiative.
 # https://www.birdscanada.org/bird-science/nabci-bird-conservation-regions  Accessed:  Nov 8 2024
-bcrs <- read_sf("data/BCR_terrestrial/BCR_Terrestrial_master_International.shp") %>%
-  group_by(BCR,Label) %>%
-  summarise(do_union = FALSE)
+bcrs <- readRDS("data/bcr2026_statprov_simplified.rds") |>
+  group_by(bcr_label, bcr_label_) |>
+  summarise(do_union = FALSE) |>
+  rename(bcr = bcr_label,
+         bcr_name = bcr_label_)
 
 
 
@@ -244,14 +241,26 @@ if(use_traditional){
 }
 
 
-output_dir <- "F:/PIF_pop_estimates/output"
-#output_dir <- "output"
+#output_dir <- "F:/PIF_pop_estimates/output"
+output_dir <- "output"
 trim_rel_abund <- TRUE
 
-
+summ_out <- NULL
 # species loop ------------------------------------------------------------
+selected_species <- c("American Robin",
+                      "Bank Swallow",
+                      "California Gull",
+                      "Common Nighthawk",
+                      "Mallard",
+                      "Sora",
+                      "Bay-breasted Warbler",
+                      "Wood Duck",
+                      "Killdeer",
+                      "Turkey Vulture",
+                      "Green Heron",
+                      "Northern Shrike",
+                      "Short-eared Owl")
 
-selected_species <- readRDS("data/selected_species.rds")
 
 for(sp_sel in selected_species){
 
@@ -289,13 +298,21 @@ if(!file.exists(paste0("data/species_relative_abundance_2023/",
 
 
 
+summ <- readRDS(paste0("convergence/parameter_summary_alt_",vers,sp_aou,"_",sp_ebird,".rds")) |>
+  mutate(species = sp_sel)
+# convergence summary -----------------------------------------------------
+
+
+summ_out <-  bind_rows(summ_out,summ)
+
+
 
 
 # load saved fitted model, summary, and data ------------------------------
 
 
   fit <- readRDS(paste0(output_dir,"/calibration_fit_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
-  summ <- readRDS(paste0("convergence/parameter_summary_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
+
 
   combined <- readRDS(paste0("stan_data/dataframe_",vers,sp_aou,"_",sp_ebird,".rds"))
   stan_data <- readRDS(paste0("stan_data/stan_data_",vers,sp_aou,"_",sp_ebird,".rds"))
@@ -303,6 +320,7 @@ if(!file.exists(paste0("data/species_relative_abundance_2023/",
 
 
   routes_buf <- readRDS(paste0("stan_data/routes_buffered_",vers,sp_aou,"_",sp_ebird,".rds"))
+
 
 
 # posterior of calibration ------------------------------------------------
@@ -716,7 +734,7 @@ abundance_in_bcr <- abundance_in_bcr %>%
 
 
 
-bcr_abund <- data.frame(region = as.character(bcr_proj$BCR[abundance_in_bcr$ID]),
+bcr_abund <- data.frame(region = as.character(bcr_proj$bcr[abundance_in_bcr$ID]),
                             region_type = "bcr",
                             sum_abund = 3^2 * unlist(abundance_in_bcr[[2]])) %>%
   filter(!is.na(sum_abund)) %>%
@@ -744,7 +762,7 @@ bcr_abund <- data.frame(region = as.character(bcr_proj$BCR[abundance_in_bcr$ID])
 
 
 
-re_do_map <- FALSE #option to skip because they take a long time.
+re_do_map <- TRUE #option to skip because they take a long time.
 if(re_do_map){
   # abund_mapable <- breed_abundance %>%
   #   terra::project(.,"EPSG:9822")
@@ -754,7 +772,7 @@ if(re_do_map){
 
   bcrs_plot <- bcrs %>%
     st_transform(crs = st_crs(strata)) %>%
-    filter(BCR %in% bcrs_w_pop$region)
+    filter(bcr %in% bcrs_w_pop$region)
 
 countries_plot <- countries %>%
   st_transform(crs = st_crs(strata)) %>%
@@ -785,7 +803,7 @@ bb <- sf::st_bbox(strata_bound)
     geom_spatraster(data = breed_abundance_plot,
                     maxcell = 16000000)+
     geom_sf(data = bcrs_plot, fill = NA)+
-    # geom_sf_text(data = bcrs_plot,aes(label = BCR),
+    # geom_sf_text(data = bcrs_plot,aes(label = bcr),
     #              size = 3)+
     #geom_sf(data = routes_buf,aes(colour = mean_count),fill = NA)+
     coord_sf(xlim = c(bb[c("xmin","xmax")]),
@@ -1034,14 +1052,14 @@ xlbl <- data.frame(dtes = c("2025/05/01",
 
 
 vis_season <- ggplot(data = seasonal_strat,
-                     aes(x = doy,y = mean,
+                     aes(x = doy,y = median,
                          group = strata_name,
                          colour = strata_name))+
-  geom_ribbon(data = seasonal,aes(x = doy,y = mean,
+  geom_ribbon(data = seasonal,aes(x = doy,y = median,
                                   ymin = q5, ymax = q95),
               alpha = 0.1,
               inherit.aes = FALSE)+
-  geom_line(data = seasonal,aes(x = doy,y = mean),
+  geom_line(data = seasonal,aes(x = doy,y = median),
             inherit.aes = FALSE)+
   geom_line(alpha = 0.5)+
   coord_cartesian(xlim = c(100,240))+
@@ -1074,6 +1092,13 @@ dev.off()
 }
 
 
+saveRDS(summ_out,"convergence_summary.rds")
 
-
+problems <- summ_out |>
+  filter(rhat > 1.1, ess_bulk < 100) |>
+  mutate(variable_type = sub("\\[.*","",variable)) |>
+  group_by(variable_type,species) |>
+  summarise(n = n(),
+            max_rhat = max(rhat),
+            min_ess = min(ess_bulk))
 

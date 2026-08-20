@@ -21,8 +21,19 @@ source("functions/GAM_basis_function_mgcv.R")
 source("functions/neighbours_define.R")
 yr_ebird <- 2023 # prediction year for eBird relative abundance
 
-selected_species <- readRDS("data/selected_species.rds")
-
+selected_species <- c("American Robin",
+                 "Bank Swallow",
+                 "California Gull",
+                 "Common Nighthawk",
+                 "Mallard",
+                 "Sora",
+                 "Bay-breasted Warbler",
+                 "Wood Duck",
+                 "Killdeer",
+                 "Turkey Vulture",
+                 "Green Heron",
+                 "Northern Shrike",
+                 "Short-eared Owl")
 
 # mean counts to id routes on which species has been observed -------------
 mean_counts_all <- readRDS("data/mean_counts_by_route.rds")
@@ -30,8 +41,8 @@ mean_counts_all <- readRDS("data/mean_counts_by_route.rds")
 raw_counts_all <- readRDS("data/all_counts_by_route.rds")
 
 # general summaries of time and season
-surveys <- load_bbs_data(release = 2024)$routes %>%
-  filter(year > 2012)  %>%  # 10 years from 2013 - 2023, missing 2020.
+surveys <- load_bbs_data(release = 2026)$routes %>%
+  filter(year >= 2015)  %>%  # 10 years missing 2020.
   mutate(doy = lubridate::yday(paste(year,month,day,sep = "-")),
          start_hr = floor(start_time/100),
          end_hr = floor(end_time/100),
@@ -41,8 +52,8 @@ surveys <- load_bbs_data(release = 2024)$routes %>%
   summarise(mean_time = mean(mid_time),
             mean_doy = mean(doy))
 
-survey_dates <- load_bbs_data(release = 2024)$routes %>%
-  filter(year > 2012)  %>%  # 10 years from 2013 - 2023, missing 2020.
+survey_dates <- load_bbs_data(release = 2026)$routes %>%
+  filter(year >= 2015)  %>%   # 10 years from 2013 - 2023, missing 2020.
   mutate(doy = lubridate::yday(paste(year,month,day,sep = "-")),
          start_hr = floor(start_time/100),
          end_hr = floor(end_time/100),
@@ -59,192 +70,47 @@ mean_doy = round(surveys$mean_doy)
 # Add na-pops EDRs --------------------------------------------------------
 
 
-Inputfiles.dir <- "Stanton_2019_code/input_files/" #paste(Inputfiles.dir, '/', sep="")
 
-re_napops <- FALSE # set to True to re-run the napops extraction of ERDs and Availability estimates
+  #ExpAdjs <- read_csv("Species_correction_factors_w_edr_availability.csv")
 
-if(re_napops){
-  napops_species <- napops::list_species() |>
-    dplyr::select(Species,Common_Name)
+  decisions3 <- readRDS("full_decisions_file.rds")
 
-# Species specific adjustment factors (Time of Day, Detection Distance, Pair)
-ExpAdjs <- read.csv(paste(Inputfiles.dir, 'Species_PSEst_Adjustments.csv', sep=''), stringsAsFactors=FALSE) %>%
-  mutate(cn = ifelse(cn == "McCown's Longspur",
-                     "Thick-billed Longspur",
-                     cn),
-         cn = ifelse(cn == "Gray Jay",
-                     "Canada Jay",
-                     cn),
-         cn = ifelse(grepl("Le Conte's",cn),
-                     gsub("Le Conte's","LeConte's",cn),
-                     cn))
+sp_new <- readRDS("data/sp_new.rds")
 
-
-
-ExpAdjs <- ExpAdjs |>
-  dplyr::left_join(napops_species,
-                   by = c("cn" = "Common_Name"))
-
-for(i in 1:nrow(ExpAdjs)){
-  if(is.na(ExpAdjs[i,"Species"])){
-    print(paste("no napops edr for",ExpAdjs[i,"cn"]))
-          next}
-
-  sp <- ExpAdjs[i,"Species"]
-
-  # choose better supported model between models 1 (intercept) and 2 (roadside)
-  # Unless the road model suggests that EDR is smaller on roads (contrary to physics)
-  cefs <- napops::coef_distance(species = sp) |>
-    dplyr::filter(Model %in% c(1,2)) |>
-    dplyr::arrange(AIC)
-if(nrow(cefs) > 1){
-  if((cefs[1,"Model"] == 2 & cefs[1,"Road"] < 0) |
-     sp == "PRFA"){ #one-off to remove the PRFA roadside estimates that have CI so wide that the sd is > mean
-    cefs <- cefs |>
-      dplyr::filter(Model == 1)
-  }
-}
-  if(nrow(cefs) == 0){next} # skip if no napops output
-
-  w_mod <- cefs[1,"Model"]
-
-  edrt <- try(napops::edr(species = sp,
-                  model = w_mod,
-                  forest = 0.5,
-                  road = TRUE,
-                  quantiles = c(0.1625,0.8375), # 1 sd below the mean
-                  samples = 1000),
-              silent = TRUE)
-
-  if(edrt$EDR_est > 500){ # two species where the model 2 estimates of edr are silly (> 5 km!)
-    edrt <- try(napops::edr(species = sp,
-                    model = 1,
-                    forest = 0.5,
-                    road = TRUE,
-                    quantiles = c(0.1625,0.8375), # 1 sd below the mean
-                    samples = 1000),
-                silent = TRUE)
-    w_mod <- 1
-  }
-
-  if(class(edrt) == "try-error"){
-    warning(paste("edr extraction did not work for",sp))
-    next
-  }
-
-
-  ExpAdjs[i,"edr"] <- as.numeric(edrt$EDR_est)
-
-  if("EDR_16.25" %in% names(edrt)){
-    ExpAdjs[i,"edr_sd"] <- c(as.numeric(edrt$EDR_83.75)-as.numeric(edrt$EDR_16.25))/2
-  }
-
-  ExpAdjs[i,"EDR_model"] <- ifelse(w_mod == 1,"Intercept","Roadside")
-
-  rm(edrt, w_mod)
-}
-
-ExpAdjs <- ExpAdjs |>
-  dplyr::mutate(edr = ifelse(edr == 1,NA,edr),
-                use_edr = ifelse(is.na(edr),FALSE,TRUE))
+adjustments <- decisions3 |>
+  mutate(PIF_CALC_Rosenberg_2019 = ifelse(cn %in% sp_new$cn,
+                                          "Yes","No"),
+         PIF_time_of_day = 1/exp(TimeAdj.meanlog)) |>
+  rename(common_name = cn,
+         PIF_MDD = Dist2,
+         PIF_pair = Pair2,
+         NA_POPS_edr = edr,
+         NA_POPS_EDR_model = EDR_model,
+         NA_POPS_availability = availability,
+         NA_POPS_availability_model = availability_model,
+         BAM_population_estimate_Canada = canadian_2020_population_estimate_bam_M_birds,
+         p_population_canada_ebirdst = p_population_canada,
+         ACAD_pop_size_us_ca = pop_size_us_ca_,
+         ACAD_pop_size_us_ca_source = pop_size_us_ca_s,
+         ACAD_pop_size_us_ca_comment = pop_size_us_ca_com,
+         ebird_species_code = ebird_species,
+         ebirdst_resident = is_resident_ebirdst,
+         ebirdst_breeding_quality = breeding_quality_ebirdst,
+         ebirdst_resident_quality = resident_quality_ebirdst,
+         prop_BOTW_range_na_ebirdst = p_BOTW_range_na_eBirdst,
+         taxonomic_sort = sort
+  )  |>
+  arrange(taxonomic_sort)
 
 
 
-
-# Availability from napops ------------------------------------------------
-
-
-
-for(i in 1:nrow(ExpAdjs)){
-  if(is.na(ExpAdjs[i,"Species"])){
-    print(paste("no napops avail for",ExpAdjs[i,"cn"]))
-    next}
-
-  sp <- unlist(ExpAdjs[i,"Species"])
-
-  # choose best supported model
-  cefs <- napops::coef_removal(species = sp) |>
-    dplyr::arrange(AIC)
-
-  if(nrow(cefs) == 0){next} # skip if no napops output
-
-
-    w_mod <- cefs[1,"Model"]
-
-  availability <- try(napops::avail(species = sp,
-                           time = 3,
-                          model = w_mod,
-                          od = mean_doy, # mean of the doy for all BBS surveys
-                          tssr = mid_time, #mean of time of day for all BBS surveys
-                          quantiles = c(0.1625,0.8375), # 1 sd below the mean
-                          samples = 1000),
-              silent = TRUE)
-
-  if(class(availability) == "try-error"){
-    availability <- try(napops::avail(species = sp,
-                                      time = 3,
-                                      model = 1, #intercept model
-                                      od = mean_doy, # mean of the doy for all BBS surveys
-                                      tssr = mid_time, #mean of time of day for all BBS surveys
-                                      quantiles = c(0.1625,0.8375), # 1 sd below the mean
-                                      samples = 1000),
-                        silent = TRUE)
-    w_mod <- 1
-  }else{
-    if(availability$p_est < 0.1){
-      availability <- try(napops::avail(species = sp,
-                                        time = 3,
-                                        model = 1,
-                                        od = mean_doy, # mean of the doy for all BBS surveys
-                                        tssr = mid_time, #mean of time of day for all BBS surveys
-                                        quantiles = c(0.1625,0.8375), # 1 sd below the mean
-                                        samples = 1000),
-                          silent = TRUE)
-      w_mod <- 1
-    }
-  }
-
-    if(class(availability) == "try-error"){
-          warning(paste("availability extraction did not work for",sp))
-          next
-        }
-
-
-
-  ExpAdjs[i,"availability"] <- as.numeric(availability$p_est)
-
-  if("p_16.25" %in% names(availability)){
-    ExpAdjs[i,"availability_sd"] <- c(as.numeric(availability$p_83.75)-as.numeric(availability$p_16.25))/2
-  }
-
-  ExpAdjs[i,"availability_model"] <- w_mod
-
-  if(sp %in% c("BOWA","CORE","CAHU")){
-    ExpAdjs[i,"availability"] <- NA
-    ExpAdjs[i,"availability_sd"] <- NA
-  }
-  rm(availability, w_mod)
-}
-
-ExpAdjs <- ExpAdjs |>
-  dplyr::mutate(use_availability = ifelse(is.na(availability),FALSE,TRUE),
-                availability_log_scaled = log(1/availability),
-                availability_sd_log_scaled = 0.5*(log(1/(availability-availability_sd))-log(1/(availability+availability_sd))),
-                availability_sd_log_scaled = ifelse(is.na(availability_sd_log_scaled),
-                                                    log(1/(availability+availability_sd)),
-                                                    availability_sd_log_scaled))
-
-
-write_csv(ExpAdjs,"Species_correction_factors_w_edr_availability.csv")
-}else{
-  ExpAdjs <- read_csv("Species_correction_factors_w_edr_availability.csv")
-}
 
 
 
 routes_buf_all <- readRDS("data/all_routes_buffered_400m.rds")
 
-strata <- bbsBayes2::load_map("bbs_usgs")
+strata <- bbsBayes2::load_map("bbs")%>%
+  filter(country_code %in% c("CA","US"))
 
 strata_names <- strata %>%
   sf::st_drop_geometry()
@@ -259,92 +125,6 @@ strata_join <- strata_names %>%
          prov_state, bcr) %>%
   st_drop_geometry() %>%
   distinct()
-
-trad_dir <- "Stanton_2019_code/output_alldata/"
-strata_trad_all <- read_csv(paste0(trad_dir,"PSest_Prov_by_BCR__100iter.csv")) %>%
-  left_join(.,strata_join,
-            by = c("st_abrev" = "prov_state",
-                   "BCR" = "bcr")) %>%
-  mutate(region = strata_name,
-         region_type = "strata",
-         version = "traditional",
-         species = cn,
-         aou = Aou,
-         pop_median = med.PopEst,
-         pop_lci_80 = LCI80.PopEst,
-         pop_uci_80 = UCI80.PopEst,
-         pop_lci_95 = LCI95.PopEst,
-         pop_uci_95 = UCI95.PopEst)
-
-USACAN_trad_all <- read_csv(paste0(trad_dir,"PSest_Global_WH_NA__100iter.csv")) %>%
-  mutate(region = "USACAN",
-         region_type = "USACAN",
-         version = "traditional",
-         species = cn,
-         aou = Aou,
-         pop_median = USCAN.med.PopEst,
-         pop_lci_80 = USCAN.80LCI.PopEst,
-         pop_uci_80 = USCAN.80UCI.PopEst,
-         pop_lci_95 = USCAN.95LCI.PopEst,
-         pop_uci_95 = USCAN.95UCI.PopEst)
-
-
-
-global_trad_all <- read_csv(paste0(trad_dir,"PSest_Global_WH_NA__100iter.csv")) %>%
-  mutate(region = "global",
-         region_type = "global",
-         version = "traditional",
-         species = cn,
-         aou = Aou,
-         pop_median = GL.med.PopEst,
-         pop_lci_80 = GL.80LCI.PopEst,
-         pop_uci_80 = GL.80UCI.PopEst,
-         pop_lci_95 = GL.95LCI.PopEst,
-         pop_uci_95 = GL.95UCI.PopEst)
-
-
-
-prov_trad_all <- read_csv(paste0(trad_dir,"PSest_by_Prov__100iter.csv")) %>%
-  mutate(region = st_abrev,
-         region_type = "prov_state",
-         version = "traditional",
-         species = cn,
-         aou = Aou,
-         pop_median = med.PopEst,
-         pop_lci_80 = LCI80.PopEst,
-         pop_uci_80 = UCI80.PopEst,
-         pop_lci_95 = LCI95.PopEst,
-         pop_uci_95 = UCI95.PopEst)
-
-bcr_trad_all <- read_csv(paste0(trad_dir,"PSest_by_BCR__100iter.csv"))%>%
-  mutate(region = as.character(BCR),
-         region_type = "bcr",
-         version = "traditional",
-         species = cn,
-         aou = Aou,
-         pop_median = med.PopEst,
-         pop_lci_80 = LCI80.PopEst,
-         pop_uci_80 = UCI80.PopEst,
-         pop_lci_95 = LCI95.PopEst,
-         pop_uci_95 = UCI95.PopEst)
-
-
-
-
-pop_ests_out_trad <- bind_rows(USACAN_trad_all,
-                               global_trad_all,
-                          #country_abund,
-                          bcr_trad_all,
-                          strata_trad_all) %>%
-  select(region,region_type,version,
-         species,aou,
-         pop_median, pop_lci_80, pop_uci_80,
-         pop_lci_95, pop_uci_95)
-
-
-saveRDS(pop_ests_out_trad,"all_traditional_pop_estimates.rds")
-
-
 
 
 
@@ -407,9 +187,7 @@ continents <- countries %>%
 #Bird Studies Canada and NABCI.  2014.  Bird Conservation Regions.  Published by
 #Bird Studies Canada on behalf of the North American Bird Conservation Initiative.
 # https://www.birdscanada.org/bird-science/nabci-bird-conservation-regions  Accessed:  Nov 8 2024
-bcrs <- read_sf("data/BCR_terrestrial/BCR_Terrestrial_master_International.shp") %>%
-  group_by(BCR,Label) %>%
-  summarise(do_union = FALSE)
+bcrs <- bbsBayes2::load_map("bcr")
 
 adjs_out <- NULL
 today <- as_date(Sys.Date())
@@ -430,9 +208,6 @@ if(use_traditional){
   vers <- ifelse(estimate_rho,"_rho","")
 }
 
-
-re_fit <- TRUE # set to true to re-run plotting and summaries
-re_run_model <- TRUE # set to true to rerun the stan model fit
 
 #output_dir <- "G:/PIF_population_estimates/output"
 output_dir <- "output"
@@ -461,25 +236,11 @@ for(sp_sel in selected_species){ #
     next
   }
 
-strata_trad <- strata_trad_all %>%
-  filter(cn == sp_sel)
 
-global_trad <- global_trad_all %>%
-  filter(cn == sp_sel)
-
-bcr_trad <- bcr_trad_all %>%
-  filter(cn == sp_sel)
-
-
-
-
-
-
-
-if(!file.exists(paste0("data/species_relative_abundance_2023/",
+if(!file.exists(paste0("data/species_relative_abundance_",yr_ebird,"/",
                        sp_ebird,"_relative_abundance.rds"))){next}
 
-rel_abund <- readRDS(paste0("data/species_relative_abundance_2023/",
+rel_abund <- readRDS(paste0("data/species_relative_abundance_",yr_ebird,"/",
                             sp_ebird,"_relative_abundance.rds"))
 
 
@@ -543,13 +304,14 @@ strata_incl <- combined %>%
   select(strata_name,strata) %>%
   distinct()
 
-strata_map <- bbsBayes2::load_map("bbs_usgs") %>%
+strata_map <- bbsBayes2::load_map("bbs") %>%
   inner_join(strata_incl) %>%
   arrange(strata)
 
 neighbours <- neighbours_define(strata_map,
                                 strat_indicator = "strata",
-                                save_plot_data = FALSE)
+                                save_plot_data = TRUE,
+                                species = sp_sel)
 
 
 all_years <- data.frame(year = c(min(combined$year):max(combined$year)))
@@ -588,12 +350,34 @@ mean_abund <- combined %>%
 
 
 #adjustment scores
-adjs <- ExpAdjs %>%
-  filter(cn == sp_sel)
+adjs <- adjustments %>%
+  filter(common_name == sp_sel)
 if(nrow(adjs) == 0){next}
-if(!use_traditional & !(adjs$use_edr | adjs$use_availability)){next}
+#if(!use_traditional & !(adjs$use_edr | adjs$use_availability)){next}
+
+edr <- ifelse(adjs$use_edr,
+              adjs$NA_POPS_edr,
+              adjs$PIF_MDD)
+
+edr_sd <- ifelse(adjs$use_edr,
+                 adjs$edr_sd,
+                 1)
+
+MDD_lower <- adjs$Dist.Lower
+MDD_upper <- adjs$Dist.Upper
 
 
+
+avail <- ifelse(adjs$use_availability,
+                adjs$NA_POPS_availability,
+                adjs$TimeAdj.meanlog)
+
+avail_sd <- ifelse(adjs$use_availability,
+                   adjs$availability_sd,
+                   adjs$TimeAdj.sdlog)
+
+
+pair <- adjs$PIF_pair
 # Fit stan model ----------------------------------------------------------
 
 # setup for GAM of doy ----------------------------------------------------
@@ -631,18 +415,14 @@ stan_data <- list(n_routes = max(combined$route),
                   node2 = neighbours$node2,
 
                   # PIF adjustments
-                  c_p = adjs$Pair2,
+                  c_p = pair,
                   sd_c_p = 0.13,
-                  c_d = ifelse(!use_traditional & adjs$use_edr,adjs$edr,adjs$Dist2),
-                  sd_c_d = ifelse(!use_traditional & adjs$use_edr,adjs$edr_sd,1),
-                  c_t = ifelse(!use_traditional & adjs$use_availability,
-                               adjs$availability,
-                               adjs$TimeAdj.meanlog),
-                  sd_c_t = ifelse(!use_traditional & adjs$use_availability,
-                                  adjs$availability_sd,
-                                  adjs$TimeAdj.sdlog),
-                  c_d_lower = adjs$Dist.Lower,
-                  c_d_upper = adjs$Dist.Upper,
+                  c_d = edr,
+                  sd_c_d = edr_sd,
+                  c_t = avail,
+                  sd_c_t = avail_sd,
+                  c_d_lower = MDD_lower,
+                  c_d_upper = MDD_upper,
 
                   # Conditional statments
                   use_edr = ifelse(!use_traditional & adjs$use_edr,1,0),
@@ -650,8 +430,9 @@ stan_data <- list(n_routes = max(combined$route),
                   use_pois = 0,
                   use_pair = 1,
                   use_t = 1,
-                  use_ppc = 1,
-                  est_rho = ifelse(estimate_rho,1,0)
+                  use_ppc = 0,
+                  est_rho = ifelse(estimate_rho,1,0),
+                  use_likelihood = 1
                   )
 
 
@@ -663,7 +444,7 @@ stan_data <- list(n_routes = max(combined$route),
 #   # stan_data$c_d_upper = mean(ExpAdjs$Dist.Upper,na.rm = T)
 #
 # }
-adjs$n_routes <- stan_data$n_routes
+# adjs$n_routes <- stan_data$n_routes
 
 saveRDS(stan_data,paste0("stan_data/stan_data_",vers,sp_aou,"_",sp_ebird,".rds"))
 saveRDS(combined,paste0("stan_data/dataframe_",vers,sp_aou,"_",sp_ebird,".rds"))

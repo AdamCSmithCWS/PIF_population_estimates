@@ -267,7 +267,19 @@ dev.off()
 
 
 # continental estimate summaries ------------------------------------------
-sp_example <- readRDS("data/selected_species.rds")
+sp_example <- c("American Robin",
+                    "Bank Swallow",
+                    "California Gull",
+                    "Common Nighthawk",
+                    "Mallard",
+                    "Sora",
+                    "Bay-breasted Warbler",
+                    "Wood Duck",
+                    "Killdeer",
+                    "Turkey Vulture",
+                    "Green Heron",
+                    "Northern Shrike",
+                    "Short-eared Owl")
 
 
 
@@ -283,10 +295,10 @@ for(sp_sel in unique(sp_example)){ #sps_list$english){
     sp_aou <- bbsBayes2::search_species(sp_sel)$aou[1]
     sp_ebird <- ebirdst::get_species(sp_sel)
 
-if(!file.exists(paste0("estimates/csv_estimates/pop_ests_alt_",sp_aou,sp_ebird,".csv"))){next}
+if(!file.exists(paste0("estimates/pop_ests_alt_",sp_aou,sp_ebird,".csv"))){next}
 
 
-pop_ests_out <- read_csv(paste0("estimates/csv_estimates/pop_ests_alt_",
+pop_ests_out <- read_csv(paste0("estimates/pop_ests_alt_",
                                 sp_aou,sp_ebird,".csv"))%>%
   mutate(version = "PIF_eBird_with_EDR_Avail")
 
@@ -385,9 +397,9 @@ pop_compare_wide <- pop_compare_stack_sel %>%
 
 pop_compare_wide_usacan <- pop_compare_wide %>%
   filter(region %in% c("USACAN")) %>%
-  left_join(Cor_factors,
-            by = c("species" = "cn",
-                   "aou" = "Aou")) %>%
+  # left_join(Cor_factors,
+  #           by = c("species" = "cn",
+  #                  "aou" = "Aou")) %>%
   mutate(species = factor(species),
          species_factor = fct_reorder(species,dif_mag_new_trad,
                                       .na_rm = TRUE))
@@ -395,9 +407,9 @@ pop_compare_wide_usacan <- pop_compare_wide %>%
 
 pop_compare_stack <- pop_compare_stack_sel %>%
   filter(region %in% c("USACAN")) %>%
-  left_join(Cor_factors,
-            by = c("species" = "cn",
-                   "aou" = "Aou")) %>%
+  # left_join(Cor_factors,
+  #           by = c("species" = "cn",
+  #                  "aou" = "Aou")) %>%
   mutate(species_factor = factor(species,levels = levels(pop_compare_wide_usacan$species_factor)))
 
 side_plot1 <- ggplot(data = pop_compare_stack,

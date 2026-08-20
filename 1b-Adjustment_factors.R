@@ -64,6 +64,8 @@ sp_stanton <- unique(ExpAdjs$cn)
 
 sp_new <- rosenberg |>
   filter(!cn %in% sp_stanton)
+
+saveRDS(sp_new, "data/sp_new.rds")
 #
 # for(i in 1:nrow(sp_new)){
 #   ss <- as.character(sp_new[i,"cn"])
@@ -237,7 +239,7 @@ mean_doy = round(surveys$mean_doy)
 # NA-POPS -----------------------------------------------------------------
 
 
-re_napops <- TRUE # set to True to re-run the napops extraction of ERDs and Availability estimates
+re_napops <- FALSE # set to True to re-run the napops extraction of ERDs and Availability estimates
 
 if(re_napops){
   napops_species <- napops::list_species() |>
@@ -428,7 +430,7 @@ countries <- bbsBayes2::load_map("prov_state") |>
   summarise(.groups = "drop")
 
 
-redo_bam_ebird_cov <- TRUE
+redo_bam_ebird_cov <- FALSE
 
 if(redo_bam_ebird_cov){
 abundance_all <- NULL
@@ -608,7 +610,7 @@ botw_seas <- readRDS("data/botw_all_seasonal.rds")
 bcr_strata <- readRDS("data/bcr2026_statprov_simplified.rds")
 
 
-for(i in 5:nrow(decisions)){
+for(i in 1:nrow(decisions)){
 
   sp <- as.character(decisions[i,"cn"])
   species_ebird <- as.character(decisions[i,"ebird_species"])
@@ -840,11 +842,22 @@ decisions3 <- decisions2 |>
             by = c("cn" = "species"))
 
 
+# replacing the upper and lower ranges on MDD
+mdd_range <- decisions3 |>
+  select(Dist2,Dist.Lower,Dist.Upper) |>
+  drop_na() |>
+  distinct()
+
+decisions3 <- decisions3 |>
+  select(-c(Dist.Lower,Dist.Upper)) |>
+  left_join(mdd_range,
+            by = "Dist2")
 
 #saveRDS(decisions3,"full_decisions_file.rds")
 
 
 decisions3 <- readRDS("full_decisions_file.rds")
+
 
 decisions4 <- decisions3 |>
   mutate(PIF_CALC_Rosenberg_2019 = ifelse(cn %in% sp_new$cn,

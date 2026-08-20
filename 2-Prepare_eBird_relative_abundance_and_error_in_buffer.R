@@ -3,6 +3,7 @@ library(tidyverse)
 library(ebirdst)
 library(terra)
 library(bbsBayes2)
+library(exactextractr)
 
 #source("eBirdst.R") #script to set access key for local user (not included in archive)
 # download and extract eBird seasonal relative abundance within
@@ -41,7 +42,7 @@ sps_list <- readRDS("data/all_bbs_data_species_list.rds")
 
 qual_ebird <- ebirdst_runs
 
-re_calc <- FALSE # TRUE if want to re-calcluate the eBird-BBS overlap
+re_calc <- TRUE # TRUE if want to re-calcluate the eBird-BBS overlap
       # e.g., when new route spatial data
 
 use_weekly <- TRUE # only use TRUE if goal is to model all species
@@ -57,77 +58,34 @@ bbs_end <- as_date("2023-07-07") # Latest data for end of BBS-relevant breeding 
 
 metric_used <- "mean" #options are "max", mean" or "median" (although "median" won't work for seasonal)
 
-Inputfiles.dir <- "Stanton_2019_code/input_files/" #paste(Inputfiles.dir, '/', sep="")
 
 
-# loading the Stanton et al. PIF adjustment factors
-# with some english names updated to match the BBS and eBird databases
-ExpAdjs <- read.csv(paste(Inputfiles.dir, 'Species_PSEst_Adjustments.csv', sep=''), stringsAsFactors=FALSE) %>%
-  mutate(cn = ifelse(cn == "McCown's Longspur",
-                     "Thick-billed Longspur",
-                     cn),
-         cn = ifelse(cn == "Gray Jay",
-                     "Canada Jay",
-                     cn),
-         cn = ifelse(grepl("Le Conte's",cn),
-                     gsub("Le Conte's","LeConte's",cn),
-                     cn))
-
-# somewhat pragmatic list of possible 60 species to explore, compiled over
-# multiple iterative discussions with coauthors
-selected_species <- unique(c("Brown Creeper","Canyon Wren",
-                             "Black-capped Chickadee","American Robin",
-                             "Barn Swallow",
-                             "Blackpoll Warbler","Baird's Sparrow",
-                             "Western Meadowlark",
-                             "Mountain Bluebird",
-                             "Eastern Phoebe",
-                             "Rose-breasted Grosbeak",
-                             "Downy Woodpecker",
-                             "Red-winged Blackbird",
-                             "Scarlet Tanager",
-                             "Say's Phoebe",
-                             "Black-chinned Hummingbird","Tennessee Warbler","Bay-breasted Warbler",
-                             "Blue Jay",
-                             "Blue-headed Vireo","Bicknell's Thrush",
-                             "Wilson's Snipe","American Kestrel",
-                             "Steller's Jay","Clay-colored Sparrow",
-                             "Killdeer","Long-billed Curlew",
-                             "Yellow-rumped Warbler","Olive-sided Flycatcher",
-                             "Purple Martin",
-                             "Barn Swallow",
-                             "Verdin","Ash-throated Flycatcher","Black-throated Sparrow",
-                             "Blue Jay","Varied Thrush","Veery","Wood Thrush","Chestnut-collared Longspur",
-                             "Bobolink","Savannah Sparrow","Grasshopper Sparrow",
-                             "Horned Lark",
-                             "Eastern Whip-poor-will", "Common Nighthawk",
-                             "Mountain Chickadee",
-                             "Northern Bobwhite",
-                             "Northern Flicker",
-                             "Golden-winged Warbler",
-                             "Red-eyed Vireo",
-                             "Palm Warbler",
-                             "Clark's Nutcracker",
-                             "White-throated Sparrow",
-                             "Song Sparrow",
-                             "Great-blue Heron",
-                             "Sora",
-                             "Swamp Sparrow",
-                             "Common Yellowthroat",
-                             "Spotted Sandpiper",
-                             "Northern Waterthrush",
-                             "Sage Thrasher",
-                             "Sedge Wren"))
-
-saveRDS(selected_species,"data/selected_species.rds")
-
-# filtering down to ensure species meet minimum data by PIF population estimates criterion
-remaining_species <- sps_list %>%
-  filter(n_routes_w_obs >= 100,
-         !english %in% selected_species)
 
 
-ii <- which(sps_list$english %in% remaining_species$english)
+adjustments <- read_csv("Population_estimates_workflow_support.csv")
+
+
+
+
+
+ii <- which(sps_list$english %in% adjustments$common_name)
+
+
+species_sel <- c("American Robin",
+                 "Bank Swallow",
+                 "California Gull",
+                 "Common Nighthawk",
+                 "Mallard",
+                 "Sora",
+                 "Bay-breasted Warbler",
+                 "Wood Duck",
+                 "Killdeer",
+                 "Turkey Vulture",
+                 "Green Heron",
+                 "Northern Shrike",
+                 "Short-eared Owl")
+
+ii <- which(sps_list$english %in% species_sel)
 
 for(i in ii){
 
@@ -400,13 +358,15 @@ if(use_uncertainty){
 #  the rest of the ebird distribution map is unaffected for the eventual
 #  predictions of density across the full species' range (i.e., see
 #  saveRDS() call above)
-bbs_strata <- bbsBayes2::load_map("bbs_usgs") %>%
-  st_buffer(., dist = 10000) #add 10km buffer for clipping eBird data
+bbs_strata <- bbsBayes2::load_map("bbs") %>%
+  filter(country_code %in% c("CA","US")) |>
+  st_buffer(dist = 10000) #add 10km buffer for clipping eBird data
 
 # project boundary to match raster data
 region_boundary_proj <- st_transform(bbs_strata, st_crs(breed_abundance))
 
-bbs_strata2 <- bbsBayes2::load_map("bbs_usgs")
+bbs_strata2 <- bbsBayes2::load_map("bbs")%>%
+  filter(country_code %in% c("CA","US"))
 strata_proj <- st_transform(bbs_strata2, st_crs(breed_abundance))
 
 routes_nm <- routes_buf %>%
@@ -419,6 +379,7 @@ routes_nm <- routes_buf %>%
 # crop and mask to boundary of BBS
 breed_abundance <- crop(breed_abundance, region_boundary_proj) |>
   mask(region_boundary_proj)
+
 if(use_uncertainty){
 
 breed_abundance_sd <- crop(breed_abundance_sd, region_boundary_proj) |>
@@ -432,120 +393,96 @@ routes_buf_proj <- st_transform(routes_buf, st_crs(breed_abundance))
 
 
 
-# extract mean abundance in BBS route buffers
-
-abundance_in_buffers <- terra::extract(breed_abundance,
+abundance_df <- exact_extract(breed_abundance,
                                        routes_buf_proj,
-                                       fun = mean,
-                                       na.rm = TRUE,
-                                       ID = FALSE,
-                                       exact = TRUE)
+                                       fun = "mean",
+                                       force_df = TRUE,
+                                       append_cols = "route_name") |>
+  rename(ebird_abund = mean)
 
-abundance_in_strata <- terra::extract(breed_abundance,
-                                       strata_proj,
-                                       fun = mean,
-                                       na.rm = TRUE,
-                                       ID = FALSE,
-                                       exact = TRUE)
 
-total_abundance_in_strata <- terra::extract(breed_abundance,
-                                      strata_proj,
-                                      fun = sum,
-                                      na.rm = TRUE,
-                                      ID = FALSE,
-                                      exact = TRUE)
+
 if(use_uncertainty){
 
-abundance_sd_in_buffers <- terra::extract(breed_abundance_sd,
-                                       routes_buf_proj,
-                                       fun = mean,
-                                       na.rm = TRUE,
-                                       ID = FALSE,
-                                       exact = TRUE)
+abundance_sd_in_buffers <- exact_extract(breed_abundance_sd,
+                                         routes_buf_proj,
+                                         fun = "mean",
+                                         force_df = TRUE,
+                                         append_cols = "route_name")
+abundance_df <- abundance_df |>
+  left_join(abundance_sd_in_buffers,
+            by = "route_name")|>
+  rename(ebird_abund_sd = mean)
 
-abundance_ci_in_buffers <- terra::extract(breed_abundance_ci,
-                                          routes_buf_proj,
-                                          fun = mean,
-                                          na.rm = TRUE,
-                                          ID = FALSE,
-                                          exact = TRUE)
+abundance_ci_in_buffers <- exact_extract(breed_abundance_ci,
+                                         routes_buf_proj,
+                                         fun = "mean",
+                                         force_df = TRUE,
+                                         append_cols = "route_name")
+
+abundance_df <- abundance_df |>
+  left_join(abundance_sd_in_buffers,
+            by = "route_name")|>
+  rename(ebird_abund_ci = mean)
+
 }
-# this argument creates an area-weighted mean of the cells that are overlapped
-# by the buffer
 
-abundance_sampled <- terra::extract(breed_abundance,
-                                       routes_nm,
-                                       fun = mean,
-                                       na.rm = TRUE,
-                                       ID = FALSE,
-                                       exact = TRUE)
-
-# plot(breed_abundance)
-# plot(routes_buf_proj,add = TRUE)
-# plot(breed_abundance,add = TRUE)
-
-# drop NA routes that are outside of the eBird prediction surface -----------------------
-
-# these NA routes could be dropped because they don't represent
-# much when it comes to scaling to the surface...
-
-# may as well drop routes with no estimated abundance as they are outside
-# of the range of the modeled seasonal distribution
-if(use_uncertainty){
-
-abundance_df <- data.frame(route_name = routes_buf_proj$route_name,
-                             ebird_abund = abundance_in_buffers[[1]],
-                           ebird_abund_logsd = abundance_sd_in_buffers[[1]],
-                           ebird_abund_ci = abundance_ci_in_buffers[[1]]) %>%
+abundance_df <- abundance_df |>
   filter(
-    ebird_abund > 0,
-    !is.na(ebird_abund)
-    ) %>%
+  ebird_abund > 0,
+  !is.na(ebird_abund)
+) |>
   distinct()
-
-}else{
-  abundance_df <- data.frame(route_name = routes_buf_proj$route_name,
-                             ebird_abund = abundance_in_buffers[[1]]) %>%
-    filter(
-      ebird_abund > 0,
-      !is.na(ebird_abund)
-    ) %>%
-    distinct()
-
-}
-
-# ## displaying routes with no abundance data
-# tstrt <- routes_buf %>%
-#   inner_join(.,abundance_df) %>%
-#   filter(is.na(ebird_abund))
-#
-# tst <- ggplot(data = tstrt)+
-#   geom_sf(data = bbs_strata)+
-#   geom_sf(aes(colour = ebird_abund))
-# tst
 
 saveRDS(abundance_df,
         paste0("data/species_relative_abundance_2023/",species_ebird,"_relative_abundance.rds"))
 
-abundance_strat <- bbs_strata2 %>%
-  sf::st_drop_geometry() %>%
-  mutate(mean_ebird_abundance = abundance_in_strata[[1]],
-         total_ebird_abundance = total_abundance_in_strata[[1]])
-
-abundance_strat[nrow(abundance_strat)+1,"strata_name"] <- "USA_CAN"
-abundance_strat[nrow(abundance_strat),"mean_ebird_abundance"] <- terra::global(breed_abundance, "mean", na.rm = TRUE)
-abundance_strat[nrow(abundance_strat),"total_ebird_abundance"] <- terra::global(breed_abundance, "sum", na.rm = TRUE)
 
 
-sampled_abund <- data.frame(strata_name = routes_nm$strata_name,
-                            sampled_abundance = abundance_sampled$mean)
 
 
-abundance_strat <- abundance_strat %>%
-  left_join(sampled_abund,
+
+
+abundance_strat <- exact_extract(breed_abundance,
+                                     strata_proj,
+                                     fun = "mean",
+                                     force_df = TRUE,
+                                     append_cols = "strata_name")|>
+  rename(mean_ebird_abundance = mean)
+
+
+total_abundance_in_strata <- exact_extract(breed_abundance,
+                                           strata_proj,
+                                           fun = "sum",
+                                           force_df = TRUE,
+                                           append_cols = "strata_name")|>
+  rename(total_ebird_abundance = sum)
+
+abundance_strat <- abundance_strat |>
+  left_join(total_abundance_in_strata,
+            by = "strata_name")
+
+abundance_sampled <- exact_extract(breed_abundance,
+                                   routes_nm,
+              fun = "mean",
+              force_df = TRUE,
+              append_cols = "strata_name") |>
+  rename(sampled_abundance = mean)
+
+abundance_strat <- abundance_strat |>
+  left_join(abundance_sampled,
             by = "strata_name") %>%
   mutate(sampled_avail_ratio = sampled_abundance/mean_ebird_abundance,
          log_ratio = log(sampled_avail_ratio))
+
+
+
+#
+# abundance_strat[nrow(abundance_strat)+1,"strata_name"] <- "USA_CAN"
+# abundance_strat[nrow(abundance_strat),"mean_ebird_abundance"] <- terra::global(breed_abundance, "mean", na.rm = TRUE)
+# abundance_strat[nrow(abundance_strat),"total_ebird_abundance"] <- terra::global(breed_abundance, "sum", na.rm = TRUE)
+
+
 
 saveRDS(abundance_strat,
         paste0("data/species_relative_abundance_2023/",species_ebird,"_bbs_strata_relative_abundance.rds"))

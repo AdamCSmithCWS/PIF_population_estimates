@@ -53,7 +53,7 @@ for(i in 1:length(prov)){
 return(y)
 }
 ## a shapefile currated by the Canadian national BBS office bbs@ec.gc.ca
-routes_can <- st_read(dsn = "data/Canada/ALLROUTES_2024.shp") %>%
+routes_can <- st_read(dsn = "data/Canada/ALLROUTES2024.shp") %>%
   st_make_valid() #%>%
 
 routes_can <- routes_can %>%
@@ -68,26 +68,21 @@ select(route_name,prov_state,route)
 ## sample of route-paths from unofficial gis data
 ## US routes - old unofficial shapefile archived online
 ## at https://earthworks.stanford.edu/catalog/stanford-vy474dv5024
-routes_us <- readRDS("data/GIS/United_States_selected_BBS_route_paths.rds") %>%
+# routes_us <- readRDS("data/GIS/United_States_selected_BBS_route_paths.rds") %>%
+#   sf::st_transform(crs = sf::st_crs(routes_can)) %>%
+#   distinct() %>%
+#   st_make_valid()
+#
+
+
+routes_us <- read_sf("data/GIS/Provisional_Working_BBS_US_Route__Paths_Jan2025_ForCanadaReview/PROVISIONALforREVIEW_Working_BBS_US_Route_Paths_Jan2025.shx") %>%
   sf::st_transform(crs = sf::st_crs(routes_can)) %>%
   distinct() %>%
-  st_make_valid()
-
-## translate route text names to state*route numerical route_names
-rts <- load_bbs_data(release = 2024)$routes %>%
-  select(state_num,route,route_name,st_abrev,year) %>%
-  group_by(state_num,route,route_name,st_abrev) %>%
-  slice_min(order_by = year, n = 1)
-
-## join with rts to add common route-names
-routes_us <- routes_us %>%
-  inner_join(rts, by = c("RTENAME" = "route_name",
-                        "prov_state" = "st_abrev",
-                        "first_year_surveyed" = "year")) %>%
-  distinct() %>%
-  mutate(route_name = paste(state_num,route,sep = "-")) %>%
-  select(route_name,state_num,route) %>%
-  rename(prov_state = state_num)
+  st_make_valid() |>
+  mutate(prov_state = as.integer(str_sub(StateRoute,1,2)),
+         route = as.integer(str_sub(StateRoute,3,5)),
+         route_name = paste0(prov_state,"-",route)) |>
+  select(route_name,prov_state,route)
 
 
 
@@ -110,7 +105,8 @@ routes_all$length_km <- as.numeric(lgth/1000)
 
 vie <- ggplot()+
   geom_sf(data = routes_all,
-          aes(colour = prov_state))
+          aes(colour = length_km))+
+  scale_colour_viridis_b(breaks = c(0,35,40,60,200))
 
 vie
 
@@ -158,9 +154,9 @@ rts_toolong <- routes_all %>%
 
 # load route start locations ----------------------------------------------
 
-routes_w_data <- load_bbs_data(release = 2024)$routes %>%
+routes_w_data <- load_bbs_data(release = 2026)$routes %>%
   select(-route_name) %>%
-  filter(year > 2012) %>%  # 10 years from 2013 - 2023, missing 2020.
+  filter(year >= 2015) %>%  # 10 years from 2015 - 2025, missing 2020.
   mutate(route_name = paste(state_num,route,sep = "-")) %>%
   select(state_num,route,route_name,st_abrev,year,latitude,longitude) %>%
   group_by(state_num,route,route_name,st_abrev,latitude,longitude) %>%
@@ -202,9 +198,9 @@ saveRDS(routes_all,
 ## it must be adjuste for the area of each buffered region
 # BBS counts --------------------------------------------------------------
 
-surveys <- bbsBayes2::load_bbs_data(release = 2024)$routes %>%
+surveys <- bbsBayes2::load_bbs_data(release = 2026)$routes %>%
   select(-route_name) %>%
-  filter(year > 2012) %>%  # 10 years from 2013 - 2023, missing 2020.
+  filter(year >= 2015) %>%  # 10 years from 2015 - 2025, missing 2020.
   mutate(route_name = paste(state_num,route,sep = "-"),
          doy = lubridate::yday(paste(year,month,day,sep = "-"))) %>%
   filter(route_name %in% unique(routes_buf$route_name))
@@ -233,7 +229,7 @@ n_routes_ob <- n_obs_summary %>%
 
 
 bird_obs <- bbsBayes2::load_bbs_data()[["birds"]]%>%
-  filter(year > 2012) %>%
+  filter(year >= 2015) %>%
   mutate(route_name = paste(state_num,route,sep = "-")) %>%
   filter(route_name %in% routes_buf$route_name,
          route_data_id %in% surveys$route_data_id) %>%
