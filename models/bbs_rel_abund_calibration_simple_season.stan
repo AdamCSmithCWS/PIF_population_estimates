@@ -68,6 +68,7 @@ data {
   int<lower=1> n_edges;
   array [n_edges] int<lower=1, upper=n_strata> node1;  // node1[i] adjacent to node2[i]
   array [n_edges] int<lower=1, upper=n_strata> node2;  // and node1[i] < node2[i]
+  real<lower=0> scaling_factor;
 
 
 // spline components for doy
@@ -142,7 +143,7 @@ parameters {
   real<lower=0> sdnoise;    // sd of over-dispersion, if use_pois == 1
 
 
-  real<lower=0> sd_gamma;    // sd of annual changes among strata
+  real<lower=0> sd_gamma_raw;    // sd of annual changes among strata
   real<lower=0> sd_GAMMA;    // sd of overall annual changes
 
   vector[n_years_m1] GAMMA_raw;//_hyperparameter of overall annual change values - "differences" between years
@@ -173,6 +174,7 @@ transformed parameters{
   matrix[n_strata,n_years] yeareffect;  // matrix of estimated annual values of trajectory
   vector[n_years] YearEffect; // hyperparameter for population-wide annual trajectory
   real RHO; // slope of the log-log relationship - used as a check, not for inference
+  real<lower=0> sd_gamma = sd_gamma_raw/sqrt(scaling_factor);
 
 
 if(est_rho){
@@ -296,8 +298,8 @@ model {
 //  //doy_raw[1:n_strata,k] ~ icar_normal(n_strata, node1, node2);         // GAM strata level parameters for doy
 //  target += -0.5 * dot_self(doy_raw[k,node1] - doy_raw[k,node2]);
 // }
-
-  sd_gamma ~ student_t(3,0,0.2); // prior on sd of annual differences among strata, see Smith et al. 2023 supplements for prior pred checks
+  sd_gamma_raw ~ gamma(2,10);
+  //sd_gamma_raw ~ student_t(3,0,0.2); // prior on sd of annual differences among strata, see Smith et al. 2023 supplements for prior pred checks
   sd_GAMMA ~ student_t(3,0,0.1); // prior on sd of mean hyperparameter annual differences
   GAMMA_raw ~ std_normal();
   GAMMA_raw_2020 ~ std_normal();

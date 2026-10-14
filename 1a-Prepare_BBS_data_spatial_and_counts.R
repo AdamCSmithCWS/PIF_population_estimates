@@ -195,12 +195,14 @@ saveRDS(routes_all,
 ## the length of the route path
 ## Therefore
 ## if summarising this information at the route-level
-## it must be adjuste for the area of each buffered region
+## it must be adjusted for the area of each buffered region
+## i.e., we will use mean values, not sums
 # BBS counts --------------------------------------------------------------
 
 surveys <- bbsBayes2::load_bbs_data(release = 2026)$routes %>%
   select(-route_name) %>%
-  filter(year >= 2015) %>%  # 10 years from 2015 - 2025, missing 2020.
+  filter(year >= 2015,
+         month > 4) %>%  # 10 years from 2015 - 2025, missing 2020.
   mutate(route_name = paste(state_num,route,sep = "-"),
          doy = lubridate::yday(paste(year,month,day,sep = "-"))) %>%
   filter(route_name %in% unique(routes_buf$route_name))

@@ -92,6 +92,8 @@ neighbours_define <- function(real_strata_map = realized_strata_map, #sf map of 
 
   coords = st_coordinates(centres)
 
+n_strata <- nrow(working_strata_map)
+
 
   if(voronoi == FALSE){
     #check if input layer is polygon, if not set voronoi to TRUE
@@ -232,6 +234,16 @@ neighbours_define <- function(real_strata_map = realized_strata_map, #sf map of 
 
   }#end if voronoi
 
+  nb_predata <- nb_fmt(nb_info)
+
+  scaling_factor <- calculate_icar_scaling_factor(nb_predata$node1,
+                                                  nb_predata$node2,
+                                                  n_strata)
+  if(scaling_factor < 0.001){
+    warning("something may be wrong with the adjacency map, check scaling_factor")
+  }
+
+
 
   if(plot_neighbours){
 
@@ -312,11 +324,79 @@ neighbours_define <- function(real_strata_map = realized_strata_map, #sf map of 
                                 numBUGS = nb_info$num)
 
   car_stan[["adj_matrix"]] <- nb_mat
+  car_stan[["scaling_factor"]] <- scaling_factor
 
   return(list(N = car_stan$N,
               N_edges = car_stan$N_edges,
               node1 = car_stan$node1,
               node2 = car_stan$node2,
               adj_matrix = car_stan$adj_matrix,
-              map = ggp))
+              map = ggp,
+              scaling_factor = car_stan$scaling_factor))
 } ### end of function
+
+
+
+nb_fmt <- function(nb_weights) {
+  num <- nb_weights$num
+  adj <- nb_weights$adj
+
+  node1 <- vector()
+  node2 <- vector()
+
+  i_adj <- 0
+  i_edge <- 0
+
+  for (i in seq_along(num)) {
+    for (j in seq_len(num[i])) {
+      i_adj <- i_adj + 1
+      if (i < adj[i_adj]) {
+        i_edge <- i_edge + 1
+        node1[i_edge] <- i
+        node2[i_edge] <- adj[i_adj]
+      }
+    }
+  }
+  list("n" = length(num),
+       "n_edges" = length(adj) / 2,
+       "node1" = node1,
+       "node2" = node2)
+
+}
+
+
+
+calculate_icar_scaling_factor <- function(node1, node2, n_strata) {
+  # calculates scaling factor for precision matrix
+  # in the model, the sd scaling of the spatial effects is adjusted by
+  # dividing the sqrt(scaling_factor)
+  # dense adjacency matrix - fine at bbsBayes2's typical strata counts
+  # (tens to a couple hundred, occasionally low thousands); the eigen()
+  # step below is the actual cost driver, not this matrix's storage
+  adj <- matrix(0, n_strata, n_strata)
+  adj[cbind(node1, node2)] <- 1
+  adj[cbind(node2, node1)] <- 1
+
+  # ICAR precision matrix: Q = D - A
+  degree <- rowSums(adj)
+  Q <- diag(degree) - adj
+
+  # Moore-Penrose pseudoinverse via eigendecomposition: zeroing out the
+  # (near-)zero eigenvalues before inverting the rest automatically
+  # restricts to the sum-to-zero subspace - and does so correctly even
+  # for a disconnected graph, since each connected component contributes
+  # its own zero eigenvalue (spanned by that component's indicator
+  # vector), which gets zeroed out the same way
+  eig <- eigen(Q, symmetric = TRUE)
+  tol <- max(eig$values) * 1e-8
+  inv_values <- ifelse(eig$values > tol, 1 / eig$values, 0)
+  Q_inv <- eig$vectors %*% (inv_values * t(eig$vectors))
+
+  # geometric mean of the implied marginal variances
+  # (Riebler et al. 2016 / Freni-Sterrantino et al. 2018)
+  # see recomendation #1 in but here using only base R and not the
+  # sparse application that requires inla
+  # https://doi.org/10.1016/j.sste.2018.04.002
+  exp(mean(log(diag(Q_inv))))
+}
+

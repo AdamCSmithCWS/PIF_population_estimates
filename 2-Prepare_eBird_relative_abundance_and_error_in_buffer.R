@@ -87,7 +87,7 @@ species_sel <- c("American Robin",
 
 ii <- which(sps_list$english %in% species_sel)
 
-for(i in ii){
+for(i in ii[c(154:404)]){
 
   sp_sel <- unname(unlist(sps_list[i,"english"]))
 species_ebird <- ebirdst::get_species(sp_sel)
@@ -132,7 +132,11 @@ sel_end <- ifelse(as_date(breeding_end)>bbs_end, # if stable breeding season end
   sel_start <- as_date("2023-05-20") # use May 20, as start of BBS observations season for resident species
   sel_end <- as_date("2023-07-07")# use July 7, as end of BBS observations season for resident species
   }
+if(sel_start > sel_end){
+  sel_start <- as_date("2023-05-20") # use May 20, as start of BBS observations season for resident species
+  sel_end <- as_date("2023-06-10")# use June 10, as end of BBS observations if the eBird season is so early that it's over before BBS starts
 
+}
 sps_list[i,"is_resident"] <- resident
 sps_list[i,"breeding_quality"] <- breed_qual
 sps_list[i,"resident_quality"] <- resident_qual

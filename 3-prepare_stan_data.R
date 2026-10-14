@@ -20,6 +20,7 @@ setwd("c:/Users/SmithAC/Documents/GitHub/PIF_population_estimates")
 source("functions/GAM_basis_function_mgcv.R")
 source("functions/neighbours_define.R")
 yr_ebird <- 2023 # prediction year for eBird relative abundance
+sp_new <- readRDS("data/sp_new.rds")
 
 selected_species <- c("American Robin",
                  "Bank Swallow",
@@ -33,7 +34,35 @@ selected_species <- c("American Robin",
                  "Turkey Vulture",
                  "Green Heron",
                  "Northern Shrike",
-                 "Short-eared Owl")
+                 "Short-eared Owl",
+                 "Downy Woodpecker",
+                 "Hairy Woodpecker",
+                 "Common Nighthawk",
+                 "Eastern Whip-poor-will",
+                 "Barn Swallow",
+                 "Canada Warbler",
+                 "Virginia Rail",
+                 "Pied-billed Grebe",
+                 "Black Tern",
+                 "Scarlet Tanager",
+                 "Veery",
+                 "Eastern Phoebe",
+                 "Black-capped Chickadee",
+                 "Western Meadowlark",
+                 "Purple Martin",
+                 "Canyon Wren",
+                 "Blackpoll Warbler",
+                 "Clark's Nutcracker",
+                 "American Kestrel",
+                 "Red-winged Blackbird",
+                 "Wood Thrush",
+                 "Black-chinned Hummingbird",
+                 "Varied Thrush",
+                 "Baird's Sparrow",
+                 "Chestnut-collared Longspur",
+                 "Savannah Sparrow",
+                 "Barred Owl",
+                 "Great Horned Owl")
 
 # mean counts to id routes on which species has been observed -------------
 mean_counts_all <- readRDS("data/mean_counts_by_route.rds")
@@ -75,7 +104,6 @@ mean_doy = round(surveys$mean_doy)
 
   decisions3 <- readRDS("full_decisions_file.rds")
 
-sp_new <- readRDS("data/sp_new.rds")
 
 adjustments <- decisions3 |>
   mutate(PIF_CALC_Rosenberg_2019 = ifelse(cn %in% sp_new$cn,
@@ -189,24 +217,25 @@ continents <- countries %>%
 # https://www.birdscanada.org/bird-science/nabci-bird-conservation-regions  Accessed:  Nov 8 2024
 bcrs <- bbsBayes2::load_map("bcr")
 
-adjs_out <- NULL
+
 today <- as_date(Sys.Date())
 
 
 
 
 
-# species loop -----------------------------------------------------
 estimate_rho <- FALSE # set to true to allow the model to estimate a non-unit log-log slope
 
-use_traditional <- FALSE # if TRUE uses the traditional adjustments for TOD and distance
 
 
-if(use_traditional){
-  vers <- ifelse(estimate_rho,"trad_rho","trad")
-}else{
-  vers <- ifelse(estimate_rho,"_rho","")
-}
+model_components <- data.frame(model = c("napops",
+                                          "napops_edr",
+                                          "napops_avail",
+                                          "no_napops"),
+                               use_avail = c(TRUE,FALSE,TRUE,FALSE),
+                               use_edr = c(TRUE,TRUE,FALSE,FALSE),
+                               use_tod = c(FALSE,TRUE,FALSE,TRUE),
+                               use_mdd = c(FALSE,FALSE,TRUE,TRUE))
 
 
 #output_dir <- "G:/PIF_population_estimates/output"
@@ -214,11 +243,18 @@ output_dir <- "output"
 trim_rel_abund <- TRUE
 trim_bbs_routes <- FALSE
 
-for(sp_sel in selected_species){ #
+species_to_prepare <- adjustments$common_name
 
+
+# species loop ------------------------------------------------------------
+
+
+for(i in 1:nrow(adjustments)){ #
+  sp_sel <- adjustments[i,"sp_aou"]
  sp_aou <- bbsBayes2::search_species(sp_sel)$aou[1]
   sp_ebird <- ebirdst::get_species(sp_sel)
-
+  adjustments[i,"sp_aou"] <- sp_aou
+  adjustments[i,"sp_ebird"] <- sp_ebird
 
 
   raw_counts <- raw_counts_all %>%
@@ -294,7 +330,7 @@ mean_counts <- raw_counts %>%
 routes_buf <- routes_buf_all %>%
   inner_join(mean_counts, by = "route_name")
 
-saveRDS(routes_buf,paste0("stan_data/routes_buffered_",vers,sp_aou,"_",sp_ebird,".rds"))
+saveRDS(routes_buf,paste0("stan_data/routes_buffered_",sp_aou,"_",sp_ebird,".rds"))
 
 
 
@@ -307,7 +343,9 @@ strata_incl <- combined %>%
 strata_map <- bbsBayes2::load_map("bbs") %>%
   inner_join(strata_incl) %>%
   arrange(strata)
-
+if(nrow(strata_map) < 2){
+  next
+}
 neighbours <- neighbours_define(strata_map,
                                 strat_indicator = "strata",
                                 save_plot_data = TRUE,
@@ -355,31 +393,6 @@ adjs <- adjustments %>%
 if(nrow(adjs) == 0){next}
 #if(!use_traditional & !(adjs$use_edr | adjs$use_availability)){next}
 
-edr <- ifelse(adjs$use_edr,
-              adjs$NA_POPS_edr,
-              adjs$PIF_MDD)
-
-edr_sd <- ifelse(adjs$use_edr,
-                 adjs$edr_sd,
-                 1)
-
-MDD_lower <- adjs$Dist.Lower
-MDD_upper <- adjs$Dist.Upper
-
-
-
-avail <- ifelse(adjs$use_availability,
-                adjs$NA_POPS_availability,
-                adjs$TimeAdj.meanlog)
-
-avail_sd <- ifelse(adjs$use_availability,
-                   adjs$availability_sd,
-                   adjs$TimeAdj.sdlog)
-
-
-pair <- adjs$PIF_pair
-# Fit stan model ----------------------------------------------------------
-
 # setup for GAM of doy ----------------------------------------------------
 
 
@@ -388,6 +401,52 @@ doy_gam <- gam_basis(combined$doy, nknots = 7,
                      sm_name = "doy")
 
 
+for(i in 1:nrow(model_components)){
+
+  vers <- model_components[i,"model"]
+  use_avail <- model_components[i,"use_avail"]
+  use_edr <- model_components[i,"use_edr"]
+  use_tod <- model_components[i,"use_tod"]
+  use_mdd <- model_components[i,"use_mdd"]
+
+
+edr <- ifelse(use_edr,
+              adjs$NA_POPS_edr,
+              adjs$PIF_MDD)
+
+edr_sd <- ifelse(use_edr,
+                 adjs$edr_sd,
+                 1)
+
+MDD_lower <- ifelse(use_mdd,
+                    adjs$Dist.Lower,
+                    1)
+MDD_upper <- ifelse(use_mdd,
+                    adjs$Dist.Upper,
+                    1)
+
+
+
+avail <- ifelse(use_avail,
+                adjs$NA_POPS_availability,
+                adjs$TimeAdj.meanlog)
+
+avail_sd <- ifelse(use_avail,
+                   adjs$availability_sd,
+                   adjs$TimeAdj.sdlog)
+
+pair <- adjs$PIF_pair
+# prepare stan data ----------------------------------------------------------
+
+if( is.na(avail) |
+    is.na(avail_sd) |
+    is.na(edr) |
+    (use_mdd & (is.na(MDD_lower) | is.na(MDD_upper))) |
+    (use_edr & is.na(edr_sd))
+    ){
+  print(paste("data_missing for",vers,sp_sel))
+  next
+}
 
 stan_data <- list(n_routes = max(combined$route),
                   n_obs = max(combined$observer),
@@ -413,6 +472,7 @@ stan_data <- list(n_routes = max(combined$route),
                   n_edges = neighbours$N_edges,
                   node1 = neighbours$node1,
                   node2 = neighbours$node2,
+                  scaling_factor = neighbours$scaling_factor,
 
                   # PIF adjustments
                   c_p = pair,
@@ -425,8 +485,8 @@ stan_data <- list(n_routes = max(combined$route),
                   c_d_upper = MDD_upper,
 
                   # Conditional statments
-                  use_edr = ifelse(!use_traditional & adjs$use_edr,1,0),
-                  use_availability = ifelse(!use_traditional & adjs$use_availability,1,0),
+                  use_edr = ifelse(use_edr,1,0),
+                  use_availability = ifelse(use_avail,1,0),
                   use_pois = 0,
                   use_pair = 1,
                   use_t = 1,
@@ -446,7 +506,39 @@ stan_data <- list(n_routes = max(combined$route),
 # }
 # adjs$n_routes <- stan_data$n_routes
 
-saveRDS(stan_data,paste0("stan_data/stan_data_",vers,sp_aou,"_",sp_ebird,".rds"))
-saveRDS(combined,paste0("stan_data/dataframe_",vers,sp_aou,"_",sp_ebird,".rds"))
+saveRDS(stan_data,paste0("stan_data/stan_data_",vers,"_",sp_aou,".rds"))
 }
+saveRDS(combined,paste0("stan_data/dataframe_",sp_aou,".rds"))
+}
+
+
+
+
+# preparing list of aou numbers to run on gpsc ----------------------------
+
+for(i in 1:nrow(adjustments)){ #
+  sp_sel <- adjustments[i,"common_name"]
+  sp_aou <- bbsBayes2::search_species(sp_sel)$aou[1]
+  sp_ebird <- ebirdst::get_species(sp_sel)
+  adjustments[i,"sp_aou"] <- sp_aou
+  adjustments[i,"sp_ebird"] <- sp_ebird
+
+  adjustments[i,"to_run_atleast_one_model"] <- ifelse(any(file.exists(paste0("stan_data/stan_data_",model_components$model,"_",sp_aou,".rds"))),
+                                                      TRUE,
+                                                      FALSE)
+}
+
+
+saveRDS(adjustments,"pop_estimates_control_file.rds")
+
+
+
+aou_list <- adjustments |>
+  filter(to_run_atleast_one_model,
+         common_name %in% selected_species) |>
+  select(sp_aou) |>
+  distinct()
+
+write_tsv(aou_list, "aou_list.txt",
+          col_names = FALSE)
 

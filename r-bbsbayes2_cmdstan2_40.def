@@ -1,0 +1,145 @@
+Bootstrap: docker
+From: ubuntu:24.04
+
+%labels
+    Author       you
+    Version      1.0
+    Description  Ubuntu 24.04 + R + cmdstanr + bbsBayes2
+
+%help
+    This container provides R with the tidyverse, cmdstanr, and bbsBayes2
+    packages, built on Ubuntu 24.04, for running Breeding Bird Survey
+    Bayesian trend models (bbsBayes2) using CmdStan as the backend.
+
+    Build:
+        sudo apptainer build r-bbsbayes2.sif r-bbsbayes2.def
+
+    Run an interactive R session:
+        apptainer exec r-bbsbayes2.sif R
+
+    Run a script:
+        apptainer exec r-bbsbayes2.sif Rscript my_script.R
+
+    Open a shell inside the container:
+        apptainer shell r-bbsbayes2.sif
+
+# ---- Pin the CmdStan version so its install path is deterministic ----
+%files
+    # (nothing to copy in from the host for this build)
+
+%post
+    set -e
+    export DEBIAN_FRONTEND=noninteractive
+    CMDSTAN_VERSION=2.40.0
+    CMDSTAN_DIR=/opt/cmdstan
+
+    echo "=== Updating apt and installing system dependencies ==="
+    apt-get update
+    apt-get install -y --no-install-recommends \
+        software-properties-common \
+        dirmngr \
+        gnupg \
+        ca-certificates \
+        wget \
+        curl \
+        git \
+        pandoc \
+        build-essential \
+        gfortran \
+        cmake \
+        pkg-config \
+        libcurl4-openssl-dev \
+        libssl-dev \
+        libuv1-dev \
+        libxml2-dev \
+        libgit2-dev \
+        libfontconfig1-dev \
+        libfreetype6-dev \
+        libpng-dev \
+        libtiff5-dev \
+        libjpeg-dev \
+        libgdal-dev \
+        gdal-bin \
+        libgeos-dev \
+        libproj-dev \
+        proj-data \
+        proj-bin \
+        libudunits2-dev \
+        libnetcdf-dev \
+        libharfbuzz-dev \
+        libfribidi-dev \
+        libblas-dev \
+        liblapack-dev \
+        libicu-dev \
+        zlib1g-dev \
+        r-base \
+        r-base-dev
+
+    echo "=== Cleaning apt cache ==="
+    apt-get clean
+    rm -rf /var/lib/apt/lists/*
+
+    echo "=== Installing baseline R packages ==="
+    Rscript -e 'install.packages(c("remotes", "devtools"), repos = "https://cloud.r-project.org")'
+
+    echo "=== Installing tidyverse ==="
+    Rscript -e 'install.packages("tidyverse", repos = "https://cloud.r-project.org")'
+
+    echo "=== Installing parallel ==="
+    Rscript -e 'install.packages(c("foreach","doParallel"), repos = "https://cloud.r-project.org")'
+
+    echo "=== Installing usethis ==="
+    Rscript -e 'install.packages(c("usethis"), repos = "https://cloud.r-project.org")'
+
+    echo "=== Installing cmdstanr from the Stan R-universe repo ==="
+    Rscript -e 'install.packages("cmdstanr", repos = c("https://stan-dev.r-universe.dev", "https://cloud.r-project.org"))'
+
+    echo "=== Installing CmdStan (${CMDSTAN_VERSION}) into ${CMDSTAN_DIR} ==="
+    mkdir -p ${CMDSTAN_DIR}
+    Rscript -e "cmdstanr::install_cmdstan(dir = '${CMDSTAN_DIR}', version = '${CMDSTAN_VERSION}', cores = 4, overwrite = TRUE)"
+
+    echo "=== Installing bbsBayes2 from the bbsBayes R-universe repo ==="
+    Rscript -e 'install.packages("bbsBayes2", repos = c(bbsbayes = "https://bbsbayes.r-universe.dev", CRAN = "https://cloud.r-project.org"))'
+
+
+    echo "=== Registering CmdStan path so it is found automatically at runtime ==="
+    # Write both an Rprofile.site entry (covers any R invocation) and an
+    # /etc/profile.d script (covers plain shells) so CMDSTAN is always set.
+    R_HOME_DIR=$(R RHOME)
+    echo "Sys.setenv(CMDSTAN = '${CMDSTAN_DIR}/cmdstan-${CMDSTAN_VERSION}')" >> "${R_HOME_DIR}/etc/Rprofile.site"
+
+    cat > /etc/profile.d/cmdstan.sh << EOF
+export CMDSTAN=${CMDSTAN_DIR}/cmdstan-${CMDSTAN_VERSION}
+EOF
+    chmod +x /etc/profile.d/cmdstan.sh
+
+    echo "=== Verifying installation ==="
+    Rscript -e 'library(tidyverse); library(cmdstanr); library(bbsBayes2); cmdstanr::cmdstan_version(); cat("tidyverse + cmdstanr + bbsBayes2 installed OK\n")
+        library(doParallel)
+        library(foreach)
+        library(usethis)
+
+	'
+
+%environment
+    export LC_ALL=C.UTF-8
+    export LANG=C.UTF-8
+    export CMDSTAN=/opt/cmdstan/cmdstan-2.39.0
+
+%runscript
+    exec R "$@"
+
+%test
+    Rscript -e '
+        library(tidyverse)
+        library(doParallel)
+        library(foreach)
+        library(cmdstanr)
+        library(bbsBayes2)
+        cat("CmdStan path: ", cmdstanr::cmdstan_path(), "\n")
+        cat("CmdStan version: ", as.character(cmdstanr::cmdstan_version()), "\n")
+        cat("bbsBayes2 version: ", as.character(packageVersion("bbsBayes2")), "\n")
+        cat("tidyverse version: ", as.character(packageVersion("tidyverse")), "\n")
+        cat("doParallel version: ", as.character(packageVersion("doParallel")), "\n")
+        cat("foreach version: ", as.character(packageVersion("foreach")), "\n")
+    '

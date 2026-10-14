@@ -12,44 +12,47 @@ yr_ebird <- 2023 # prediction year for eBird relative abundance
 
 #selected_species <- readRDS("data/selected_species.rds")
 
-selected_species <- c("American Robin",
-                      "Bank Swallow",
-                      "California Gull",
-                      "Common Nighthawk",
-                      "Mallard",
-                      "Sora",
-                      "Bay-breasted Warbler",
-                      "Wood Duck",
-                      "Killdeer",
-                      "Turkey Vulture",
-                      "Green Heron",
-                      "Northern Shrike",
-                      "Short-eared Owl")
-
 re_fit <- TRUE
+
+model_components <- data.frame(model = c("napops",
+                                         "napops_edr",
+                                         "napops_avail",
+                                         "no_napops"),
+                               use_avail = c(TRUE,FALSE,TRUE,FALSE),
+                               use_edr = c(TRUE,TRUE,FALSE,FALSE),
+                               use_tod = c(FALSE,TRUE,FALSE,TRUE),
+                               use_mdd = c(FALSE,FALSE,TRUE,TRUE))
+
+
+sp_sel <- "Chestnut-collared Longspur"
+sp_aou <- 5380
+sp_ebird <- "chclon"
+
+
 #Parallel species loop ---------------------------------------------------
 ## run on machine with 64 cores, 128GB RAM
-n_cores <- 3 # requires total of 32 (8*4) cores 4 parallel chains for each of 8 species
-cluster <- makeCluster(n_cores, type = "PSOCK")
-registerDoParallel(cluster)
-
-
-test <- foreach(sp_sel = selected_species,
-                .packages = c("bbsBayes2",
-                              "tidyverse",
-                              "cmdstanr",
-                              "ebirdst"),
-                .errorhandling = "pass") %dopar%
-  {
+# n_cores <- 3 # requires total of 32 (8*4) cores 4 parallel chains for each of 8 species
+# cluster <- makeCluster(n_cores, type = "PSOCK")
+# registerDoParallel(cluster)
+#
+#
+# test <- foreach(sp_sel = selected_species,
+#                 .packages = c("bbsBayes2",
+#                               "tidyverse",
+#                               "cmdstanr",
+#                               "ebirdst"),
+#                 .errorhandling = "pass") %dopar%
+#   {
 
 #for(sp_sel in selected_species){
- sp_aou <- bbsBayes2::search_species(sp_sel)$aou[1]
-  sp_ebird <- ebirdst::get_species(sp_sel)
-  vers <- ""
 
-if(!file.exists(paste0(output_dir,"/calibration_fit_alt_",vers,sp_aou,"_",sp_ebird,".rds")) | re_fit){
+for(vers in model_components$model){
 
-  stan_data <- readRDS(paste0("stan_data/stan_data_",vers,sp_aou,"_",sp_ebird,".rds"))
+  if(!file.exists(paste0("stan_data/stan_data_",vers,"_",sp_aou,"_",sp_ebird,".rds"))){
+
+    next}
+
+  stan_data <- readRDS(paste0("stan_data/stan_data_",vers,"_",sp_aou,"_",sp_ebird,".rds"))
   # params_to_summarise <- c("nu",
   #                          "log_BETA",
   #                          "log_beta_raw",
@@ -100,23 +103,23 @@ if(!file.exists(paste0(output_dir,"/calibration_fit_alt_",vers,sp_aou,"_",sp_ebi
 
   #vers <- "seas_opt_"
 
-  if(vers == "seas_opt_"){ # alternate version of model that removes the seasonal component
-    stop("Wrong model called check seas_opt_")
-    stan_data[["use_season"]] <- 0
-    model <- cmdstanr::cmdstan_model("models/ebird_rel_abund_calibration_spatial_year_doy_sep_obs_rte_rhoopt_seas_opt.stan")
-  }
-  if(vers == ""){
-    #model <- cmdstanr::cmdstan_model("models/ebird_rel_abund_calibration_spatial_year_doy_sep_obs_rte_rhoopt.stan")
-    model <- cmdstanr::cmdstan_model("models/bbs_rel_abund_calibration_simple_season.stan")
+  # if(vers == "seas_opt_"){ # alternate version of model that removes the seasonal component
+  #   stop("Wrong model called check seas_opt_")
+  #   stan_data[["use_season"]] <- 0
+  #   model <- cmdstanr::cmdstan_model("models/ebird_rel_abund_calibration_spatial_year_doy_sep_obs_rte_rhoopt_seas_opt.stan")
+  # }
 
-  }
+    #model <- cmdstanr::cmdstan_model("models/ebird_rel_abund_calibration_spatial_year_doy_sep_obs_rte_rhoopt.stan")
+    model <- cmdstanr::cmdstan_model("models/bbs_rel_abund_calibration_simple_season.stan",
+                                     stanc_options = list("O1"))
+
 
 stan_data$use_ppc <- 0
 
   fit <- model$sample(data = stan_data,
                     parallel_chains = 4,
                     refresh = 500,
-                    iter_warmup = 1000,
+                    iter_warmup = 2000,
                     iter_sampling = 1000,
                     adapt_delta = 0.95,
                     max_treedepth = 11,
@@ -126,10 +129,10 @@ stan_data$use_ppc <- 0
 summ <- fit$summary()
 
 
-fit$save_object(paste0(output_dir,"/calibration_fit_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
+fit$save_object(paste0(output_dir,"/calibration_fit_alt_",vers,"_",sp_aou,"_",sp_ebird,".rds"))
 
 
-saveRDS(summ,paste0("convergence/parameter_summary_alt_",vers,sp_aou,"_",sp_ebird,".rds"))
+saveRDS(summ,paste0("convergence/parameter_summary_alt_",vers,"_",sp_aou,"_",sp_ebird,".rds"))
 
 }
 
