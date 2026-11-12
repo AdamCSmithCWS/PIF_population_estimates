@@ -286,7 +286,7 @@ model {
   sdnoise ~ student_t(3,0,1); //prior on scale of extra Poisson log-normal variance or inverse sqrt(phi) for negative binomial
  // sd_gamma ~ gamma(2,10); //time-series annual variance in gamma
  // sd_doy ~ gamma(2,10); // weak shrinkage prior with zero-avoidance
-  sd_DOY ~ normal(0,1);
+  sd_DOY ~ student_t(3,0,0.01);
   DOY_raw ~ normal(0,1);         // GAM hyper coefficients for doy
 // alternate non-spatial treatment of doy effects
 //   for(s in 1:n_strata){
@@ -298,7 +298,7 @@ model {
 //  //doy_raw[1:n_strata,k] ~ icar_normal(n_strata, node1, node2);         // GAM strata level parameters for doy
 //  target += -0.5 * dot_self(doy_raw[k,node1] - doy_raw[k,node2]);
 // }
-  sd_gamma_raw ~ gamma(2,10);
+  sd_gamma_raw ~ student_t(3,0,0.01);//gamma(2,10);
   //sd_gamma_raw ~ student_t(3,0,0.2); // prior on sd of annual differences among strata, see Smith et al. 2023 supplements for prior pred checks
   sd_GAMMA ~ student_t(3,0,0.1); // prior on sd of mean hyperparameter annual differences
   GAMMA_raw ~ std_normal();

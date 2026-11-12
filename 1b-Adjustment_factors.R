@@ -856,7 +856,145 @@ decisions3 <- decisions3 |>
 #saveRDS(decisions3,"full_decisions_file.rds")
 
 
-decisions3 <- readRDS("full_decisions_file.rds")
+
+
+decisions_model <- decisions3 |>
+  mutate(mdd_sqrt = sqrt(Dist2),
+         edr_sqrt = sqrt(edr),
+         log_mdd = log(Dist2),
+         log_edr = log(edr))
+
+vis_edr <- ggplot(data = decisions_model,
+                  aes(x = Dist2,
+                      y = edr))+
+  geom_abline(slope = 1, intercept = 0)+
+  geom_point(alpha = 0.1)+
+  scale_y_continuous(transform = "log",
+                     breaks = c(50,100,150,250,400))+
+  scale_x_continuous(transform = "log",
+                     breaks = c(50,100,150,250,400))+
+  geom_smooth(method = "lm")+
+  theme_bw()
+
+vis_edr
+
+m_edr <- brms::brm(data = decisions_model,
+                   log_edr ~ log_mdd,
+                   family = gaussian())
+
+
+pred_levels <- decisions_model |>
+  select(Dist2) |>
+  drop_na() |>
+  distinct() |>
+  mutate(log_mdd = log(Dist2)) |>
+  arrange(log_mdd)
+
+pred_edr <- brms::posterior_predict(m_edr,
+                                    newdata = pred_levels) |>
+  as_tibble() |>
+  mutate(iter = row_number())
+
+names(pred_edr)[1:nrow(pred_levels)] <- paste0("MDD_",pred_levels$Dist2)
+hist(exp(pred_edr$MDD_400))
+
+pred_edr_samples <- pred_edr |>
+  pivot_longer(cols = starts_with("MDD"),
+               names_to = "PIF_MDD_level",
+               values_to = "log_edr") |>
+  mutate(pred_EDR = exp(log_edr)) |>
+  mutate(Dist2 = as.integer(str_replace(PIF_MDD_level,
+                                        pattern = "MDD_",
+                                        replacement = "")))
+
+pred_edr_ints <- pred_edr_samples |>
+  group_by(Dist2,PIF_MDD_level) |>
+  summarise(edr_median = median(pred_EDR),
+            edr_lci_95 = quantile(pred_EDR,0.025),
+            edr_uci_95 = quantile(pred_EDR,0.975),
+            log_edr_median = median(log_edr),
+            log_edr_sd = sd(log_edr))
+
+pred_join <- pred_edr_ints |>
+  select(Dist2,
+         log_edr_median,
+         log_edr_sd)
+
+vis_edr <- ggplot(data = decisions_model,
+                  aes(x = Dist2,
+                      y = edr))+
+  geom_abline(slope = 1, intercept = 0)+
+  geom_smooth(method = "lm")+
+  geom_point(data = pred_edr_samples,
+             aes(x = Dist2,
+                 y = pred_EDR),
+             alpha = 0.05,
+             colour = 2,
+             position = position_jitter(width = 0.05))+
+  geom_point(alpha = 0.1)+
+  scale_y_continuous(transform = "log",
+                     breaks = c(25,50,100,150,250,400))+
+  scale_x_continuous(transform = "log",
+                     breaks = c(50,100,150,250,400))+
+  theme_bw()+
+  ylab("predicted EDR")+
+  xlab("PIF MDD")+
+  labs(title = "PIF MDD vs NA-POPS EDRs",
+       caption = "Dark points are observed data for species with both EDR and MDD.
+       Red points are (jittered) 4000 samples of species-level predictions from a linear regression of log(EDR) ~ log(MDD).
+       PIF could control for the bias in MDD for species with no EDR, using means and SD of the red predictions.
+       Blue line is the predicted mean from a similar regression.")
+
+pdf("predicted_edrs_from_mdd.pdf",
+    width = 11,
+    height = 8.5)
+print(vis_edr)
+dev.off()
+
+
+
+
+decisions3 <- decisions3 |>
+  left_join(pred_join,
+            by = "Dist2") |>
+  mutate(EDR_model = ifelse(is.na(edr) & !is.na(log_edr_median),
+                            "Approximate corrected EDR based on MDD",
+                            EDR_model),
+         edr_sd = ifelse(is.na(edr) & !is.na(log_edr_median),
+                         exp(log_edr_sd),
+                         edr_sd),
+         edr = ifelse(is.na(edr) & !is.na(log_edr_median),
+                      exp(log_edr_median),
+                      edr))
+
+tst <- ggplot()+
+  geom_point(data = decisions3,
+             aes(y = edr_sd,x = Dist2,
+                 group = EDR_model,
+                 colour = EDR_model),
+             alpha = 0.3)+
+  theme_bw()
+tst
+
+
+saveRDS(decisions3,"full_decisions_file.rds")
+
+
+peak_detect_outside_morning <- c("Caprimulgidae",
+               "Rallidae",
+               "Ardeidae",
+               "Cathartidae",
+               "Tytonidae",
+               "Strigidae")
+
+# peak_season_different <- c("Picidae",
+#                            "Certhiidae",
+#                            "")
+
+highly_mobile <- c("Apodidae",
+                   "Laridae",
+                   "Hirundinidae",
+                   "Cathartidae")
 
 
 decisions4 <- decisions3 |>
@@ -906,12 +1044,83 @@ rename(common_name = cn,
           starts_with("PIF_MDD"),
           PIF_pair,
          PIF_CALC_Rosenberg_2019) |>
-  arrange(taxonomic_sort)
+  arrange(taxonomic_sort) |>
+  mutate(peak_detectability_outside_morning = ifelse(family %in% peak_detect_outside_morning,
+                                                     TRUE,FALSE),
+         highly_mobile = ifelse(family %in% highly_mobile,
+                                TRUE,
+                                FALSE),
+         ACAD_pop_size_us_ca = ACAD_pop_size_us_ca/1e6,
+         EDR_vs_MDD_increase = (1/(NA_POPS_edr^2))/(1/(PIF_MDD^2)),
+         Avail_vs_ToD_increase = (1+(1-NA_POPS_availability))/(1+(1-PIF_time_of_day)),
+  )
 
 
 
 write_csv(decisions4,
           "Population_estimates_workflow_support.csv")
+
+
+
+
+
+
+w_labs <- decisions4 |>
+  filter(peak_detectability_outside_morning |
+           PIF_time_of_day > (NA_POPS_availability + 0.3) |
+           (NA_POPS_availability > PIF_time_of_day+0.1))
+
+tmp <- ggplot(data = decisions4,
+              aes(x = PIF_time_of_day,
+                  y = NA_POPS_availability,
+                  colour = peak_detectability_outside_morning))+
+  geom_abline(slope = 1,intercept = 0)+
+  geom_point(alpha = 0.3)+
+  geom_text(data = w_labs,
+            aes(label = ebird_species_code),
+            size = 3)+
+  scale_x_continuous(limits = c(0,1))+
+  scale_y_continuous(limits = c(0,1))
+
+
+print(tmp)
+
+
+
+
+
+
+
+
+decisions4_plot <- decisions4 |>
+  mutate(sp_labl = ifelse(highly_mobile |
+           (1/(NA_POPS_edr^2))/(1/(PIF_MDD^2)) > 5 |
+             (1/(NA_POPS_edr^2))/(1/(PIF_MDD^2)) < 0.75 ,
+           ebird_species_code,
+           NA))
+
+tmp <- ggplot(data = decisions4_plot,
+              aes(x = PIF_MDD,
+                  y = NA_POPS_edr,
+                  colour = highly_mobile))+
+  geom_abline(slope = 1,intercept = 0)+
+  geom_point(alpha = 0.3,
+             position = position_jitter(width = 20, seed = 1))+
+  ggrepel::geom_text_repel(aes(label = sp_labl),
+            size = 3,
+            position = position_jitter(width = 20, seed = 1),
+            min.segment.length = 0,
+            max.overlaps = 20)+
+  scale_x_continuous(limits = c(0,500))+
+  scale_y_continuous(limits = c(0,500))
+
+
+print(tmp)
+
+
+
+
+
 
 # eBird data coverage ----------------------------------------------------------
 

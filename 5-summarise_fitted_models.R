@@ -239,17 +239,17 @@ model_components <- data.frame(model = c("napops",
 
 
 
-#output_dir <- "F:/PIF_pop_estimates/output"
-output_dir <- "output"
+output_dir <- "E:/PIF_pop_estimates/output"
+#output_dir <- "output"
 trim_rel_abund <- TRUE
+ #
+ # <- readRDS("full_decisions_file.rds") #
 
-sps_list <- readRDS("full_decisions_file.rds") #
-
-
+sps_list <- readRDS("pop_estimates_control_file.rds")
 
 #Parallel species loop ---------------------------------------------------
 ## run on machine with 64 cores, 128GB RAM
-n_cores <- 3 # requires total of 32 (8*4) cores 4 parallel chains for each of 8 species
+n_cores <- 8 # requires total of 32 (8*4) cores 4 parallel chains for each of 8 species
 cluster <- makeCluster(n_cores, type = "PSOCK")
 registerDoParallel(cluster)
 # library(sf)
@@ -284,17 +284,20 @@ test <- foreach(i = 1:nrow(sps_list),
 
 # species loop ------------------------------------------------------------
 
-# for(i in c(109)){#1:nrow(sps_list)){
+ # for(i in 1:nrow(sps_list)){
 
   summ_out <- NULL
   pop_ests_out_save <- NULL
   trajectories_out_all <- NULL
 
-  sp_sel <- sps_list[i,"cn"]
+  sp_sel <- sps_list[i,"common_name"]
 
- sp_aou <- sps_list[i,"Aou"]
-  sp_ebird <- sps_list[i,"ebird_species"]
+ sp_aou <- sps_list[i,"sp_aou"]
+  sp_ebird <- sps_list[i,"sp_ebird"]
 
+  if(!any(file.exists(paste0(output_dir,"/calibration_fit_alt_",
+                            model_components$model,"_",sp_aou,".rds")))){
+    next} #skip of no saved models
 
   for(vers in model_components$model){
   if(!file.exists(paste0(output_dir,"/calibration_fit_alt_",
@@ -326,12 +329,12 @@ summ_out <-  bind_rows(summ_out,summ)
   fit <- readRDS(paste0(output_dir,"/calibration_fit_alt_",vers,"_",sp_aou,".rds"))
 
 
-  combined <- readRDS(paste0("stan_data/dataframe_",sp_aou,".rds"))
+  combined <- readRDS(paste0("stan_data/dataframe_no_napops_",sp_aou,".rds"))
   stan_data <- readRDS(paste0("stan_data/stan_data_",vers,"_",sp_aou,".rds"))
 
 
 
-  routes_buf <- readRDS(paste0("stan_data/routes_buffered_no_napops_",sp_aou,"_",sp_ebird,".rds"))
+  routes_buf <- readRDS(paste0("stan_data/routes_buffered_",sp_aou,"_",sp_ebird,".rds"))
 
 
 
@@ -1198,8 +1201,39 @@ dev.off()
 
 
 
+#summ_out <- NULL
+pop_ests_out_save <- NULL
+trajectories_out_save <- NULL
+
+# sp_sel <- sps_list[i,"common_name"]
+#
+# sp_aou <- sps_list[i,"sp_aou"]
+# sp_ebird <- sps_list[i,"sp_ebird"]
+
+for(i in 1:nrow(sps_list)){
+  sp_aou <- sps_list[i,"sp_aou"]
+
+  if(file.exists(paste0("estimates/combined_population_estimates_4_models_",sp_aou,".rds"))){
+
+
+    pop_ests_out <- readRDS(paste0("estimates/combined_population_estimates_4_models_",sp_aou,".rds"))
+
+  pop_ests_out_save <- bind_rows(pop_ests_out_save,
+                                 pop_ests_out)
+
+  trajectories_out <- readRDS(paste0("estimates/trajectories_population_estimates_4_models_",sp_aou,".rds"))
+
+  trajectories_out_save <- bind_rows(trajectories_out_save,
+                                 trajectories_out)
+
+  }
+}
+
 tst_plot_data <- pop_ests_out_save |>
-    filter(region %in% c("USACAN"))
+    filter(region %in% c("USACAN")) |>
+  mutate(model = ifelse(model == "no_napops",
+                        "PIF TOD and MDD",
+                        model))
 
   tst_plot <- ggplot()+
     geom_pointinterval(data = tst_plot_data,
@@ -1207,9 +1241,19 @@ tst_plot_data <- pop_ests_out_save |>
                            ymin = pop_lci_95, ymax = pop_uci_95,
                            colour = model),
                        position = position_dodge(width = 0.5))+
-    scale_y_continuous(transform = "log10")
+    scale_y_continuous(transform = "log10",
+                       breaks = c(1e5,1e6,1e7,1e8,1e9),
+                       labels = c(paste(c(1e5,1e6,1e7,1e8)/1e6,"Million"),"1 Billion"))+
+    ylab("Population estimate Canada and USA")+
+    coord_flip()
 
 tst_plot
+
+pdf("some population estimates.pdf",
+    width = 8.5,
+    height = 11)
+print(tst_plot)
+dev.off()
 
   saveRDS(summ_out,"convergence_summary.rds")
 
@@ -1236,7 +1280,10 @@ signif_M <- function(x,sig = 3){
 # NOTE: Friday something is wrong that are multiple (4) estimates -------------
 # for each region in ped....
 
-ped <- pop_ests_out_save |>
+ped <- pop_ests_out_save  |>
+  mutate(model = ifelse(model == "no_napops",
+                        "PIF TOD and MDD",
+                        model)) |>
   select(species,
          species_ebird,
          region,
@@ -1267,6 +1314,24 @@ trajs <- trajectories_out_all |>
                 .fns = ~signif_M(.x)))
 
 write_csv(ped,"ped_new.csv")
+
+
+ped <- tst_plot_data |>
+  select(species,
+         species_ebird,
+         region,
+         region_type,
+         model,
+         pop_median,
+         pop_lci_80,
+         pop_uci_80,
+         pop_lci_95,
+         pop_uci_95) |>
+  mutate(across(starts_with("pop"),
+                .fns = ~signif_M(.x)))
+
+
+write_csv(ped,"some_population_estimates.csv")
 
 
 write_csv(trajs,"annual_peds_new.csv")

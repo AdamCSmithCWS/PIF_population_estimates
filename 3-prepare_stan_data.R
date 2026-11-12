@@ -19,7 +19,7 @@ setwd("c:/Users/SmithAC/Documents/GitHub/PIF_population_estimates")
 
 source("functions/GAM_basis_function_mgcv.R")
 source("functions/neighbours_define.R")
-yr_ebird <- 2023 # prediction year for eBird relative abundance
+yr_ebird <- 2025 # prediction year for eBird relative abundance
 sp_new <- readRDS("data/sp_new.rds")
 
 selected_species <- c("American Robin",
@@ -401,52 +401,7 @@ doy_gam <- gam_basis(combined$doy, nknots = 7,
                      sm_name = "doy")
 
 
-for(i in 1:nrow(model_components)){
 
-  vers <- model_components[i,"model"]
-  use_avail <- model_components[i,"use_avail"]
-  use_edr <- model_components[i,"use_edr"]
-  use_tod <- model_components[i,"use_tod"]
-  use_mdd <- model_components[i,"use_mdd"]
-
-
-edr <- ifelse(use_edr,
-              adjs$NA_POPS_edr,
-              adjs$PIF_MDD)
-
-edr_sd <- ifelse(use_edr,
-                 adjs$edr_sd,
-                 1)
-
-MDD_lower <- ifelse(use_mdd,
-                    adjs$Dist.Lower,
-                    1)
-MDD_upper <- ifelse(use_mdd,
-                    adjs$Dist.Upper,
-                    1)
-
-
-
-avail <- ifelse(use_avail,
-                adjs$NA_POPS_availability,
-                adjs$TimeAdj.meanlog)
-
-avail_sd <- ifelse(use_avail,
-                   adjs$availability_sd,
-                   adjs$TimeAdj.sdlog)
-
-pair <- adjs$PIF_pair
-# prepare stan data ----------------------------------------------------------
-
-if( is.na(avail) |
-    is.na(avail_sd) |
-    is.na(edr) |
-    (use_mdd & (is.na(MDD_lower) | is.na(MDD_upper))) |
-    (use_edr & is.na(edr_sd))
-    ){
-  print(paste("data_missing for",vers,sp_sel))
-  next
-}
 
 stan_data <- list(n_routes = max(combined$route),
                   n_obs = max(combined$observer),
@@ -474,21 +429,8 @@ stan_data <- list(n_routes = max(combined$route),
                   node2 = neighbours$node2,
                   scaling_factor = neighbours$scaling_factor,
 
-                  # PIF adjustments
-                  c_p = pair,
-                  sd_c_p = 0.13,
-                  c_d = edr,
-                  sd_c_d = edr_sd,
-                  c_t = avail,
-                  sd_c_t = avail_sd,
-                  c_d_lower = MDD_lower,
-                  c_d_upper = MDD_upper,
-
                   # Conditional statments
-                  use_edr = ifelse(use_edr,1,0),
-                  use_availability = ifelse(use_avail,1,0),
                   use_pois = 0,
-                  use_pair = 1,
                   use_t = 1,
                   use_ppc = 0,
                   est_rho = ifelse(estimate_rho,1,0),
@@ -506,10 +448,11 @@ stan_data <- list(n_routes = max(combined$route),
 # }
 # adjs$n_routes <- stan_data$n_routes
 
-saveRDS(stan_data,paste0("stan_data/stan_data_",vers,"_",sp_aou,".rds"))
-}
+saveRDS(stan_data,paste0("stan_data/stan_data_",sp_aou,".rds"))
 saveRDS(combined,paste0("stan_data/dataframe_",sp_aou,".rds"))
+
 }
+
 
 
 
