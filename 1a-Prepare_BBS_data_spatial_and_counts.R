@@ -95,7 +95,7 @@ routes_us <- read_sf("data/GIS/Provisional_Working_BBS_US_Route__Paths_Jan2025_F
 
 routes_all <- routes_can %>%
   bind_rows(.,routes_us) %>%
-  group_by(route_name,prov_state,route) %>%
+  group_by(route_name) %>%
   summarise()
 
 lgth <- st_length(routes_all)
@@ -144,7 +144,7 @@ vie
 #### total length or area of the buffer is not critical information
 ####
 rts_toolarge <- routes_buf %>%
-  filter(area_km > 50)
+  filter(area_km > 60)
 
 rts_toolong <- routes_all %>%
   filter(route_name %in% rts_toolarge$route_name)
@@ -180,9 +180,25 @@ routes_buf <- routes_buf %>%
 routes_all <- routes_all %>%
   filter(route_name %in% route_starts$route_name)
 
+strata_map <- bbsBayes2::load_map("bbs") |>
+  st_transform(crs = st_crs(routes_all)) |>
+  select(strata_name)
+
+
+routes_all <- routes_all |>
+  st_join(strata_map,
+          largest = TRUE,
+          left = FALSE)
+if(any(is.na(routes_all$strata_name))){
+  stop("Some routes are missing strata")
+}
 saveRDS(routes_all,
         "data/GIS/all_bbs_route_paths_w_data.rds")
 
+routes_w_strata <- routes_all |>
+  st_drop_geometry() |>
+  select(route_name,strata_name) |>
+  distinct()
 # vie <- ggplot()+
 #   geom_sf(data = routes_buf,
 #           aes(colour = first_year))+
@@ -230,7 +246,7 @@ n_routes_ob <- n_obs_summary %>%
 
 
 
-bird_obs <- bbsBayes2::load_bbs_data()[["birds"]]%>%
+bird_obs <- bbsBayes2::load_bbs_data(release = 2026)[["birds"]]%>%
   filter(year >= 2015) %>%
   mutate(route_name = paste(state_num,route,sep = "-")) %>%
   filter(route_name %in% routes_buf$route_name,
@@ -246,24 +262,26 @@ surveys_all <- surveys %>%
   expand_grid(.,bird_incl)
 
 full_bird <- surveys_all %>%
-  left_join(.,bird_obs,
+  inner_join(routes_w_strata,
+             by = "route_name") |>
+  left_join(bird_obs,
             by = c("route_data_id",
                    "aou")) %>%
   mutate(count = ifelse(is.na(species_total),0,
-                              species_total),
-         strata_name = paste(country,st_abrev,bcr,sep ="-")) %>%
+                              species_total)) %>%
   select(route_data_id,
          route_name,
+         strata_name,
          aou,
          count,
          year,
          obs_n,
-         doy,
-         strata_name) %>%
+         doy) %>%
   distinct()
+
 unique(full_bird$strata_name)
 
-species_list <- bbsBayes2::load_bbs_data()[["species"]] %>%
+species_list <- bbsBayes2::load_bbs_data(release = 2026)[["species"]] %>%
   filter(unid_combined == TRUE)
 
 mean_counts_route <- full_bird %>%

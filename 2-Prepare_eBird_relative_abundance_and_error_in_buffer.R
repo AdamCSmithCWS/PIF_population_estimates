@@ -9,9 +9,6 @@ library(exactextractr)
 # download and extract eBird seasonal relative abundance within
 # BBS route path buffers
 
-if(Sys.info()[["nodename"]] == "WNCRLABN72960"){
-  setwd("c:/Users/SmithAC/Documents/GitHub/PIF_population_estimates")
-}
 
 routes_buf <- readRDS("data/all_routes_buffered_400m.rds")
 
@@ -51,8 +48,8 @@ use_weekly <- TRUE # only use TRUE if goal is to model all species
 
 use_uncertainty <- FALSE # TRUE if teh uncertainty values of the relative abundance are desired
 
-bbs_start <- as_date("2023-06-01") # Latest date for start of BBS-relevant breeding season
-bbs_end <- as_date("2023-07-07") # Latest data for end of BBS-relevant breeding season
+bbs_start <- as_date("2025-05-31") # Latest date matching dates for eBird weeks for start of BBS-relevant breeding season
+bbs_end <- as_date("2025-07-05") # Latest date matching dates for eBird weeks for end of BBS-relevant breeding season
 
 
 
@@ -70,32 +67,36 @@ adjustments <- read_csv("Population_estimates_workflow_support.csv")
 
 ii <- which(sps_list$english %in% adjustments$common_name)
 
+#
+# species_sel <- c("American Robin",
+#                  "Bank Swallow",
+#                  "California Gull",
+#                  "Common Nighthawk",
+#                  "Mallard",
+#                  "Sora",
+#                  "Bay-breasted Warbler",
+#                  "Wood Duck",
+#                  "Killdeer",
+#                  "Turkey Vulture",
+#                  "Green Heron",
+#                  "Northern Shrike",
+#                  "Short-eared Owl")
+#
+# ii <- which(sps_list$english %in% species_sel)
 
-species_sel <- c("American Robin",
-                 "Bank Swallow",
-                 "California Gull",
-                 "Common Nighthawk",
-                 "Mallard",
-                 "Sora",
-                 "Bay-breasted Warbler",
-                 "Wood Duck",
-                 "Killdeer",
-                 "Turkey Vulture",
-                 "Green Heron",
-                 "Northern Shrike",
-                 "Short-eared Owl")
 
-ii <- which(sps_list$english %in% species_sel)
+# Species loop ------------------------------------------------------------
 
-for(i in ii[c(154:404)]){
+
+for(i in ii[-c(1:113)]){
 
   sp_sel <- unname(unlist(sps_list[i,"english"]))
 species_ebird <- ebirdst::get_species(sp_sel)
 
 
-if((file.exists(paste0("data/species_relative_abundance_2023/",
+if((file.exists(paste0("data/species_relative_abundance_2025/",
                       species_ebird,"_relative_abundance.rds")) &
-   file.exists(paste0("data/species_relative_abundance_2023/",
+   file.exists(paste0("data/species_relative_abundance_2025/",
                       species_ebird,"_derived_breeding_relative_abundance.rds"))) &
    !re_calc){
   next
@@ -116,11 +117,14 @@ resident <- unname(unlist(qual_sel[,"is_resident"]))
 
 breeding_start <- unname(unlist(qual_sel[,"breeding_start"]))
 breeding_end <- unname(unlist(qual_sel[,"breeding_end"]))
+if(!resident & (is.na(breed_qual) | breed_qual == 0)){
+  next
+}
 
 if(!resident){
 sel_start <- ifelse(as_date(breeding_start)>bbs_start, # if stable breeding season is later than the 1st of June (mostly only northern species)
                     bbs_start,# then use the first of June
-                    as_date("2023-05-20")) # otherwise use May 20th to match the earliest BBS observation dates
+                    as_date("2025-05-17")) # otherwise use May 17 to match the earliest BBS observation dates
 
 
 sel_end <- ifelse(as_date(breeding_end)>bbs_end, # if stable breeding season ending is later than the 2nd week of July
@@ -129,12 +133,12 @@ sel_end <- ifelse(as_date(breeding_end)>bbs_end, # if stable breeding season end
 
 
 }else{
-  sel_start <- as_date("2023-05-20") # use May 20, as start of BBS observations season for resident species
-  sel_end <- as_date("2023-07-07")# use July 7, as end of BBS observations season for resident species
+  sel_start <- as_date("2025-05-17") # use May 17, as start of BBS observations season for resident species
+  sel_end <- as_date("2025-07-05")# use July 7, as end of BBS observations season for resident species
   }
 if(sel_start > sel_end){
-  sel_start <- as_date("2023-05-20") # use May 20, as start of BBS observations season for resident species
-  sel_end <- as_date("2023-06-10")# use June 10, as end of BBS observations if the eBird season is so early that it's over before BBS starts
+  sel_start <- as_date("2025-05-17") # use May 20, as start of BBS observations season for resident species
+  sel_end <- as_date("2025-06-07")# use June 07, as end of BBS observations if the eBird season is so early that it's over before BBS starts
 
 }
 sps_list[i,"is_resident"] <- resident
@@ -347,10 +351,10 @@ if(resident | use_weekly){
 
 }
 
-saveRDS(breed_abundance,paste0("data/species_relative_abundance_2023/",species_ebird,"_derived_breeding_relative_abundance.rds"))
+saveRDS(breed_abundance,paste0("data/species_relative_abundance_2025/",species_ebird,"_derived_breeding_relative_abundance.rds"))
 
 if(use_uncertainty){
-  saveRDS(breed_abundance_sd,paste0("data/species_relative_abundance_2023/",species_ebird,"_derived_breeding_relative_abundance_logsd.rds"))
+  saveRDS(breed_abundance_sd,paste0("data/species_relative_abundance_2025/",species_ebird,"_derived_breeding_relative_abundance_logsd.rds"))
 }
 
 
@@ -374,9 +378,9 @@ bbs_strata2 <- bbsBayes2::load_map("bbs")%>%
 strata_proj <- st_transform(bbs_strata2, st_crs(breed_abundance))
 
 routes_nm <- routes_buf %>%
-  select(route_name,route) %>%
+  select(route_name) %>%
   st_transform(crs = st_crs(bbs_strata2)) %>%
-  sf::st_join(bbs_strata2, largest = TRUE) %>%
+  sf::st_join(bbs_strata2, largest = TRUE, left = FALSE) %>%
   group_by(strata_name) %>%
   summarise() %>%
   sf::st_transform(crs = st_crs(breed_abundance))
@@ -439,7 +443,7 @@ abundance_df <- abundance_df |>
   distinct()
 
 saveRDS(abundance_df,
-        paste0("data/species_relative_abundance_2023/",species_ebird,"_relative_abundance.rds"))
+        paste0("data/species_relative_abundance_2025/",species_ebird,"_relative_abundance.rds"))
 
 
 
@@ -489,6 +493,6 @@ abundance_strat <- abundance_strat |>
 
 
 saveRDS(abundance_strat,
-        paste0("data/species_relative_abundance_2023/",species_ebird,"_bbs_strata_relative_abundance.rds"))
+        paste0("data/species_relative_abundance_2025/",species_ebird,"_bbs_strata_relative_abundance.rds"))
 
 }

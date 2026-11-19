@@ -52,7 +52,7 @@ for(vers in model_components$model){
 
     next}
 
-  stan_data <- readRDS(paste0("stan_data/stan_data_",vers,"_",sp_aou,".rds"))
+  stan_data <- readRDS(paste0("stan_data/stan_data_",sp_aou,".rds"))
   # params_to_summarise <- c("nu",
   #                          "log_BETA",
   #                          "log_beta_raw",
@@ -110,7 +110,7 @@ for(vers in model_components$model){
   # }
 
     #model <- cmdstanr::cmdstan_model("models/ebird_rel_abund_calibration_spatial_year_doy_sep_obs_rte_rhoopt.stan")
-    model <- cmdstanr::cmdstan_model("models/bbs_rel_abund_calibration_simple_season.stan",
+    model <- cmdstanr::cmdstan_model("models/bbs_rel_abund_calibration_simplified.stan",
                                      stanc_options = list("O1"))
 
 

@@ -608,8 +608,8 @@ botw_seas <- readRDS("data/botw_all_seasonal.rds")
 
 
 bcr_strata <- readRDS("data/bcr2026_statprov_simplified.rds")
-
-
+redo_botw_coverage <- FALSE
+if(redo_botw_coverage){
 for(i in 1:nrow(decisions)){
 
   sp <- as.character(decisions[i,"cn"])
@@ -776,11 +776,18 @@ print(round(i/nrow(decisions),2))
 
 
   }# end species decisions rows loop
+saveRDS(decisions,"decisions_w_botw_range.rds")
+}else{
+  decisions <- readRDS("decisions_w_botw_range.rds")
+}
 
-
-
-
-
+# decisions_tmp <- decisions_tmp |>
+#   select(common_name,ebird_species,p_BOTW_range_na_eBirdst) |>
+#   distinct()
+#
+# decisions <- decisions |>
+#   left_join(decisions_tmp, by = c("cn" = "common_name",
+#                                   "ebird_species"))
 
 acad_pop_size <- readRDS("data/cleaned_acad_global_2024_05_23.rds") |>
   select(common_name,scientific_name,
@@ -858,17 +865,46 @@ decisions3 <- decisions3 |>
 
 
 
+
+
+
+peak_detect_outside_morning <- c("Caprimulgidae",
+                                 "Rallidae",
+                                 "Ardeidae",
+                                 "Cathartidae",
+                                 "Tytonidae",
+                                 "Strigidae")
+
+highly_mobile <- c("Apodidae",
+                   "Laridae",
+                   "Hirundinidae",
+                   "Cathartidae")
+
+
 decisions_model <- decisions3 |>
   mutate(mdd_sqrt = sqrt(Dist2),
          edr_sqrt = sqrt(edr),
          log_mdd = log(Dist2),
-         log_edr = log(edr))
+         log_edr = log(edr),
+         log_edr_sd = (log((edr+(edr_sd)))-log(edr-(edr_sd)))/2) |> # treats the uniform dist as definin the 99.9 percentiles of normal
+  mutate(log_edr_sd = ifelse(log_edr_sd == 0,0.2,log_edr_sd),
+         log_mdd_sd = 0.3,
+         peak_detectability_outside_morning = ifelse(family %in% peak_detect_outside_morning,
+                                                     TRUE,FALSE),
+         highly_mobile = ifelse(family %in% highly_mobile,
+                                TRUE,
+                                FALSE) ) |>
+  filter(!highly_mobile)
+
+
+
 
 vis_edr <- ggplot(data = decisions_model,
                   aes(x = Dist2,
                       y = edr))+
   geom_abline(slope = 1, intercept = 0)+
-  geom_point(alpha = 0.1)+
+  geom_point(alpha = 0.4,
+             position = position_jitter(width = 0.02))+
   scale_y_continuous(transform = "log",
                      breaks = c(50,100,150,250,400))+
   scale_x_continuous(transform = "log",
@@ -878,22 +914,47 @@ vis_edr <- ggplot(data = decisions_model,
 
 vis_edr
 
-m_edr <- brms::brm(data = decisions_model,
-                   log_edr ~ log_mdd,
-                   family = gaussian())
+#f<- bf(log_edr | mi(log_edr_sd) ~ mi(log_mdd)) + bf(log_mdd | mi(log_mdd_sd) ~ 1) + set_rescor(FALSE)
+
+m_edr <- brms::brm(log_edr | se(log_edr_sd, sigma = TRUE) ~ log_mdd,
+                   #log_edr | se(log_edr_sd, sigma = TRUE) ~ me(log_mdd , log_mdd_sd),
+                   #f,
+                   family = gaussian(),
+                   data = decisions_model,
+                   # prior = c(brms::prior(normal(0,1), class = Intercept),
+                   #           brms::prior(normal(1,1), class = b)),
+                   cores = 4)
 
 
 pred_levels <- decisions_model |>
-  select(Dist2) |>
+  select(log_mdd,log_mdd_sd,Dist2) |>
   drop_na() |>
   distinct() |>
-  mutate(log_mdd = log(Dist2)) |>
-  arrange(log_mdd)
+  arrange(log_mdd) |>
+  mutate(log_edr_sd = median(decisions_model$log_edr_sd,na.rm = TRUE))
+
+
+pred_edr2 <- brms::as_draws_df(m_edr,
+                               pars = c("log_mdd","Intercept"))
+
+pred_points <- tibble(x = seq(min(decisions_model$log_mdd,na.rm = TRUE),
+                              max(decisions_model$log_mdd,na.rm = TRUE),
+                              length.out = 100)) |>
+  rowwise() |>
+  mutate(pred_median = median(exp(pred_edr2$b_Intercept+pred_edr2$b_log_mdd*x)),
+         pred_lci = quantile(exp(pred_edr2$b_Intercept+pred_edr2$b_log_mdd*x),0.05),
+         pred_uci = quantile(exp(pred_edr2$b_Intercept+pred_edr2$b_log_mdd*x),0.95),
+         Dist2 = exp(x))
+
+
 
 pred_edr <- brms::posterior_predict(m_edr,
                                     newdata = pred_levels) |>
   as_tibble() |>
   mutate(iter = row_number())
+
+
+
 
 names(pred_edr)[1:nrow(pred_levels)] <- paste0("MDD_",pred_levels$Dist2)
 hist(exp(pred_edr$MDD_400))
@@ -909,29 +970,39 @@ pred_edr_samples <- pred_edr |>
 
 pred_edr_ints <- pred_edr_samples |>
   group_by(Dist2,PIF_MDD_level) |>
-  summarise(edr_median = median(pred_EDR),
-            edr_lci_95 = quantile(pred_EDR,0.025),
-            edr_uci_95 = quantile(pred_EDR,0.975),
-            log_edr_median = median(log_edr),
-            log_edr_sd = sd(log_edr))
+  summarise(approx_edr_median = median(pred_EDR),
+            approx_edr_lci_95 = quantile(pred_EDR,0.025),
+            approx_edr_uci_95 = quantile(pred_EDR,0.975),
+            approx_log_edr_median = median(log_edr),
+            approx_log_edr_sd = sd(log_edr))
 
 pred_join <- pred_edr_ints |>
   select(Dist2,
-         log_edr_median,
-         log_edr_sd)
+         approx_log_edr_median,
+         approx_log_edr_sd)
 
-vis_edr <- ggplot(data = decisions_model,
+vis_edr2 <- ggplot(data = decisions_model,
                   aes(x = Dist2,
                       y = edr))+
   geom_abline(slope = 1, intercept = 0)+
-  geom_smooth(method = "lm")+
+  geom_ribbon(data = pred_points,
+            aes(x = Dist2,
+                y = pred_median,
+                ymin = pred_lci,
+                ymax = pred_uci),
+            alpha = 0.2)+
+  geom_line(data = pred_points,
+            aes(x = Dist2,
+                y = pred_median),
+            colour = blues9[8])+
   geom_point(data = pred_edr_samples,
              aes(x = Dist2,
                  y = pred_EDR),
              alpha = 0.05,
              colour = 2,
-             position = position_jitter(width = 0.05))+
-  geom_point(alpha = 0.1)+
+             position = position_jitter(width = 0.01))+
+  geom_point(alpha = 0.4,
+             position = position_jitter(width = 0.03))+
   scale_y_continuous(transform = "log",
                      breaks = c(25,50,100,150,250,400))+
   scale_x_continuous(transform = "log",
@@ -941,14 +1012,15 @@ vis_edr <- ggplot(data = decisions_model,
   xlab("PIF MDD")+
   labs(title = "PIF MDD vs NA-POPS EDRs",
        caption = "Dark points are observed data for species with both EDR and MDD.
-       Red points are (jittered) 4000 samples of species-level predictions from a linear regression of log(EDR) ~ log(MDD).
+       Red points are (jittered) 4000 samples of species-level predictions from a linear regression of log(EDR) | log(sd(EDR)) ~ log(MDD).
        PIF could control for the bias in MDD for species with no EDR, using means and SD of the red predictions.
-       Blue line is the predicted mean from a similar regression.")
+       Blue line is the predicted mean from the regression.")
 
 pdf("predicted_edrs_from_mdd.pdf",
     width = 11,
     height = 8.5)
 print(vis_edr)
+print(vis_edr2)
 dev.off()
 
 
@@ -957,22 +1029,16 @@ dev.off()
 decisions3 <- decisions3 |>
   left_join(pred_join,
             by = "Dist2") |>
-  mutate(EDR_model = ifelse(is.na(edr) & !is.na(log_edr_median),
-                            "Approximate corrected EDR based on MDD",
-                            EDR_model),
-         edr_sd = ifelse(is.na(edr) & !is.na(log_edr_median),
-                         exp(log_edr_sd),
-                         edr_sd),
-         edr = ifelse(is.na(edr) & !is.na(log_edr_median),
-                      exp(log_edr_median),
-                      edr))
+  mutate(approximate_edr_sd = ((exp(approx_log_edr_median+approx_log_edr_sd)-exp(approx_log_edr_median-approx_log_edr_sd))/2),
+         approximate_edr = exp(approx_log_edr_median))
 
 tst <- ggplot()+
   geom_point(data = decisions3,
-             aes(y = edr_sd,x = Dist2,
+             aes(y = approximate_edr,x = edr,
                  group = EDR_model,
                  colour = EDR_model),
              alpha = 0.3)+
+  geom_abline(intercept = 0, slope = 1)+
   theme_bw()
 tst
 
@@ -1041,6 +1107,8 @@ rename(common_name = cn,
           starts_with("NA_POPS_avail"),
           starts_with("PIF_time_of_day"),
           starts_with("NA_POPS_edr"),
+          approximate_edr,
+          approximate_edr_sd,
           starts_with("PIF_MDD"),
           PIF_pair,
          PIF_CALC_Rosenberg_2019) |>

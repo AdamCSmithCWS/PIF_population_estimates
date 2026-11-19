@@ -20,49 +20,6 @@ setwd("c:/Users/SmithAC/Documents/GitHub/PIF_population_estimates")
 source("functions/GAM_basis_function_mgcv.R")
 source("functions/neighbours_define.R")
 yr_ebird <- 2025 # prediction year for eBird relative abundance
-sp_new <- readRDS("data/sp_new.rds")
-
-selected_species <- c("American Robin",
-                 "Bank Swallow",
-                 "California Gull",
-                 "Common Nighthawk",
-                 "Mallard",
-                 "Sora",
-                 "Bay-breasted Warbler",
-                 "Wood Duck",
-                 "Killdeer",
-                 "Turkey Vulture",
-                 "Green Heron",
-                 "Northern Shrike",
-                 "Short-eared Owl",
-                 "Downy Woodpecker",
-                 "Hairy Woodpecker",
-                 "Common Nighthawk",
-                 "Eastern Whip-poor-will",
-                 "Barn Swallow",
-                 "Canada Warbler",
-                 "Virginia Rail",
-                 "Pied-billed Grebe",
-                 "Black Tern",
-                 "Scarlet Tanager",
-                 "Veery",
-                 "Eastern Phoebe",
-                 "Black-capped Chickadee",
-                 "Western Meadowlark",
-                 "Purple Martin",
-                 "Canyon Wren",
-                 "Blackpoll Warbler",
-                 "Clark's Nutcracker",
-                 "American Kestrel",
-                 "Red-winged Blackbird",
-                 "Wood Thrush",
-                 "Black-chinned Hummingbird",
-                 "Varied Thrush",
-                 "Baird's Sparrow",
-                 "Chestnut-collared Longspur",
-                 "Savannah Sparrow",
-                 "Barred Owl",
-                 "Great Horned Owl")
 
 # mean counts to id routes on which species has been observed -------------
 mean_counts_all <- readRDS("data/mean_counts_by_route.rds")
@@ -102,34 +59,34 @@ mean_doy = round(surveys$mean_doy)
 
   #ExpAdjs <- read_csv("Species_correction_factors_w_edr_availability.csv")
 
-  decisions3 <- readRDS("full_decisions_file.rds")
+adjustments <- readRDS("full_decisions_file.rds")
 
 
-adjustments <- decisions3 |>
-  mutate(PIF_CALC_Rosenberg_2019 = ifelse(cn %in% sp_new$cn,
-                                          "Yes","No"),
-         PIF_time_of_day = 1/exp(TimeAdj.meanlog)) |>
-  rename(common_name = cn,
-         PIF_MDD = Dist2,
-         PIF_pair = Pair2,
-         NA_POPS_edr = edr,
-         NA_POPS_EDR_model = EDR_model,
-         NA_POPS_availability = availability,
-         NA_POPS_availability_model = availability_model,
-         BAM_population_estimate_Canada = canadian_2020_population_estimate_bam_M_birds,
-         p_population_canada_ebirdst = p_population_canada,
-         ACAD_pop_size_us_ca = pop_size_us_ca_,
-         ACAD_pop_size_us_ca_source = pop_size_us_ca_s,
-         ACAD_pop_size_us_ca_comment = pop_size_us_ca_com,
-         ebird_species_code = ebird_species,
-         ebirdst_resident = is_resident_ebirdst,
-         ebirdst_breeding_quality = breeding_quality_ebirdst,
-         ebirdst_resident_quality = resident_quality_ebirdst,
-         prop_BOTW_range_na_ebirdst = p_BOTW_range_na_eBirdst,
-         taxonomic_sort = sort
-  )  |>
-  arrange(taxonomic_sort)
-
+# adjustments <- decisions3 |>
+#   mutate(PIF_CALC_Rosenberg_2019 = ifelse(cn %in% sp_new$cn,
+#                                           "Yes","No"),
+#          PIF_time_of_day = 1/exp(TimeAdj.meanlog)) |>
+#   rename(common_name = cn,
+#          PIF_MDD = Dist2,
+#          PIF_pair = Pair2,
+#          NA_POPS_edr = edr,
+#          NA_POPS_EDR_model = EDR_model,
+#          NA_POPS_availability = availability,
+#          NA_POPS_availability_model = availability_model,
+#          BAM_population_estimate_Canada = canadian_2020_population_estimate_bam_M_birds,
+#          p_population_canada_ebirdst = p_population_canada,
+#          ACAD_pop_size_us_ca = pop_size_us_ca_,
+#          ACAD_pop_size_us_ca_source = pop_size_us_ca_s,
+#          ACAD_pop_size_us_ca_comment = pop_size_us_ca_com,
+#          ebird_species_code = ebird_species,
+#          ebirdst_resident = is_resident_ebirdst,
+#          ebirdst_breeding_quality = breeding_quality_ebirdst,
+#          ebirdst_resident_quality = resident_quality_ebirdst,
+#          prop_BOTW_range_na_ebirdst = p_BOTW_range_na_eBirdst,
+#          taxonomic_sort = sort
+#   )  |>
+#   arrange(taxonomic_sort)
+#
 
 
 
@@ -137,24 +94,24 @@ adjustments <- decisions3 |>
 
 routes_buf_all <- readRDS("data/all_routes_buffered_400m.rds")
 
-strata <- bbsBayes2::load_map("bbs")%>%
-  filter(country_code %in% c("CA","US"))
+# strata_map <- bbsBayes2::load_map("bbs")%>%
+#   filter(country_code %in% c("CA","US"))
 
-strata_names <- strata %>%
-  sf::st_drop_geometry()
-
-
-
-
-
-# load traditional estimates for later comparison -------------------------
-strata_join <- strata_names %>%
-  select(strata_name,country_code,
-         prov_state, bcr) %>%
-  st_drop_geometry() %>%
-  distinct()
-
-
+# strata_names <- strata_map %>%
+#   sf::st_drop_geometry()
+#
+#
+#
+#
+#
+# # load traditional estimates for later comparison -------------------------
+# strata_join <- strata_names %>%
+#   select(strata_name,country_code,
+#          prov_state, bcr) %>%
+#   st_drop_geometry() %>%
+#   distinct()
+#
+#
 
 
 #
@@ -238,19 +195,17 @@ model_components <- data.frame(model = c("napops",
                                use_mdd = c(FALSE,FALSE,TRUE,TRUE))
 
 
-#output_dir <- "G:/PIF_population_estimates/output"
-output_dir <- "output"
 trim_rel_abund <- TRUE
 trim_bbs_routes <- FALSE
 
-species_to_prepare <- adjustments$common_name
+species_to_prepare <- adjustments$cn
 
 
 # species loop ------------------------------------------------------------
 
 
 for(i in 1:nrow(adjustments)){ #
-  sp_sel <- adjustments[i,"sp_aou"]
+  sp_sel <- unname(unlist(adjustments[i,"cn"]))
  sp_aou <- bbsBayes2::search_species(sp_sel)$aou[1]
   sp_ebird <- ebirdst::get_species(sp_sel)
   adjustments[i,"sp_aou"] <- sp_aou
@@ -283,7 +238,8 @@ rel_abund <- readRDS(paste0("data/species_relative_abundance_",yr_ebird,"/",
 if(trim_rel_abund){ # if TRUE drops routes with < 10th %ile relative abundance
   tenth_percentile <- unname(quantile(rel_abund$ebird_abund,0.1))
   rel_abund <- rel_abund %>%
-    filter(ebird_abund >= tenth_percentile)
+    filter(ebird_abund >= tenth_percentile,
+           route_name %in% routes_buf_all$route_name)
 }
 
 if(trim_bbs_routes){ # if TRUE drops routes with < 10th %ile observed mean counts
@@ -305,9 +261,26 @@ if(trim_bbs_routes){ # if TRUE drops routes with < 10th %ile observed mean count
 
 
 
+
+
+# filtering routes on which species wasn't observed.
+
+mean_counts <- raw_counts %>%
+  filter(route_name %in% rel_abund$route_name) |>
+  group_by(route_name) %>%
+  summarise(mean_count = mean(count)) %>%
+  distinct()
+
+routes_buf <- routes_buf_all %>%
+  inner_join(mean_counts, by = "route_name")
+
+saveRDS(routes_buf,paste0("stan_data/routes_buffered_",sp_aou,"_",sp_ebird,".rds"))
+
+
 combined <- rel_abund %>%
-inner_join(.,raw_counts,
-           by = "route_name") %>%
+  filter(route_name %in% routes_buf$route_name) |>
+  inner_join(raw_counts,
+             by = "route_name") %>%
   mutate(logm = log(ebird_abund),
          day_of_year = doy,
          route = as.integer(factor(route_name)),
@@ -319,21 +292,6 @@ inner_join(.,raw_counts,
          route_obs = as.integer(factor(paste(route_name,obs_n,sep = "-"))))
 
 
-
-# filtering routes on which species wasn't observed.
-
-mean_counts <- raw_counts %>%
-  group_by(route_name) %>%
-  summarise(mean_count = mean(count)) %>%
-  filter(route_name %in% combined$route_name)
-
-routes_buf <- routes_buf_all %>%
-  inner_join(mean_counts, by = "route_name")
-
-saveRDS(routes_buf,paste0("stan_data/routes_buffered_",sp_aou,"_",sp_ebird,".rds"))
-
-
-
 # spatial setup -----------------------------------------------------------
 
 strata_incl <- combined %>%
@@ -343,6 +301,8 @@ strata_incl <- combined %>%
 strata_map <- bbsBayes2::load_map("bbs") %>%
   inner_join(strata_incl) %>%
   arrange(strata)
+
+
 if(nrow(strata_map) < 2){
   next
 }
@@ -389,7 +349,7 @@ mean_abund <- combined %>%
 
 #adjustment scores
 adjs <- adjustments %>%
-  filter(common_name == sp_sel)
+  filter(cn == sp_sel)
 if(nrow(adjs) == 0){next}
 #if(!use_traditional & !(adjs$use_edr | adjs$use_availability)){next}
 
@@ -460,25 +420,57 @@ saveRDS(combined,paste0("stan_data/dataframe_",sp_aou,".rds"))
 # preparing list of aou numbers to run on gpsc ----------------------------
 
 for(i in 1:nrow(adjustments)){ #
-  sp_sel <- adjustments[i,"common_name"]
+  sp_sel <- unname(unlist(adjustments[i,"cn"]))
   sp_aou <- bbsBayes2::search_species(sp_sel)$aou[1]
   sp_ebird <- ebirdst::get_species(sp_sel)
   adjustments[i,"sp_aou"] <- sp_aou
   adjustments[i,"sp_ebird"] <- sp_ebird
 
-  adjustments[i,"to_run_atleast_one_model"] <- ifelse(any(file.exists(paste0("stan_data/stan_data_",model_components$model,"_",sp_aou,".rds"))),
+  adjustments[i,"to_run_atleast_one_model"] <- ifelse(file.exists(paste0("stan_data/stan_data_",sp_aou,".rds")),
                                                       TRUE,
                                                       FALSE)
 }
+
+
+
+peak_detect_outside_morning <- c("Caprimulgidae",
+                                 "Rallidae",
+                                 "Ardeidae",
+                                 "Cathartidae",
+                                 "Tytonidae",
+                                 "Strigidae")
+
+# peak_season_different <- c("Picidae",
+#                            "Certhiidae",
+#                            "")
+
+highly_mobile <- c("Apodidae",
+                   "Laridae",
+                   "Hirundinidae",
+                   "Cathartidae")
+
+
+adjustments <- adjustments |>
+  mutate(peak_detectability_outside_morning = ifelse(family %in% peak_detect_outside_morning,
+                                                     TRUE,FALSE),
+         highly_mobile = ifelse(family %in% highly_mobile,
+                                TRUE,
+                                FALSE),
+         EDR_vs_MDD_increase = (1/(edr^2))/(1/(Dist2^2)),
+         PIF_time_of_day = 1/exp(TimeAdj.meanlog),
+         Avail_vs_ToD_increase = (1+(1-availability))/(1+(1-PIF_time_of_day))
+  ) |>
+  rename(common_name = cn) |>
+  arrange(sort)
 
 
 saveRDS(adjustments,"pop_estimates_control_file.rds")
 
 
 
+
 aou_list <- adjustments |>
-  filter(to_run_atleast_one_model,
-         common_name %in% selected_species) |>
+  filter(to_run_atleast_one_model) |>
   select(sp_aou) |>
   distinct()
 
