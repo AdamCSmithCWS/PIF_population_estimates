@@ -30,9 +30,9 @@ if(file.exists(paste0("/home/acs001/PIF/stan_data/stan_data_",sp_aou,".rds"))){
   fit <- model$sample(data = stan_data,
                       parallel_chains = 4,
                       refresh = 0,
-                      iter_warmup = 2000,
-                      iter_sampling = 2000,
-                      thin = 2,
+                      iter_warmup = 3000,
+                      iter_sampling = 6000,
+                      thin = 6,
                       adapt_delta = 0.95,
                       max_treedepth = 11,
                       show_exceptions = TRUE)

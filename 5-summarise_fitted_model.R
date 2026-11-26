@@ -23,7 +23,7 @@ source("functions/hpdi.R")
 source("functions/posterior_abundance.R")
 
 
-yr_ebird <- 2023 # prediction year for eBird relative abundance
+yr_ebird <- 2025 # prediction year for eBird relative abundance
 
 
 # mean counts to id routes on which species has been observed -------------
@@ -135,14 +135,82 @@ model_components <- data.frame(model = c("napops",
 
 output_dir <- "E:/PIF_pop_estimates/output"
 #output_dir <- "output"
-trim_rel_abund <- TRUE
  #
 
 sps_list <- readRDS("pop_estimates_control_file.rds")
 
-#Parallel species loop ---------------------------------------------------
-## run on machine with 64 cores, 128GB RAM
-n_cores <- 8 # requires total of 32 (8*4) cores 4 parallel chains for each of 8 species
+# species loop convergence ------------------------------------------------------------
+summ_out <- NULL
+
+ for(i in 1:nrow(sps_list)){
+
+
+  sp_sel <- unname(unlist(sps_list[i,"common_name"]))
+
+ sp_aou <- unname(unlist(sps_list[i,"sp_aou"]))
+  sp_ebird <- unname(unlist(sps_list[i,"sp_ebird"]))
+
+
+
+
+
+if(!file.exists(paste0("convergence/parameter_summary_alt_",sp_aou,".rds"))){
+  next
+}# skip if no convergence
+
+summ <- readRDS(paste0("convergence/parameter_summary_alt_",sp_aou,".rds")) |>
+  mutate(species = sp_sel)
+# convergence summary -----------------------------------------------------
+
+
+summ_out <-  bind_rows(summ_out,summ)
+
+}
+
+
+
+
+saveRDS(summ_out,"convergence_summary.rds")
+
+problems <- summ_out |>
+  filter(rhat > 1.02, ess_bulk < 200) |>
+  mutate(variable_type = sub("\\[.*","",variable)) |>
+  group_by(variable_type,species) |>
+  summarise(n = n(),
+            max_rhat = max(rhat),
+            min_ess = min(ess_bulk))
+
+
+
+sp_re_run <- problems |>
+  ungroup() |>
+  select(species) |>
+  distinct()
+
+
+
+aou_list2 <- sps_list |>
+  filter(common_name %in% sp_re_run$species) |>
+  select(sp_aou) |>
+  distinct()
+
+if(nrow(aou_list2) != 0){
+write_tsv(aou_list2, "aou_list_rerun.txt",
+          col_names = FALSE)
+}else{
+  warning("Congratulations! all species models have converged")
+}
+
+
+# end convergence check ---------------------------------------------------
+
+
+
+
+# species loop summary ------------------------------------------------------------
+
+## run on machine with
+n_cores <- 4 #
 cluster <- makeCluster(n_cores, type = "PSOCK")
 registerDoParallel(cluster)
 # library(sf)
@@ -174,47 +242,36 @@ test <- foreach(i = 1:nrow(sps_list),
                               "ggrepel"),
                 .errorhandling = "pass") %dopar%
   {
+    summ_out <- NULL
+    pop_ests_out_save <- NULL
+    trajectories_out_all <- NULL
 
-# species loop ------------------------------------------------------------
+    sp_sel <- unname(unlist(sps_list[i,"common_name"]))
 
- # for(i in 1:nrow(sps_list)){
-
-  summ_out <- NULL
-  pop_ests_out_save <- NULL
-  trajectories_out_all <- NULL
-
-  sp_sel <- unname(unlist(sps_list[i,"common_name"]))
-
- sp_aou <- unname(unlist(sps_list[i,"sp_aou"]))
-  sp_ebird <- unname(unlist(sps_list[i,"sp_ebird"]))
-
-  if(!any(file.exists(paste0(output_dir,"/calibration_fit_alt_",sp_aou,".rds")))){
-    next} #skip of no saved models
-
-
-  if(!file.exists(paste0(output_dir,"/calibration_fit_alt_",
-                        sp_aou,".rds"))){
-    next} #skip of no saved model
-
-if(!file.exists(paste0("data/species_relative_abundance_2023/",
-                       sp_ebird,"_relative_abundance.rds"))){
-  next} # skip if no saved data
+    sp_aou <- unname(unlist(sps_list[i,"sp_aou"]))
+    sp_ebird <- unname(unlist(sps_list[i,"sp_ebird"]))
 
 
 
+    if(!file.exists(paste0("data/species_relative_abundance_",yr_ebird,"/",sp_ebird,"_relative_abundance.rds"))){
+      next} # skip if no saved data
 
 
-summ <- readRDS(paste0("convergence/parameter_summary_alt_",sp_aou,".rds")) |>
-  mutate(species = sp_sel)
-# convergence summary -----------------------------------------------------
-
-
-summ_out <-  bind_rows(summ_out,summ)
-
-#}
-
+if(!file.exists(paste0(output_dir,"/calibration_fit_alt_",
+                       sp_aou,".rds"))){
+  next} #skip of no saved model
 
 # load saved fitted model, summary, and data ------------------------------
+    if(!file.exists(paste0("convergence/parameter_summary_alt_",sp_aou,".rds"))){
+      next
+    }# skip if no convergence
+
+    summ <- readRDS(paste0("convergence/parameter_summary_alt_",sp_aou,".rds")) |>
+      mutate(species = sp_sel)
+    # convergence summary -----------------------------------------------------
+
+
+    summ_out <-  bind_rows(summ_out,summ)
 
 
   fit <- readRDS(paste0(output_dir,"/calibration_fit_alt_",sp_aou,".rds"))
@@ -226,7 +283,13 @@ summ_out <-  bind_rows(summ_out,summ)
 
   routes_buf <- readRDS(paste0("stan_data/routes_buffered_",sp_aou,"_",sp_ebird,".rds"))
 
-
+  # tr_summ <- combined |>
+  #   group_by(route_name,route) |>
+  #   summarise(mean_obs = mean(count),
+  #             .groups = "drop")
+  #
+  # tr_keep <- tr_summ |> filter(mean_obs > 0)
+  # rt_k <- routes_buf |> filtercount# rt_k <- routes_buf |> filter(mean_count > 0)
 
 # posterior of calibration ------------------------------------------------
 
@@ -255,6 +318,8 @@ cali_alt_post <- fit$draws(variables = "log_BETA",
   #
   w_excl <- c(which(betas$mean > quantile(betas$mean,0.975)), # identifying the routes in the outer 2.5% tails
               which(betas$mean < quantile(betas$mean,0.025)))
+
+  #w_excl2 <- tr_summ |> filter(mean_obs == 0) |> select(route) |> unlist() |> unname()
 
   betas_keep <- c(1:stan_data$n_routes)[-w_excl] # dropping the routes in the tails
 
@@ -382,7 +447,7 @@ saveRDS(cali_trim_post,paste0("estimates/calibration_posterior_",sp_aou,"_",sp_e
 
 # this is the range-wide (global) relative abundance surface for the
 # selected set of weeks that overlap the BBS field season
-breed_abundance <- readRDS(paste0("data/species_relative_abundance_2023/",
+breed_abundance <- readRDS(paste0("data/species_relative_abundance_",yr_ebird,"/",
                                   sp_ebird,
                                   "_derived_breeding_relative_abundance.rds"))
 
@@ -458,10 +523,10 @@ strata_abund <- data.frame(region = strata_proj$strata_name,
                                  fun = "hpdi",p = 0.975),
          species = sp_sel,
          species_ebird = sp_ebird,
-         strata_name = region) %>%
-  left_join(.,strata_names)
+         strata_name = region) #%>%
+  #left_join(.,strata_names)
   #filter(pop_mean != 0)
-strata_sampled <- readRDS(paste0("data/species_relative_abundance_2023/",sp_ebird,"_bbs_strata_relative_abundance.rds")) %>%
+strata_sampled <- readRDS(paste0("data/species_relative_abundance_",yr_ebird,"/",sp_ebird,"_bbs_strata_relative_abundance.rds")) %>%
   select(strata_name,mean_ebird_abundance:log_ratio)
 
 strata_abund <- strata_abund %>%
@@ -839,7 +904,7 @@ bcr_abund <- data.frame(region = as.character(bcr_proj$bcr[abundance_in_bcr$ID])
 
 
 
-re_do_map <- FALSE #option to skip because they take a long time.
+re_do_map <- TRUE #option to skip because they take a long time.
 if(re_do_map){
   # abund_mapable <- breed_abundance %>%
   #   terra::project(.,"EPSG:9822")
@@ -853,7 +918,8 @@ if(re_do_map){
 
 countries_plot <- countries %>%
   st_transform(crs = st_crs(strata)) %>%
-  filter(CC == "NA")
+  filter(CC == "NA",
+         country_name != "Greenland")
 
 strata_w_pop <- strata_abund %>%
   filter(sum_abund > 0)
@@ -866,17 +932,44 @@ bb <- sf::st_bbox(strata_bound)
   breed_abundance_plot <- breed_abundance
   names(breed_abundance_plot) <- "breeding"
 
+  NA_clip <- countries_plot |>
+    st_transform(st_crs(breed_abundance_plot))
+
   breed_abundance_plot <- breed_abundance_plot %>%
-    #st_transform(crs = st_crs(strata)) %>%
-    mutate(.,breeding = ifelse(breeding == 0,NA,breeding),
-           breeding = (breeding*mean(cali_use$calibration))/9) # per km2 mean density
+    terra::crop(NA_clip) |>
+    mutate(breeding = ifelse(breeding == 0,NA,breeding),
+           breeding = (breeding*median(cali_use$calibration))/9) # per km2 mean density
+
+hist_df <- data.frame(breding = as.numeric(breed_abundance_plot$breeding)) |>
+  drop_na() |>
+  rename(birds_km2 = breeding)
+
+  # hist_inset <- ggplot(data = hist_df)+
+  #   geom_histogram(aes(x = birds_km2,
+  #                      colour = birds_km2),
+  #                  binwidth = 1)+
+  #   scale_colour_viridis_b(direction = -1,
+  #                          option = "B",
+  #                          end = 0.9)
+  # hist_inset
 
 
-  # Mapping -----------------------------------------------------------------
+qs <- quantile(hist_df$birds_km2,
+                c(0,0.1,0.3,0.5,0.75,0.9,0.95,0.99,1))
+capt <- paste0("Colour scale binned to show breaks at the following percentiles of\nthe distribution of density values in the map: \n",
+              paste((c(0,0.1,0.3,0.5,0.75,0.9,0.95,0.99)*100),collapse = "%,"),"%", "\n The lightest colour shows the grid cells with density in the lowest 10%",
+              "\n and the darkest colour shows the highest 1%.")
+names(qs) <- signif(qs,2)
+
+min(hist_df$birds_km2)
+max(hist_df$birds_km2)
+
+# Mapping -----------------------------------------------------------------
 
 
   abund_map <- ggplot()+
-    geom_sf(data = countries_plot, fill = NA)+
+    geom_sf(data = countries_plot)+
+    geom_sf(data = bcrs_plot, fill = "white")+
     geom_spatraster(data = breed_abundance_plot,
                     maxcell = 16000000)+
     geom_sf(data = bcrs_plot, fill = NA)+
@@ -886,21 +979,25 @@ bb <- sf::st_bbox(strata_bound)
     coord_sf(xlim = c(bb[c("xmin","xmax")]),
              ylim = c(bb[c("ymin","ymax")]))+
     #scale_fill_gradientn(12,colours = terrain.colors(12),na.value = NA)+
-    scale_fill_viridis_c(direction = -1,
-                         option = "G",
+    scale_fill_viridis_b(direction = -1,
+                         option = "B",
                          na.value = NA,
-                         end = 0.9,
+                         end = 0.98,
+                         begin = 0.1,
+                         breaks = qs,
                          name = paste0(sp_sel,"\n","Birds/km<sup>2</sup>"))+
     xlab("")+
     ylab("")+
     theme_bw()+
     theme(legend.title = element_markdown())+
-    labs(title = paste(sp_sel))
+    labs(title = paste(sp_sel),
+         subtitle = paste0(bquote("Density within 3km^2 grid cells")),
+         caption = capt)
 
 
   #
 
-  png(filename = paste0("Figures/abund_map_alt_",sp_aou,"_",sp_ebird,".png"),
+  png(filename = paste0("Figures/density_maps/density_map_",sp_aou,"_",sp_ebird,".png"),
       res = 400,
       height = 7,
       width = 6.5,
@@ -1179,12 +1276,32 @@ dev.off()
   saveRDS(pop_ests_out_save,paste0("estimates/combined_population_estimates_4_models_",sp_aou,".rds"))
 } # end species loop
 
+stopCluster(cluster)
+
+
+
+
+# End species loop --------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 #summ_out <- NULL
 pop_ests_out_save <- NULL
 trajectories_out_save <- NULL
-summ_out_save <- NULL
+
 # sp_sel <- sps_list[i,"common_name"]
 #
 # sp_aou <- sps_list[i,"sp_aou"]
@@ -1206,13 +1323,16 @@ for(i in 1:nrow(sps_list)){
   trajectories_out_save <- bind_rows(trajectories_out_save,
                                  trajectories_out)
 
-  summ_out <- readRDS(paste0("estimates/convergence_population_estimates_4_models_",sp_aou,".rds"))
-
-  summ_out_save <- bind_rows(summ_out_save,
-                             summ_out)
 
   }
 }
+
+pop_ests_out_save <- pop_ests_out_save |>
+  mutate(version = factor(version, levels = c("NA-POPS edr NA-POPS Availability",
+                                              "NA-POPS edr PIF ToD",
+                                              "approximate edr NA-POPS Availability",
+                                              "approximate edr PIF ToD" ),
+                          ordered = TRUE))
 
 tst_plot_data <- pop_ests_out_save |>
     filter(region %in% c("USACAN")) |>
@@ -1286,25 +1406,153 @@ dev.off()
 
 
 
-write_csv(pop_ests_out_save,
-          "all_population_estimates.csv")
-
-write_csv(trajectories_out_save,
-          "all_population_estimate_trajectories.csv")
-
-
-  saveRDS(summ_out_save,"convergence_summary.rds")
-
-problems <- summ_out_save |>
-  filter(rhat > 1.1, ess_bulk < 100) |>
-  mutate(variable_type = sub("\\[.*","",variable)) |>
-  group_by(variable_type,species) |>
-  summarise(n = n(),
-            max_rhat = max(rhat),
-            min_ess = min(ess_bulk))
 
 
 
+tst_plot_data <- pop_ests_out_save |>
+  filter(region %in% c("Canada")) |>
+  mutate(species = fct_reorder(species,
+                               .x = pop_median)) |>
+  arrange(species)
+
+tst_plot1 <- ggplot()+
+  geom_pointinterval(data = filter(tst_plot_data,pop_median > 15e6),
+                     aes(x = species, y = pop_median,
+                         ymin = pop_lci_95, ymax = pop_uci_95,
+                         colour = version),
+                     position = position_dodge(width = 0.5),
+                     linewidth = 0.1)+
+  scale_y_continuous(transform = "log10",
+                     breaks = c(1e3,1e4,1e5,1e6,1e7,1e8,1e9),
+                     labels = c(paste(c(1e3,1e4,1e5,1e6,1e7,1e8)/1e6,"Million"),"1 Billion"))+
+  ylab("Population estimate Canada")+
+  theme(axis.text = element_text(size = 8),
+        line = element_line(lineend = "round"))+
+  theme_bw()+
+  scale_colour_viridis_d(option = "viridis")+
+  coord_flip()
+
+
+tst_plot2 <- ggplot()+
+  geom_pointinterval(data = filter(tst_plot_data,pop_median <= 15e6 & pop_median > 1.2e6),
+                     aes(x = species, y = pop_median,
+                         ymin = pop_lci_95, ymax = pop_uci_95,
+                         colour = version),
+                     position = position_dodge(width = 0.5),
+                     linewidth = 0.1)+
+  scale_y_continuous(transform = "log10",
+                     breaks = c(1e3,1e4,1e5,1e6,1e7,1e8,1e9),
+                     labels = c(paste(c(1e3,1e4,1e5,1e6,1e7,1e8)/1e6,"Million"),"1 Billion"))+
+  ylab("Population estimate Canada")+
+  theme(axis.text = element_text(size = 8),
+        line = element_line(lineend = "round"))+
+  theme_bw()+
+  scale_colour_viridis_d(option = "viridis")+
+  coord_flip()
+
+
+tst_plot3 <- ggplot()+
+  geom_pointinterval(data = filter(tst_plot_data,pop_median <= 1.2e6),
+                     aes(x = species, y = pop_median,
+                         ymin = pop_lci_95, ymax = pop_uci_95,
+                         colour = version),
+                     position = position_dodge(width = 0.5),
+                     linewidth = 0.1)+
+  scale_y_continuous(transform = "log10",
+                     breaks = c(1e3,1e4,1e5,1e6,1e7,1e8,1e9),
+                     labels = c(paste(c(1e3,1e4,1e5,1e6,1e7,1e8)/1e6,"Million"),"1 Billion"))+
+  ylab("Population estimate Canada")+
+  theme(axis.text = element_text(size = 8),
+        line = element_line(lineend = "round"))+
+  theme_bw()+
+  scale_colour_viridis_d(option = "viridis")+
+  coord_flip()
+
+
+
+
+pdf(paste0("Population_estimates_Canada_",nrow(tst_plot_data),"_species.pdf"),
+    width = 11,
+    height = 17)
+print(tst_plot1)
+print(tst_plot2)
+print(tst_plot3)
+dev.off()
+
+
+
+
+
+
+tst_plot_data <- pop_ests_out_save |>
+  filter(region %in% c("United States of America")) |>
+  mutate(species = fct_reorder(species,
+                               .x = pop_median)) |>
+  arrange(species)
+
+tst_plot1 <- ggplot()+
+  geom_pointinterval(data = filter(tst_plot_data,pop_median > 15e6),
+                     aes(x = species, y = pop_median,
+                         ymin = pop_lci_95, ymax = pop_uci_95,
+                         colour = version),
+                     position = position_dodge(width = 0.5),
+                     linewidth = 0.1)+
+  scale_y_continuous(transform = "log10",
+                     breaks = c(1e3,1e4,1e5,1e6,1e7,1e8,1e9),
+                     labels = c(paste(c(1e3,1e4,1e5,1e6,1e7,1e8)/1e6,"Million"),"1 Billion"))+
+  ylab("Population estimate USA")+
+  theme(axis.text = element_text(size = 8),
+        line = element_line(lineend = "round"))+
+  theme_bw()+
+  scale_colour_viridis_d(option = "viridis")+
+  coord_flip()
+
+
+tst_plot2 <- ggplot()+
+  geom_pointinterval(data = filter(tst_plot_data,pop_median <= 15e6 & pop_median > 3e6),
+                     aes(x = species, y = pop_median,
+                         ymin = pop_lci_95, ymax = pop_uci_95,
+                         colour = version),
+                     position = position_dodge(width = 0.5),
+                     linewidth = 0.1)+
+  scale_y_continuous(transform = "log10",
+                     breaks = c(1e3,1e4,1e5,1e6,1e7,1e8,1e9),
+                     labels = c(paste(c(1e3,1e4,1e5,1e6,1e7,1e8)/1e6,"Million"),"1 Billion"))+
+  ylab("Population estimate USA")+
+  theme(axis.text = element_text(size = 8),
+        line = element_line(lineend = "round"))+
+  theme_bw()+
+  scale_colour_viridis_d(option = "viridis")+
+  coord_flip()
+
+
+tst_plot3 <- ggplot()+
+  geom_pointinterval(data = filter(tst_plot_data,pop_median <= 3e6),
+                     aes(x = species, y = pop_median,
+                         ymin = pop_lci_95, ymax = pop_uci_95,
+                         colour = version),
+                     position = position_dodge(width = 0.5),
+                     linewidth = 0.1)+
+  scale_y_continuous(transform = "log10",
+                     breaks = c(1e3,1e4,1e5,1e6,1e7,1e8,1e9),
+                     labels = c(paste(c(1e3,1e4,1e5,1e6,1e7,1e8)/1e6,"Million"),"1 Billion"))+
+  ylab("Population estimate USA")+
+  theme(axis.text = element_text(size = 8),
+        line = element_line(lineend = "round"))+
+  theme_bw()+
+  scale_colour_viridis_d(option = "viridis")+
+  coord_flip()
+
+
+
+
+pdf(paste0("Population_estimates_United_States_",nrow(tst_plot_data),"_species.pdf"),
+    width = 11,
+    height = 17)
+print(tst_plot1)
+print(tst_plot2)
+print(tst_plot3)
+dev.off()
 
 
 # Format population estimates and trajectories ----------------------------
@@ -1312,6 +1560,27 @@ problems <- summ_out_save |>
 signif_M <- function(x,sig = 3){
   signif(x,sig)/1e6
 }
+
+pop_ests_out_save <- pop_ests_out_save |>
+  select(-c(sum_abund,strata_name,mean_ebird_abundance,total_ebird_abundance,sampled_abundance,
+            sampled_avail_ratio,log_ratio,pop_mean)) |>
+  mutate(across(starts_with("pop"),
+                .fns = ~signif_M(.x))) |>
+  rename_with(.fn = ~str_replace(.x,
+                                 "pop_",
+                                 "population_estimate_millions_"))
+
+
+
+write_csv(pop_ests_out_save,
+          "all_population_estimates.csv")
+write_csv(trajectories_out_save,
+          "all_population_estimate_trajectories.csv")
+
+
+tmp2 <- pop_ests_out_save |>
+  filter(species == "Gray-cheeked Thrush")
+
 
 
 

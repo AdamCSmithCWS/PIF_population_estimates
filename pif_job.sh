@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=pif_ped
 #SBATCH --account=eccc_oth
-#SBATCH --array=201-388                 # one task per species (1-indexed line numbers in aou_list.txt)
+#SBATCH --array=1-9                # one task per species (1-indexed line numbers in aou_list.txt)
 #SBATCH --cpus-per-task=4            # matches chains=4 / parallel_chains=4 in the R script
 #SBATCH --mem-per-cpu=8G                  # adjust based on largest species dataset
 #SBATCH --time=6:00:00              # adjust based on expected runtime per species

@@ -8,7 +8,7 @@ library(foreach)
 
 output_dir <- "output"
 #output_dir <- "F:/PIF_pop_estimates/output"
-yr_ebird <- 2023 # prediction year for eBird relative abundance
+yr_ebird <- 2025 # prediction year for eBird relative abundance
 
 #selected_species <- readRDS("data/selected_species.rds")
 
@@ -121,6 +121,7 @@ stan_data$use_ppc <- 0
                     refresh = 500,
                     iter_warmup = 2000,
                     iter_sampling = 1000,
+                    #thin = 2,
                     adapt_delta = 0.95,
                     max_treedepth = 11,
                     show_exceptions = TRUE)
@@ -136,7 +137,7 @@ saveRDS(summ,paste0("convergence/parameter_summary_alt_",vers,"_",sp_aou,"_",sp_
 
 }
 
-}
+
 
 parallel::stopCluster(cluster)
 

@@ -136,8 +136,8 @@ parameters {
   sum_to_zero_vector[n_routes] log_beta_raw; // route-specific calibrations
   sum_to_zero_vector[n_obs] obs_raw; // route-specific calibrations
   real<lower=0> sd_obs; // sd of calibration among routes
-  real<lower=3> nu;
-  real<lower=3> nu_obs;
+  // real<lower=3> nu;
+  // real<lower=3> nu_obs;
 
 
   vector[n_counts*use_pois] noise_raw; // over-dispersion if use_pois == 1
@@ -252,13 +252,13 @@ for(t in (ebird_year+1):n_years){
 }
 //
 model {
-  nu ~ gamma(2,0.1); // prior on df for t-distribution of heavy tailed site-effects from https://github.com/stan-dev/stan/wiki/Prior-Choice-Recommendations#prior-for-degrees-of-freedom-in-students-t-distribution
-  nu_obs ~ gamma(2,0.1); // prior on df for t-distribution of heavy tailed site-effects from https://github.com/stan-dev/stan/wiki/Prior-Choice-Recommendations#prior-for-degrees-of-freedom-in-students-t-distribution
+  // nu ~ gamma(2,0.1); // prior on df for t-distribution of heavy tailed site-effects from https://github.com/stan-dev/stan/wiki/Prior-Choice-Recommendations#prior-for-degrees-of-freedom-in-students-t-distribution
+  // nu_obs ~ gamma(2,0.1); // prior on df for t-distribution of heavy tailed site-effects from https://github.com/stan-dev/stan/wiki/Prior-Choice-Recommendations#prior-for-degrees-of-freedom-in-students-t-distribution
   log_BETA ~ student_t(3,0,2);
   RHO_raw ~ normal(1,0.5);
   if(use_t){
-  log_beta_raw ~ student_t(nu,0,1);
-  obs_raw ~ student_t(nu_obs,0,1);
+  log_beta_raw ~ student_t(3,0,1);
+  obs_raw ~ student_t(3,0,1);
   }else{
   log_beta_raw ~ normal(0,1);
   obs_raw ~ normal(0,1);

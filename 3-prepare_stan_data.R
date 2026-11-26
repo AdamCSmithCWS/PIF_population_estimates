@@ -13,9 +13,6 @@ library(tidybayes)
 library(doParallel)
 library(foreach)
 
-if(Sys.info()[["nodename"]] == "WNCRLABN72960"){
-setwd("c:/Users/SmithAC/Documents/GitHub/PIF_population_estimates")
-}
 
 source("functions/GAM_basis_function_mgcv.R")
 source("functions/neighbours_define.R")
@@ -25,6 +22,21 @@ yr_ebird <- 2025 # prediction year for eBird relative abundance
 mean_counts_all <- readRDS("data/mean_counts_by_route.rds")
 
 raw_counts_all <- readRDS("data/all_counts_by_route.rds")
+
+
+
+# consider a matching file that shows raw counts for last 20-years --------
+# consider a matching file that shows raw counts for last 20-years --------
+# consider a matching file that shows raw counts for last 20-years --------
+# consider a matching file that shows raw counts for last 20-years --------
+# consider a matching file that shows raw counts for last 20-years --------
+# consider a matching file that shows raw counts for last 20-years --------
+# consider a matching file that shows raw counts for last 20-years --------
+# consider a matching file that shows raw counts for last 20-years --------
+# consider a matching file that shows raw counts for last 20-years --------
+# might provide an intermediate between all BBS routes in the species' range
+# and only BBS routes with positive counts during the 10-year window
+# way to include some of the zeros without including all of them?
 
 # general summaries of time and season
 surveys <- load_bbs_data(release = 2026)$routes %>%
@@ -196,15 +208,35 @@ model_components <- data.frame(model = c("napops",
 
 
 trim_rel_abund <- TRUE
-trim_bbs_routes <- FALSE
+trim_bbs_routes <- TRUE
 
 species_to_prepare <- adjustments$cn
 
 
 # species loop ------------------------------------------------------------
 
+n_cores <- 6
+cluster <- makeCluster(n_cores, type = "PSOCK")
+registerDoParallel(cluster)
 
-for(i in 1:nrow(adjustments)){ #
+
+test <- foreach(i = c(1:nrow(adjustments)),
+                .packages = c("bbsBayes2",
+                              "tidyverse",
+                              "cmdstanr",
+                              "ebirdst",
+                              "tidybayes",
+                              "tidyterra",
+                              "ggrepel",
+                              "terra",
+                              "patchwork",
+                              "sf",
+                              "exactextractr"),
+                .errorhandling = "pass") %dopar%
+  {
+
+#for(sp_sel in selected_species){
+#for(i in 1:nrow(adjustments)){ #
   sp_sel <- unname(unlist(adjustments[i,"cn"]))
  sp_aou <- bbsBayes2::search_species(sp_sel)$aou[1]
   sp_ebird <- ebirdst::get_species(sp_sel)
@@ -236,24 +268,24 @@ rel_abund <- readRDS(paste0("data/species_relative_abundance_",yr_ebird,"/",
 
 
 if(trim_rel_abund){ # if TRUE drops routes with < 10th %ile relative abundance
-  tenth_percentile <- unname(quantile(rel_abund$ebird_abund,0.1))
+  fifth_percentile <- unname(quantile(rel_abund$ebird_abund,0.05))
   rel_abund <- rel_abund %>%
-    filter(ebird_abund >= tenth_percentile,
+    filter(ebird_abund >= fifth_percentile,
            route_name %in% routes_buf_all$route_name)
 }
 
-if(trim_bbs_routes){ # if TRUE drops routes with < 10th %ile observed mean counts
+if(trim_bbs_routes){ # if TRUE drops routes where the species has not been observed
   temp_means <- raw_counts %>%
     group_by(route_name) %>%
-    summarise(mean_obs = mean(count)) %>%
+    summarise(mean_obs = mean(count),
+              max_count = max(count),
+              n_years = length(unique(year))) %>%
+    mutate(dif_max_mean = max_count-mean_obs) |>
     filter(route_name %in% rel_abund$route_name)
 
+   temp_means <- temp_means %>%
+    filter(mean_obs > 0)
 
-  tenth_percentile_bbs <- unname(quantile(temp_means$mean_obs,0.1))
-  if(tenth_percentile_bbs > 0){
-  temp_means <- temp_means %>%
-    filter(mean_obs >= tenth_percentile_bbs)
-  }
 
   raw_counts <- raw_counts %>%
     filter(route_name %in% temp_means$route_name)
@@ -290,6 +322,8 @@ combined <- rel_abund %>%
          strata = as.integer(factor(strata_name)),
          doy = 1+(day_of_year-(min(day_of_year))),# doy centered on earliest survey day for species
          route_obs = as.integer(factor(paste(route_name,obs_n,sep = "-"))))
+
+
 
 
 # spatial setup -----------------------------------------------------------
@@ -362,6 +396,18 @@ doy_gam <- gam_basis(combined$doy, nknots = 7,
 
 
 
+#
+# tst <- ggplot(data = filter(combined,count > 0),
+#               aes(x = logm,
+#                   y = count+1))+
+#   geom_point(alpha = 0.1)+
+#   geom_smooth(method = "lm")+
+#   scale_y_continuous(transform = "log")+
+#   coord_cartesian(ylim = c(1,125))+
+#   theme_bw()
+#
+# tst
+
 
 stan_data <- list(n_routes = max(combined$route),
                   n_obs = max(combined$observer),
@@ -412,6 +458,8 @@ saveRDS(stan_data,paste0("stan_data/stan_data_",sp_aou,".rds"))
 saveRDS(combined,paste0("stan_data/dataframe_",sp_aou,".rds"))
 
 }
+
+parallel::stopCluster(cluster)
 
 
 
